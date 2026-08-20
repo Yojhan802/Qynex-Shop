@@ -1,0 +1,26 @@
+package com.freestyleperu.aplicacion.venta.dto.response;
+
+import com.freestyleperu.aplicacion.venta.domain.SaleStatus;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
+
+public record VentaResponse(
+        Long id,
+        String saleNumber,
+        Long customerId,
+        String customerName,
+        Long sellerId,
+        String sellerName,
+        BigDecimal subtotal,
+        BigDecimal discountAmount,
+        BigDecimal total,
+        SaleStatus status,
+        String notes,
+        LocalDateTime createdAt,
+        LocalDateTime cancelledAt,
+        String cancelledByUsername,
+        String cancellationReason,
+        List<VentaItemResponse> items,
+        List<PagoResponse> payments) {
+}

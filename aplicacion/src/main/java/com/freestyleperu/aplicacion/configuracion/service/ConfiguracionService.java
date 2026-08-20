@@ -1,0 +1,85 @@
+package com.freestyleperu.aplicacion.configuracion.service;
+
+import com.freestyleperu.aplicacion.configuracion.domain.CompanySettings;
+import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarCompanySettingsRequest;
+import com.freestyleperu.aplicacion.configuracion.dto.response.CompanySettingsResponse;
+import com.freestyleperu.aplicacion.configuracion.repository.CompanySettingsRepository;
+import com.freestyleperu.aplicacion.shared.audit.AuditResult;
+import com.freestyleperu.aplicacion.shared.audit.AuditService;
+import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
+import com.freestyleperu.aplicacion.shared.util.ImageUploadService;
+import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
+import java.time.LocalDateTime;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+@Service
+@Transactional(readOnly = true)
+public class ConfiguracionService {
+
+    private static final long SETTINGS_ID = 1L;
+
+    private final CompanySettingsRepository companySettingsRepository;
+    private final UsuarioRepository usuarioRepository;
+    private final AuditService auditService;
+    private final ImageUploadService imageUploadService;
+
+    public ConfiguracionService(
+            CompanySettingsRepository companySettingsRepository,
+            UsuarioRepository usuarioRepository,
+            AuditService auditService,
+            ImageUploadService imageUploadService) {
+        this.companySettingsRepository = companySettingsRepository;
+        this.usuarioRepository = usuarioRepository;
+        this.auditService = auditService;
+        this.imageUploadService = imageUploadService;
+    }
+
+    public CompanySettingsResponse obtener() {
+        return toResponse(buscarOFallar());
+    }
+
+    @Transactional
+    public CompanySettingsResponse actualizar(ActualizarCompanySettingsRequest request, Long userId) {
+        CompanySettings settings = buscarOFallar();
+        settings.setName(request.name());
+        settings.setRuc(request.ruc());
+        settings.setAddress(request.address());
+        settings.setPhone(request.phone());
+        settings.setEmail(request.email());
+        settings.setCurrencyCode(request.currencyCode());
+        settings.setCurrencySymbol(request.currencySymbol());
+        settings.setIgvRate(request.igvRate());
+        settings.setTicketFooter(request.ticketFooter());
+        settings.setUpdatedAt(LocalDateTime.now());
+        settings.setUpdatedBy(userId);
+        auditService.log("CONFIGURACION_ACTUALIZADA", "COMPANY_SETTINGS", SETTINGS_ID, null, request, AuditResult.SUCCESS);
+        return toResponse(settings);
+    }
+
+    @Transactional
+    public CompanySettingsResponse actualizarLogo(MultipartFile file, Long userId) {
+        CompanySettings settings = buscarOFallar();
+        settings.setLogoUrl(imageUploadService.guardar(file, "logo"));
+        settings.setUpdatedAt(LocalDateTime.now());
+        settings.setUpdatedBy(userId);
+        auditService.log("CONFIGURACION_LOGO_ACTUALIZADO", "COMPANY_SETTINGS", SETTINGS_ID, null, settings.getLogoUrl(), AuditResult.SUCCESS);
+        return toResponse(settings);
+    }
+
+    private CompanySettings buscarOFallar() {
+        return companySettingsRepository.findById(SETTINGS_ID)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Configuración de empresa", SETTINGS_ID));
+    }
+
+    private CompanySettingsResponse toResponse(CompanySettings settings) {
+        String updatedByUsername = settings.getUpdatedBy() == null
+                ? null
+                : usuarioRepository.findById(settings.getUpdatedBy()).map(u -> u.getUsername()).orElse(null);
+        return new CompanySettingsResponse(
+                settings.getName(), settings.getRuc(), settings.getAddress(), settings.getPhone(), settings.getEmail(),
+                settings.getLogoUrl(), settings.getCurrencyCode(), settings.getCurrencySymbol(), settings.getIgvRate(),
+                settings.getTicketFooter(), settings.getUpdatedAt(), updatedByUsername);
+    }
+}

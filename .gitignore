@@ -1,0 +1,28 @@
+# Secretos y configuración local — nunca se suben al repositorio.
+.env
+.env.local
+*.env.local
+
+# Backend (Maven/Spring Boot)
+aplicacion/target/
+aplicacion/uploads/
+aplicacion/.env
+aplicacion/.env.local
+
+# Editor / SO
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Configuración local de Claude Code — específica de la máquina, no del proyecto.
+.claude/settings.local.json
+
+# Artefactos de verificación temporal del frontend (capturas de Playwright)
+front/_shot-*.png
+front/_debug-*.png
+
+# QR de pago personal con datos reales (nombre, cuenta) — no va a un repo público.
+# El logo y demás imágenes de recursos/ sí se versionan.
+recursos/Yape QR.jpeg

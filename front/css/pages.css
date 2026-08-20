@@ -1,0 +1,396 @@
+/* ============ LOGIN ============ */
+
+.login-screen {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.login-brand-panel {
+  display: none;
+  flex-direction: column;
+  justify-content: space-between;
+  background: var(--brand-black);
+  color: var(--color-text-inverse);
+  padding: var(--space-10);
+}
+
+.login-brand-panel .brand-mark {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.login-brand-panel .brand-mark img {
+  height: 40px;
+  width: auto;
+}
+
+.login-brand-panel .brand-mark span {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--font-size-lg);
+}
+
+.login-brand-panel .brand-copy h2 {
+  font-size: var(--font-size-2xl);
+  max-width: 22ch;
+}
+
+.login-brand-panel .brand-copy p {
+  margin-top: var(--space-3);
+  color: var(--neutral-400);
+  max-width: 40ch;
+}
+
+.login-brand-panel .brand-footer {
+  font-size: var(--font-size-xs);
+  color: var(--neutral-500);
+}
+
+.login-form-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  background: var(--color-background);
+}
+
+.login-form-card {
+  width: 100%;
+  max-width: 380px;
+}
+
+.login-form-card .login-logo-mobile {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--space-6);
+}
+
+.login-form-card .login-logo-mobile img {
+  height: 44px;
+}
+
+.login-form-card h1 {
+  font-size: var(--font-size-xl);
+}
+
+.login-form-card > p {
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.login-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.login-form-footer a {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--brand-accent);
+}
+
+.login-form-footer a:hover {
+  text-decoration: underline;
+}
+
+.login-demo-hint {
+  margin-top: var(--space-6);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.login-demo-hint strong {
+  color: var(--color-text-secondary);
+}
+
+@media (min-width: 1024px) {
+  .login-screen {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .login-brand-panel {
+    display: flex;
+  }
+}
+
+/* ============ DASHBOARD ============ */
+
+.date-range-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 38px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  background: var(--color-surface);
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.stat-card {
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.stat-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.stat-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+
+.stat-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.stat-icon-accent {
+  background: var(--brand-accent-soft);
+  color: var(--brand-accent);
+}
+
+.stat-icon-success {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+}
+
+.stat-icon-warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+}
+
+.stat-icon-danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger-text);
+}
+
+.stat-value {
+  font-family: var(--font-display);
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.stat-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  width: fit-content;
+}
+
+.stat-delta svg {
+  width: 12px;
+  height: 12px;
+}
+
+.stat-delta-up {
+  color: var(--color-success-text);
+}
+
+.stat-delta-down {
+  color: var(--color-danger-text);
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.chart-grid-secondary {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+/* ---- Componentes de gráfico (ver skill dataviz: marcas finas, gap de 2px,
+   leyenda siempre presente, etiquetas directas nunca sobre el color) ---- */
+
+.viz-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: 0 var(--space-5) var(--space-4);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.viz-legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.viz-legend-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.viz-legend-value {
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.viz-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0 var(--space-5) var(--space-5);
+}
+
+.viz-bar-row {
+  display: grid;
+  grid-template-columns: 108px 1fr 64px;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.viz-bar-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-bar-track {
+  display: block;
+  height: 10px;
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.viz-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-full);
+}
+
+.viz-bar-value {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--color-text);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.viz-line-chart {
+  padding: 0 var(--space-5) var(--space-2);
+}
+
+.viz-line-chart svg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.viz-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: 0 var(--space-5) var(--space-5);
+}
+
+.viz-donut-wrap svg {
+  flex-shrink: 0;
+}
+
+.viz-donut-legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.viz-donut-legend-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+}
+
+.viz-donut-legend-label {
+  flex: 1;
+  color: var(--color-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viz-donut-legend-value {
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.viz-donut-center-value {
+  font-family: var(--font-display);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  fill: var(--color-text);
+}
+
+.viz-donut-center-label {
+  font-size: var(--font-size-xs);
+  fill: var(--color-text-muted);
+}
+
+/* display:grid necesita ir en una regla de hoja de estilos, no inline, para
+   que [hidden] (menor especificidad que un estilo inline) pueda ocultarlo. */
+.pos-screen-grid:not([hidden]) {
+  display: grid;
+  grid-template-columns: 1.4fr 420px;
+  gap: var(--space-5);
+  align-items: start;
+}

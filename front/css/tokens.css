@@ -1,0 +1,143 @@
+/*
+  Design tokens — Sistema Integral de Gestión Freestyle Perú
+  Fuente: docs/06-identidad-visual.md. Ningún color literal debe usarse
+  fuera de este archivo: cambiar la paleta debe ser editar esto y nada más.
+*/
+
+:root {
+  /* ---------- Colores de marca (medidos del logo real) ---------- */
+  --brand-black: #000000;
+  --brand-white: #f6f9fe;
+
+  --brand-accent: #1669f3;
+  --brand-accent-hover: #0b57d5;
+  --brand-accent-soft: #e8f0fe;
+
+  /* ---------- Escala neutra (mismo matiz que el logo, 217.5°) ---------- */
+  --neutral-0: #ffffff;
+  --neutral-25: #f6f9fe;
+  --neutral-50: #f1f4f9;
+  --neutral-100: #e5eaf2;
+  --neutral-200: #d3dae6;
+  --neutral-300: #b4becd;
+  --neutral-400: #8a94a6;
+  --neutral-500: #667085;
+  --neutral-600: #4a5265;
+  --neutral-700: #333a49;
+  --neutral-800: #1f242e;
+  --neutral-900: #12151b;
+  --neutral-950: #0a0c10;
+
+  /* ---------- Roles semánticos ---------- */
+  --color-background: var(--neutral-25);
+  --color-surface: var(--neutral-0);
+  --color-surface-sunken: var(--neutral-50);
+  --color-border: var(--neutral-200);
+  --color-border-strong: var(--neutral-300);
+  --color-text: var(--neutral-900);
+  --color-text-secondary: var(--neutral-600);
+  --color-text-muted: var(--neutral-500);
+  --color-text-inverse: var(--brand-white);
+
+  --color-nav-bg: var(--brand-black);
+  --color-nav-surface: #14171d;
+  --color-nav-text: #a8b0bf;
+  --color-nav-text-active: var(--brand-white);
+  --color-nav-border: #23272f;
+
+  /* ---------- Estados ---------- */
+  --color-success: #0e9f6e;
+  --color-success-bg: #e3f7ef;
+  --color-success-text: #06674a;
+
+  --color-warning: #d97706;
+  --color-warning-bg: #fdf3e4;
+  --color-warning-text: #92500a;
+
+  --color-danger: #dc2626;
+  --color-danger-bg: #fdecec;
+  --color-danger-text: #a31515;
+
+  --color-info: #1669f3;
+  --color-info-bg: #e8f0fe;
+  --color-info-text: #0b4bb8;
+
+  /* ---------- Categórico para gráficos (validado, ver docs/06 y skill dataviz) ---------- */
+  --chart-series-1: #2a78d6;
+  --chart-series-2: #eb6834;
+  --chart-series-3: #1baf7a;
+  --chart-series-4: #eda100;
+  --chart-series-5: #e87ba4;
+  --chart-series-6: #008300;
+  --chart-series-7: #4a3aa7;
+  --chart-series-8: #e34948;
+  --chart-grid: var(--neutral-200);
+  --chart-axis: var(--neutral-300);
+  --chart-muted: var(--neutral-500);
+
+  /* ---------- Tipografía ---------- */
+  --font-display: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Consolas', monospace;
+
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.8125rem;
+  --font-size-base: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.375rem;
+  --font-size-2xl: 1.75rem;
+  --font-size-3xl: 2.25rem;
+
+  --line-height-tight: 1.2;
+  --line-height-base: 1.5;
+
+  /* ---------- Espaciado (escala de 4px) ---------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* ---------- Bordes ---------- */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 999px;
+
+  /* ---------- Elevación ---------- */
+  --shadow-xs: 0 1px 2px rgba(10, 12, 16, 0.05);
+  --shadow-sm: 0 1px 3px rgba(10, 12, 16, 0.08), 0 1px 2px rgba(10, 12, 16, 0.04);
+  --shadow-md: 0 4px 12px rgba(10, 12, 16, 0.08);
+  --shadow-lg: 0 12px 32px rgba(10, 12, 16, 0.12);
+
+  /* ---------- Layout ---------- */
+  --sidebar-width: 248px;
+  --sidebar-width-collapsed: 72px;
+  --topbar-height: 56px;
+  --content-max-width: 1440px;
+
+  /* ---------- Movimiento ---------- */
+  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 240ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---------- Quiebres ---------- */
+  --bp-sm: 640px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --bp-xl: 1280px;
+  --bp-2xl: 1536px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition-fast: 0ms;
+    --transition-base: 0ms;
+    --transition-slow: 0ms;
+  }
+}

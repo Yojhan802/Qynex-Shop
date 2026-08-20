@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Freestyle Perú</title>
+  <link rel="icon" type="image/png" href="assets/brand/logo-mark-dark.png" />
+</head>
+<body>
+  <script type="module">
+    import { getSession } from './js/core/auth.js';
+    window.location.replace(getSession() ? 'dashboard.html' : 'login.html');
+  </script>
+</body>
+</html>

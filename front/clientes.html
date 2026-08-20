@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Clientes · Freestyle Perú</title>
+  <link rel="icon" type="image/png" href="assets/brand/logo-mark-dark.png" />
+  <link rel="stylesheet" href="css/fonts.css" />
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/reset.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/pages.css" />
+  <link rel="stylesheet" href="css/responsive.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Saltar al contenido</a>
+
+  <div class="app-shell">
+    <div id="shell-sidebar" style="display:contents"></div>
+    <div id="shell-topbar" style="display:contents"></div>
+
+    <main class="content" id="main-content">
+      <div class="page-header">
+        <div>
+          <h1>Clientes</h1>
+          <p>DNI y correo son opcionales. El documento, si se indica, debe ser único.</p>
+        </div>
+        <div class="page-actions">
+          <button class="btn btn-primary" type="button" id="btn-nuevo-cliente">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+            Nuevo cliente
+          </button>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <label class="topbar-search" style="background: var(--color-surface); border-color: var(--color-border-strong); width:320px;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+          <input type="search" id="filter-search" placeholder="Buscar por nombre, documento o teléfono…" aria-label="Buscar clientes" />
+        </label>
+        <select class="select" id="filter-status" aria-label="Filtrar por estado">
+          <option value="">Todos los estados</option>
+          <option value="ACTIVE">Activo</option>
+          <option value="INACTIVE">Inactivo</option>
+        </select>
+      </div>
+
+      <div class="table-card">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr><th>Cliente</th><th>Documento</th><th>Teléfono</th><th>Email</th><th>Estado</th><th></th></tr>
+            </thead>
+            <tbody id="clients-body"><tr><td colspan="6"><div class="skeleton" style="height:20px;"></div></td></tr></tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="pagination"></div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="js/pages/clientes.js"></script>
+</body>
+</html>

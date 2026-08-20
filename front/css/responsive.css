@@ -1,0 +1,116 @@
+/* < 768px — móvil: sidebar como drawer superpuesto, gráficos en una columna */
+@media (max-width: 767px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'topbar'
+      'content';
+  }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: var(--sidebar-width);
+    transform: translateX(-100%);
+    transition: transform var(--transition-base);
+    z-index: 40;
+  }
+
+  .app-shell[data-sidebar='open'] .sidebar {
+    transform: translateX(0);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .sidebar-scrim {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 12, 16, 0.5);
+    z-index: 35;
+  }
+
+  .app-shell[data-sidebar='open'] .sidebar-scrim {
+    display: block;
+  }
+
+  .topbar-search {
+    display: none;
+  }
+
+  .content {
+    padding: var(--space-4);
+  }
+
+  .chart-grid,
+  .chart-grid-secondary {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .page-header {
+    flex-direction: column;
+  }
+
+  .page-actions {
+    width: 100%;
+  }
+
+  .page-actions .btn {
+    flex: 1;
+  }
+}
+
+/* 768–1023px — tablet vertical: sidebar contraído por defecto */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* < 1024px: nunca ocultar columnas de tabla, apilar en tarjetas */
+@media (max-width: 1023px) {
+  .table-responsive-cards .data-table thead {
+    display: none;
+  }
+
+  .table-responsive-cards .data-table tr {
+    display: block;
+    margin-bottom: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+  }
+
+  .table-responsive-cards .data-table td {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border: none;
+  }
+
+  .table-responsive-cards .data-table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--color-text-secondary);
+  }
+}
+
+@media (min-width: 640px) {
+  .stat-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .stat-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}

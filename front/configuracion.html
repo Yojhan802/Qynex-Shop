@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Configuración · Freestyle Perú</title>
+  <link rel="icon" type="image/png" href="assets/brand/logo-mark-dark.png" />
+  <link rel="stylesheet" href="css/fonts.css" />
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/reset.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/pages.css" />
+  <link rel="stylesheet" href="css/responsive.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Saltar al contenido</a>
+
+  <div class="app-shell">
+    <div id="shell-sidebar" style="display:contents"></div>
+    <div id="shell-topbar" style="display:contents"></div>
+
+    <main class="content" id="main-content">
+      <div class="page-header">
+        <div>
+          <h1>Configuración</h1>
+          <p>Datos de la empresa, moneda, IGV y métodos de pago.</p>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist" style="margin-bottom: var(--space-5);">
+        <button class="tab" type="button" data-tab="empresa" role="tab" aria-selected="true">Empresa</button>
+        <button class="tab" type="button" data-tab="pagos" role="tab" aria-selected="false">Métodos de pago</button>
+      </div>
+
+      <section id="panel-empresa">
+        <div class="table-card" style="padding: var(--space-5); max-width: 720px;">
+          <div id="empresa-content">
+            <div class="skeleton" style="height:200px;"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="panel-pagos" hidden>
+        <div class="table-card">
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr><th>Método</th><th>Titular</th><th>Número / cuenta</th><th>Estado</th><th></th></tr>
+              </thead>
+              <tbody id="payment-methods-body"><tr><td colspan="5"><div class="skeleton" style="height:20px;"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="js/pages/configuracion.js"></script>
+</body>
+</html>

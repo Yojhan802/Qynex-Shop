@@ -1,0 +1,22 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:freestyleperu;MODE=MySQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  flyway:
+    enabled: false
+
+app:
+  uploads:
+    dir: ${java.io.tmpdir:./target}/freestyleperu-test-uploads
+  jwt:
+    secret: test-secret-key-must-be-at-least-32-characters-long
+    access-token-minutes: 30
+    refresh-token-days: 7
+  cors:
+    allowed-origins: http://localhost:5173

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Roles y permisos · Freestyle Perú</title>
+  <link rel="icon" type="image/png" href="assets/brand/logo-mark-dark.png" />
+  <link rel="stylesheet" href="css/fonts.css" />
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/reset.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/pages.css" />
+  <link rel="stylesheet" href="css/responsive.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Saltar al contenido</a>
+
+  <div class="app-shell">
+    <div id="shell-sidebar" style="display:contents"></div>
+    <div id="shell-topbar" style="display:contents"></div>
+
+    <main class="content" id="main-content">
+      <div class="page-header">
+        <div>
+          <h1>Roles y permisos</h1>
+          <p>Define qué puede hacer cada rol dentro del sistema.</p>
+        </div>
+        <div class="page-actions">
+          <a href="usuarios.html" class="btn btn-secondary">Volver a usuarios</a>
+          <button class="btn btn-primary" type="button" id="btn-nuevo-rol">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+            Nuevo rol
+          </button>
+        </div>
+      </div>
+
+      <div class="roles-layout" style="display:grid; grid-template-columns: 280px 1fr; gap: var(--space-5); align-items:start;">
+        <div class="table-card" style="padding: var(--space-2);">
+          <div id="roles-list" style="display:flex; flex-direction:column; gap: var(--space-1);">
+            <div class="skeleton" style="height:40px;"></div>
+          </div>
+        </div>
+
+        <div class="table-card" id="role-detail" style="padding: var(--space-5);">
+          <div class="empty-state"><span>Selecciona un rol para ver y editar sus permisos.</span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="js/pages/roles.js"></script>
+</body>
+</html>
