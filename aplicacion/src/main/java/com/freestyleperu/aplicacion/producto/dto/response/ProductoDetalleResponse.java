@@ -17,10 +17,13 @@ public record ProductoDetalleResponse(
         Long brandId,
         String brandName,
         String description,
+        String material,
+        String fit,
         BigDecimal price,
         BigDecimal promoPrice,
         EstadoGeneral status,
         String imageUrl,
+        String sizeGuideImageUrl,
         List<VarianteResponse> variants,
         LocalDateTime createdAt,
         LocalDateTime updatedAt) {

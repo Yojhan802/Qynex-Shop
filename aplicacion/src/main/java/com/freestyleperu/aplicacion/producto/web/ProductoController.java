@@ -80,4 +80,10 @@ public class ProductoController {
     public ProductoDetalleResponse actualizarImagen(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
         return productoService.actualizarImagen(id, file);
     }
+
+    @PostMapping("/api/products/{id}/size-guide")
+    @PreAuthorize("hasAuthority('" + Permisos.PRODUCTOS_EDITAR + "')")
+    public ProductoDetalleResponse actualizarGuiaTallas(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
+        return productoService.actualizarGuiaTallas(id, file);
+    }
 }

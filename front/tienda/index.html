@@ -14,14 +14,21 @@
 </head>
 <body class="store-body">
   <a class="skip-link" href="#store-main">Saltar al contenido</a>
+  <div class="store-promo-bar">Envíos a todo el Perú · Yape, Plin o contraentrega en Huacho</div>
   <header class="store-header" id="store-header"></header>
 
   <section class="store-hero">
+    <span class="store-hero-eyebrow">Nueva colección</span>
     <h1>Ropa y estilo urbano</h1>
-    <p>Compra online y recíbelo donde estés — pago por Yape, Plin o transferencia.</p>
+    <p>Compra online y recíbelo donde estés — pago por Yape, Plin, transferencia o contraentrega en Huacho.</p>
+    <div class="store-hero-actions">
+      <a class="btn btn-primary btn-xl" href="#catalog-sections">Ver catálogo</a>
+    </div>
   </section>
 
   <main class="store-main" id="store-main">
+    <div class="store-category-banners" id="category-banners"></div>
+
     <div class="store-filters">
       <label class="topbar-search" style="background: var(--color-surface); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); padding: 0 var(--space-3); height: 38px; display:flex; align-items:center; gap:var(--space-2); flex:1; min-width:220px;">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
@@ -35,14 +42,15 @@
       </select>
     </div>
 
-    <div class="store-grid" id="product-grid">
-      <div class="skeleton" style="height:280px;"></div>
-      <div class="skeleton" style="height:280px;"></div>
-      <div class="skeleton" style="height:280px;"></div>
+    <div id="catalog-sections">
+      <div class="skeleton" style="height:280px; margin-bottom: var(--space-6);"></div>
       <div class="skeleton" style="height:280px;"></div>
     </div>
 
-    <div class="pagination-bar" id="pagination"></div>
+    <div id="catalog-flat" hidden>
+      <div class="store-grid" id="product-grid"></div>
+      <div class="pagination-bar" id="pagination"></div>
+    </div>
   </main>
 
   <footer class="store-footer" id="store-footer"></footer>

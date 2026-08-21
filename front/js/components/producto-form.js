@@ -72,10 +72,35 @@ export function openProductoForm({ catalog, producto = null, onSaved }) {
             <input class="input" id="pf-promo-price" type="number" min="0.01" step="0.01" value="${producto?.promoPrice ?? ''}" />
             <span class="field-hint">Opcional. Debe ser menor que el precio regular.</span>
           </div>
+          <div class="field">
+            <label class="field-label" for="pf-material">Material</label>
+            <input class="input" id="pf-material" maxlength="150" placeholder="Ej. 100% Algodón" value="${producto?.material ?? ''}" />
+          </div>
+          <div class="field">
+            <label class="field-label" for="pf-fit">Calce</label>
+            <input class="input" id="pf-fit" maxlength="100" placeholder="Ej. True to size" value="${producto?.fit ?? ''}" />
+          </div>
           <div class="field field-span-2">
             <label class="field-label" for="pf-description">Descripción</label>
             <textarea class="input" id="pf-description" rows="3" style="height:auto; padding-top:10px; resize:vertical;">${producto?.description ?? ''}</textarea>
           </div>
+          ${
+            esEdicion
+              ? `
+          <div class="field field-span-2">
+            <span class="field-label">Guía de tallas</span>
+            <div style="display:flex; align-items:center; gap: var(--space-3);">
+              <div style="width:64px; height:64px; border-radius: var(--radius-md); overflow:hidden; background: var(--color-surface-sunken); flex-shrink:0;" id="pf-size-guide-preview-wrap">
+                ${producto.sizeGuideImageUrl ? `<img src="${API_ORIGIN}${producto.sizeGuideImageUrl}" alt="" style="width:100%; height:100%; object-fit:cover;" />` : ''}
+              </div>
+              <label class="btn btn-secondary btn-sm" for="pf-size-guide-input" style="cursor:pointer;">Cambiar guía</label>
+              <input type="file" id="pf-size-guide-input" accept="image/png,image/jpeg,image/webp" style="display:none;" />
+            </div>
+            <span class="field-hint">Se muestra en la ficha del producto en la tienda online.</span>
+          </div>
+          `
+              : ''
+          }
         </div>
       </form>
     `,
@@ -112,6 +137,11 @@ export function openProductoForm({ catalog, producto = null, onSaved }) {
         });
       }
     });
+
+    modal.body.querySelector('#pf-size-guide-input').addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      if (file) subirGuiaTallas(producto.id, file, modal.body.querySelector('#pf-size-guide-preview-wrap'));
+    });
   }
 
   modal.footer.querySelector('[data-cancel]').addEventListener('click', closeModal);
@@ -127,6 +157,8 @@ export function openProductoForm({ catalog, producto = null, onSaved }) {
       subcategoryId: subcategorySelect.value ? Number(subcategorySelect.value) : null,
       brandId: modal.body.querySelector('#pf-brand').value ? Number(modal.body.querySelector('#pf-brand').value) : null,
       description: modal.body.querySelector('#pf-description').value.trim() || null,
+      material: modal.body.querySelector('#pf-material').value.trim() || null,
+      fit: modal.body.querySelector('#pf-fit').value.trim() || null,
       price: Number(modal.body.querySelector('#pf-price').value),
       promoPrice: modal.body.querySelector('#pf-promo-price').value ? Number(modal.body.querySelector('#pf-promo-price').value) : null,
     };
@@ -175,5 +207,17 @@ async function subirImagen(productId, file, previewWrap, onUploaded) {
     onUploaded?.(actualizado);
   } catch (error) {
     showToast({ type: 'danger', title: 'Error', message: error instanceof ApiError ? error.message : 'No se pudo subir la foto' });
+  }
+}
+
+async function subirGuiaTallas(productId, file, previewWrap) {
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const actualizado = await api.post(`/products/${productId}/size-guide`, formData);
+    previewWrap.innerHTML = `<img src="${API_ORIGIN}${actualizado.sizeGuideImageUrl}" alt="" style="width:100%; height:100%; object-fit:cover;" />`;
+    showToast({ type: 'success', title: 'Guía de tallas actualizada' });
+  } catch (error) {
+    showToast({ type: 'danger', title: 'Error', message: error instanceof ApiError ? error.message : 'No se pudo subir la guía de tallas' });
   }
 }

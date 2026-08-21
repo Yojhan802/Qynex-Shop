@@ -12,13 +12,16 @@ import com.freestyleperu.aplicacion.shared.dto.PageResponse;
 import com.freestyleperu.aplicacion.shared.domain.EstadoGeneral;
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicCategoriaResponse;
+import com.freestyleperu.aplicacion.tienda.dto.response.PublicColorSwatchResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicMarcaResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicMetodoPagoResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicProductoDetalleResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicProductoResumenResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicShippingInfoResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicVarianteResponse;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,9 +69,9 @@ public class TiendaCatalogoService {
                 .toList();
 
         return new PublicProductoDetalleResponse(
-                product.getId(), product.getName(), product.getDescription(), product.getPrice(), product.getPromoPrice(),
-                product.getImageUrl(), product.getCategory().getName(),
-                product.getBrand() != null ? product.getBrand().getName() : null, variantes);
+                product.getId(), product.getName(), product.getDescription(), product.getMaterial(), product.getFit(),
+                product.getPrice(), product.getPromoPrice(), product.getImageUrl(), product.getSizeGuideImageUrl(),
+                product.getCategory().getName(), product.getBrand() != null ? product.getBrand().getName() : null, variantes);
     }
 
     public List<PublicCategoriaResponse> listarCategorias() {
@@ -98,12 +101,27 @@ public class TiendaCatalogoService {
                 .toList();
     }
 
+    private static final int MAX_SWATCHES = 6;
+
     private PublicProductoResumenResponse toResumen(Product product) {
-        boolean inStock = variantRepository.existsByProductIdAndStatusAndStockGreaterThan(
-                product.getId(), EstadoGeneral.ACTIVE, 0);
+        List<ProductVariant> variantesActivas = variantRepository
+                .findAllByProductIdOrderBySizeSortOrderAscColorNameAsc(product.getId()).stream()
+                .filter(v -> v.getStatus() == EstadoGeneral.ACTIVE)
+                .toList();
+        boolean inStock = variantesActivas.stream().anyMatch(v -> v.getStock() > 0);
+
+        List<PublicColorSwatchResponse> colores = variantesActivas.stream()
+                .collect(Collectors.toMap(
+                        v -> v.getColor().getId(), v -> v.getColor(), (a, b) -> a, LinkedHashMap::new))
+                .values().stream()
+                .map(color -> new PublicColorSwatchResponse(color.getName(), color.getHexCode()))
+                .limit(MAX_SWATCHES)
+                .toList();
+
         return new PublicProductoResumenResponse(
                 product.getId(), product.getName(), product.getPrice(), product.getPromoPrice(), product.getImageUrl(),
-                product.getCategory().getName(), product.getBrand() != null ? product.getBrand().getName() : null, inStock);
+                product.getCategory().getName(), product.getBrand() != null ? product.getBrand().getName() : null,
+                colores, inStock);
     }
 
     private PublicVarianteResponse toVariante(ProductVariant variant) {

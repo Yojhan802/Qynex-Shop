@@ -1,7 +1,6 @@
 package com.freestyleperu.aplicacion.producto.repository;
 
 import com.freestyleperu.aplicacion.producto.domain.ProductVariant;
-import com.freestyleperu.aplicacion.shared.domain.EstadoGeneral;
 import jakarta.persistence.LockModeType;
 import java.util.List;
 import java.util.Optional;
@@ -41,8 +40,6 @@ public interface ProductVariantRepository extends JpaRepository<ProductVariant, 
     List<ProductVariant> findOutOfStock();
 
     boolean existsByProductIdAndColorIdAndSizeId(Long productId, Long colorId, Long sizeId);
-
-    boolean existsByProductIdAndStatusAndStockGreaterThan(Long productId, EstadoGeneral status, int stock);
 
     boolean existsByBarcode(String barcode);
 

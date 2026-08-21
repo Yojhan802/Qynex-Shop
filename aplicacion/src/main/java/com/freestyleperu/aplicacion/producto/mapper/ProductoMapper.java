@@ -47,10 +47,13 @@ public class ProductoMapper {
                 product.getBrand() != null ? product.getBrand().getId() : null,
                 product.getBrand() != null ? product.getBrand().getName() : null,
                 product.getDescription(),
+                product.getMaterial(),
+                product.getFit(),
                 product.getPrice(),
                 product.getPromoPrice(),
                 product.getStatus(),
                 product.getImageUrl(),
+                product.getSizeGuideImageUrl(),
                 variants.stream().map(varianteMapper::toResponse).toList(),
                 product.getCreatedAt(),
                 product.getUpdatedAt());

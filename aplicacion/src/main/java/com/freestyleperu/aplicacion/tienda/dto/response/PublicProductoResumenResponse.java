@@ -1,6 +1,7 @@
 package com.freestyleperu.aplicacion.tienda.dto.response;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 public record PublicProductoResumenResponse(
         Long id,
@@ -10,5 +11,6 @@ public record PublicProductoResumenResponse(
         String imageUrl,
         String categoryName,
         String brandName,
+        List<PublicColorSwatchResponse> colors,
         boolean inStock) {
 }

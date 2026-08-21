@@ -128,7 +128,7 @@ class DevolucionFlujoIntegrationTest {
         sizeRepository.save(talla);
 
         ProductoDetalleResponse producto = productoService.crear(new CrearProductoRequest(
-                null, null, "Polo Devolución", categoria.getId(), null, null, null, new BigDecimal("40.00"), null));
+                null, null, "Polo Devolución", categoria.getId(), null, null, null, null, null, new BigDecimal("40.00"), null));
         VarianteResponse variante = varianteService.crear(producto.id(),
                 new CrearVarianteRequest(color.getId(), talla.getId(), null, null, 10, 1, false));
 

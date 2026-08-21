@@ -7,9 +7,12 @@ public record PublicProductoDetalleResponse(
         Long id,
         String name,
         String description,
+        String material,
+        String fit,
         BigDecimal price,
         BigDecimal promoPrice,
         String imageUrl,
+        String sizeGuideImageUrl,
         String categoryName,
         String brandName,
         List<PublicVarianteResponse> variants) {

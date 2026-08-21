@@ -213,7 +213,7 @@ class VentaFlujoIntegrationTest {
         sizeRepository.save(sizeEntity);
 
         ProductoDetalleResponse productoCreado = productoService.crear(new CrearProductoRequest(
-                null, null, producto, categoria.getId(), null, null, null, precio, null));
+                null, null, producto, categoria.getId(), null, null, null, null, null, precio, null));
         return varianteService.crear(productoCreado.id(),
                 new CrearVarianteRequest(colorEntity.getId(), sizeEntity.getId(), null, null, stock, 1, false));
     }

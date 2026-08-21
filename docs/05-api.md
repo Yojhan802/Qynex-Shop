@@ -139,6 +139,11 @@ Mismo patrón para `/api/categories`, `/api/subcategories`, `/api/brands`,
 | PUT | `/api/products/{id}` | `PRODUCTOS_EDITAR` | |
 | PATCH | `/api/products/{id}/status` | `PRODUCTOS_EDITAR` | Activar / desactivar |
 | POST | `/api/products/{id}/image` | `PRODUCTOS_EDITAR` | Subir imagen |
+| POST | `/api/products/{id}/size-guide` | `PRODUCTOS_EDITAR` | Subir imagen de guía de tallas (tienda online) |
+
+`material` y `fit` (texto libre, ej. "100% Algodón" / "True to size") viajan
+en `CrearProductoRequest`/`ActualizarProductoRequest` y se muestran en la
+ficha pública del producto.
 
 **Filtros:** `?search=polo&categoryId=1&subcategoryId=4&brandId=2&status=ACTIVE&minPrice=20&maxPrice=100`
 
@@ -503,7 +508,7 @@ ni viceversa. Ver docs/03-modelo-datos.md §12.
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/api/store/catalog/products` | Paginado; filtros `search`, `categoryId`, `brandId` |
+| GET | `/api/store/catalog/products` | Paginado; filtros `search`, `categoryId`, `brandId`. Cada item incluye `colors: [{name, hexCode}]` (colores distintos con stock, máx. 6) para los swatches del listado |
 | GET | `/api/store/catalog/products/{id}` | Detalle + variantes (color/talla) con `inStock` |
 | GET | `/api/store/catalog/categories` | Solo categorías activas |
 | GET | `/api/store/catalog/brands` | Solo marcas activas |
@@ -521,9 +526,12 @@ información de cara al público.
   "id": 1,
   "name": "Polo Oversize",
   "description": "Polo oversize de algodón peruano 100%",
+  "material": "100% Algodón",
+  "fit": "True to size",
   "price": 49.90,
   "promoPrice": 39.90,
   "imageUrl": "/uploads/products/....jpg",
+  "sizeGuideImageUrl": "/uploads/size-guides/....jpg",
   "categoryName": "Polos",
   "brandName": null,
   "variants": [
@@ -575,7 +583,10 @@ online. `409 DUPLICATE_RESOURCE` si el email ya tiene contraseña.
   "items": [{ "variantId": 145, "quantity": 2 }],
   "paymentMethodId": 2,
   "paymentReference": null,
-  "recipientName": "María Quispe",
+  "recipientDni": "45678912",
+  "recipientFirstName": "María",
+  "recipientLastNamePaterno": "Quispe",
+  "recipientLastNameMaterno": "Ramos",
   "phone": "987654321",
   "address": "Av. Siempre Viva 123",
   "department": "Lima",

@@ -160,6 +160,8 @@ es alfabético.
 | promo_price | DECIMAL(12,2) | NULL, `CHECK (promo_price >= 0)` |
 | status | VARCHAR(20) | NOT NULL DEFAULT `ACTIVE` |
 | image_url | VARCHAR(255) | NULL |
+| material / fit | VARCHAR(150) / VARCHAR(100) | NULL (desde V21) — texto libre para la ficha de la tienda online |
+| size_guide_image_url | VARCHAR(255) | NULL (desde V21) — imagen de guía de tallas de la tienda online |
 | created_at / updated_at | DATETIME(6) | NOT NULL |
 | created_by / updated_by | BIGINT | FK → users |
 
@@ -446,7 +448,8 @@ poder confundirse con la sesión de un `Usuario`.
 | payment_method_id | BIGINT | FK NOT NULL |
 | payment_reference | VARCHAR(50) | NULL |
 | payment_proof_url | VARCHAR(255) | NULL (desde V19) — comprobante subido por el cliente |
-| recipient_name / phone / address / district | VARCHAR | NOT NULL — datos de entrega |
+| recipient_dni / recipient_first_name / recipient_last_name_paterno / recipient_last_name_materno | VARCHAR | NOT NULL (desde V20) — la courier (Shalom) exige DNI y apellidos separados del destinatario, no un nombre libre |
+| phone / address / district | VARCHAR | NOT NULL — datos de entrega |
 | notes | VARCHAR(255) | NULL |
 | created_at | DATETIME(6) | NOT NULL |
 | confirmed_at | DATETIME(6) | NULL |
@@ -536,6 +539,9 @@ V18 → tienda online: customers.password_hash, customer_refresh_tokens, orders,
       order_details, reference_type ORDER, permisos PEDIDOS_*
 V19 → envío: company_settings.shipping_flat_rate, orders.department/province/
       shipping_cost/payment_proof_url, método de pago CONTRAENTREGA
+V20 → orders.recipient_dni/recipient_first_name/recipient_last_name_paterno/
+      recipient_last_name_materno (reemplaza recipient_name)
+V21 → products.material/fit/size_guide_image_url (ficha de tienda online)
 ```
 
 (Lista ilustrativa de las primeras fases — el detalle exacto de cada migración

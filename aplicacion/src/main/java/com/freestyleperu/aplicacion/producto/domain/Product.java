@@ -61,4 +61,13 @@ public class Product extends BaseEntity {
 
     @Column(name = "image_url", length = 255)
     private String imageUrl;
+
+    @Column(name = "material", length = 150)
+    private String material;
+
+    @Column(name = "fit", length = 100)
+    private String fit;
+
+    @Column(name = "size_guide_image_url", length = 255)
+    private String sizeGuideImageUrl;
 }

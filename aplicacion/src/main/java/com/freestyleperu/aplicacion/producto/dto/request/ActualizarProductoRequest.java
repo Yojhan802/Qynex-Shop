@@ -12,6 +12,8 @@ public record ActualizarProductoRequest(
         Long subcategoryId,
         Long brandId,
         String description,
+        @Size(max = 150) String material,
+        @Size(max = 100) String fit,
         @NotNull @DecimalMin(value = "0.01") BigDecimal price,
         @DecimalMin(value = "0.01") BigDecimal promoPrice,
         String imageUrl) {

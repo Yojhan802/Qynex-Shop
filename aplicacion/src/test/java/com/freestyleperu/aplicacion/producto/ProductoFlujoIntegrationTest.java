@@ -52,7 +52,7 @@ class ProductoFlujoIntegrationTest {
 
         CrearProductoRequest request = new CrearProductoRequest(
                 null, null, "Polo Oversize", categoria.getId(), null, null,
-                "Polo oversize de algodón", new BigDecimal("49.90"), new BigDecimal("39.90"));
+                "Polo oversize de algodón", null, null, new BigDecimal("49.90"), new BigDecimal("39.90"));
 
         ProductoDetalleResponse producto = productoService.crear(request);
 

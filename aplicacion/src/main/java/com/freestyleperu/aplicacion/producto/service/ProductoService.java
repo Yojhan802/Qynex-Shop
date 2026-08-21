@@ -86,6 +86,8 @@ public class ProductoService {
         product.setBrand(brand);
         product.setName(request.name());
         product.setDescription(request.description());
+        product.setMaterial(request.material());
+        product.setFit(request.fit());
         product.setPrice(request.price());
         product.setPromoPrice(request.promoPrice());
 
@@ -112,6 +114,8 @@ public class ProductoService {
         product.setBrand(resolverMarca(request.brandId()));
         product.setName(request.name());
         product.setDescription(request.description());
+        product.setMaterial(request.material());
+        product.setFit(request.fit());
         product.setPrice(request.price());
         product.setPromoPrice(request.promoPrice());
         product.setImageUrl(request.imageUrl());
@@ -133,6 +137,14 @@ public class ProductoService {
         Product product = buscarOFallar(id);
         product.setImageUrl(imageUploadService.guardar(file, "products"));
         auditService.log("PRODUCTO_IMAGEN_ACTUALIZADA", "PRODUCTO", product.getId(), null, product.getImageUrl(), AuditResult.SUCCESS);
+        return productoMapper.toDetalle(product, variantsDe(product.getId()));
+    }
+
+    @Transactional
+    public ProductoDetalleResponse actualizarGuiaTallas(Long id, MultipartFile file) {
+        Product product = buscarOFallar(id);
+        product.setSizeGuideImageUrl(imageUploadService.guardar(file, "size-guides"));
+        auditService.log("PRODUCTO_GUIA_TALLAS_ACTUALIZADA", "PRODUCTO", product.getId(), null, product.getSizeGuideImageUrl(), AuditResult.SUCCESS);
         return productoMapper.toDetalle(product, variantsDe(product.getId()));
     }
 

@@ -70,7 +70,7 @@ class InventarioFlujoIntegrationTest {
         Size talleL = nuevaTalla("L", (short) 4);
 
         ProductoDetalleResponse producto = productoService.crear(new CrearProductoRequest(
-                null, null, "Casaca Denim", categoria.getId(), null, null, null,
+                null, null, "Casaca Denim", categoria.getId(), null, null, null, null, null,
                 new BigDecimal("129.90"), null));
         VarianteResponse variante = varianteService.crear(producto.id(),
                 new CrearVarianteRequest(negro.getId(), talleL.getId(), null, null, 0, 2, false));

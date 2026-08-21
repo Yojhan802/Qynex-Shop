@@ -120,7 +120,7 @@ class ReporteFlujoIntegrationTest {
         sizeRepository.save(talla);
 
         ProductoDetalleResponse producto = productoService.crear(new CrearProductoRequest(
-                null, null, "Polo Reporte", categoria.getId(), null, null, null, new BigDecimal("50.00"), null));
+                null, null, "Polo Reporte", categoria.getId(), null, null, null, null, null, new BigDecimal("50.00"), null));
         VarianteResponse variante = varianteService.crear(producto.id(),
                 new CrearVarianteRequest(color.getId(), talla.getId(), null, null, 20, 1, false));
 

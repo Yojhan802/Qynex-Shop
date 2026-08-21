@@ -40,10 +40,24 @@ function render() {
           ${tieneDescuento ? `<span class="price-old">${formatCurrency(producto.price)}</span>` : ''}
           <span>${formatCurrency(tieneDescuento ? producto.promoPrice : producto.price)}</span>
         </div>
-        ${producto.description ? `<p style="margin-bottom: var(--space-5);">${producto.description}</p>` : ''}
+        ${producto.description ? `<p style="margin-bottom: var(--space-4);">${producto.description}</p>` : ''}
+
+        ${
+          producto.material || producto.fit
+            ? `
+        <div style="margin-bottom: var(--space-5); display:flex; flex-direction:column; gap:4px; font-size: var(--font-size-sm);">
+          ${producto.material ? `<div><strong>Material:</strong> ${producto.material}</div>` : ''}
+          ${producto.fit ? `<div><strong>Calce:</strong> ${producto.fit}</div>` : ''}
+        </div>
+        `
+            : ''
+        }
 
         <div class="field" style="margin-bottom: var(--space-4);">
-          <span class="field-label">Color</span>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="field-label">Color</span>
+            ${producto.sizeGuideImageUrl ? `<a href="${API_ORIGIN}${producto.sizeGuideImageUrl}" target="_blank" rel="noopener" style="font-size: var(--font-size-xs); color: var(--brand-accent); text-decoration:underline;">Guía de tallas</a>` : ''}
+          </div>
           <div class="store-swatches" id="color-swatches">
             ${colores
               .map(
