@@ -30,7 +30,15 @@ de este proxy sin configuración adicional.
 
 `backend` espera a que `mysql` pase su healthcheck (`mysqladmin ping`) antes
 de arrancar — sin esto, Spring Boot podría intentar conectarse antes de que
-MySQL esté listo para aceptar conexiones.
+MySQL esté listo para aceptar conexiones. `backend` a su vez expone su propio
+healthcheck contra `GET /actuator/health` (Spring Boot Actuator, solo el
+endpoint `health` expuesto, sin detalle — `management.endpoint.health.show-details: never`
+en `application.yml` — para no filtrar datos de conexión a un llamador
+anónimo), y `frontend` espera a que `backend` esté saludable antes de
+arrancar. Este mismo endpoint es el punto de apoyo para un futuro monitoreo
+centralizado de todas las instalaciones (una por cliente, ver
+docs/03-modelo-datos.md §15) — cada una puede reportar su estado con la misma
+llamada.
 
 ## 3. Primer despliegue
 

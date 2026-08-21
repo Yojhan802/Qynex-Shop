@@ -33,8 +33,9 @@ class AuditoriaFlujoIntegrationTest {
         PageResponse<AuditLogResumenResponse> porUsuario = auditoriaService.listar(10L, null, null, null, null, null, PageRequest.of(0, 20));
         assertThat(porUsuario.content()).hasSize(2).allMatch(e -> e.userId().equals(10L));
 
-        // Filtro por acción (parcial).
-        PageResponse<AuditLogResumenResponse> porAccion = auditoriaService.listar(null, "CREADO", null, null, null, null, PageRequest.of(0, 20));
+        // Filtro por acción (parcial), combinado con usuario para no depender de que
+        // esta sea la única acción "*CREADO*" en una base compartida entre pruebas.
+        PageResponse<AuditLogResumenResponse> porAccion = auditoriaService.listar(10L, "CREADO", null, null, null, null, PageRequest.of(0, 20));
         assertThat(porAccion.content()).extracting("action").containsExactly("PRODUCTO_CREADO");
 
         // Filtro por entidad.
@@ -42,14 +43,16 @@ class AuditoriaFlujoIntegrationTest {
         assertThat(porEntidad.content()).hasSize(1);
         assertThat(porEntidad.content().get(0).entity()).isEqualTo("VENTA");
 
-        // Filtro por resultado.
-        PageResponse<AuditLogResumenResponse> porResultado = auditoriaService.listar(null, null, null, AuditResult.DENIED, null, null, PageRequest.of(0, 20));
+        // Filtro por resultado, combinado con usuario — otras pruebas (403 reales,
+        // logins fallidos) también generan entradas DENIED en esta misma base compartida.
+        PageResponse<AuditLogResumenResponse> porResultado = auditoriaService.listar(10L, null, null, AuditResult.DENIED, null, null, PageRequest.of(0, 20));
         assertThat(porResultado.content()).hasSize(1);
         assertThat(porResultado.content().get(0).result()).isEqualTo(AuditResult.DENIED);
 
-        // Filtro por rango de fechas (excluye el de hace 10 días).
+        // Filtro por rango de fechas (excluye el de hace 10 días). El límite superior
+        // se recorta una hora para no incluir entradas "de ahora" de otras pruebas.
         PageResponse<AuditLogResumenResponse> porFecha = auditoriaService.listar(
-                null, null, null, null, LocalDateTime.now().minusDays(3), LocalDateTime.now(), PageRequest.of(0, 20));
+                10L, null, null, null, LocalDateTime.now().minusDays(3), LocalDateTime.now().minusHours(1), PageRequest.of(0, 20));
         assertThat(porFecha.content()).hasSize(2);
 
         // Detalle completo por id.
