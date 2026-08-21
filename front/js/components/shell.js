@@ -43,7 +43,7 @@ const NAV_SECTIONS = [
     label: 'Análisis',
     items: [
       { id: 'reportes', label: 'Reportes', href: 'reportes.html', icon: 'reports', enabled: true },
-      { id: 'auditoria', label: 'Auditoría', href: 'auditoria.html', icon: 'audit', enabled: false },
+      { id: 'auditoria', label: 'Auditoría', href: 'auditoria.html', icon: 'audit', enabled: true },
     ],
   },
   {

@@ -445,7 +445,10 @@ Exportación (`REPORTES_EXPORTAR`): `?format=xlsx|pdf|csv`.
 | GET | `/api/audit` | `AUDITORIA_CONSULTAR` |
 | GET | `/api/audit/{id}` | `AUDITORIA_CONSULTAR` |
 
-Filtros: `?userId=&action=&entity=&result=&from=&to=`.
+Filtros: `?userId=&action=&entity=&result=&from=&to=` (`action`/`entity` con
+coincidencia parcial). `GET /api/audit/{id}` agrega `oldValue`/`newValue`
+(el JSON crudo guardado por `AuditService.log`) e `ipAddress`/`userAgent`,
+que el listado omite por ser pesados de mostrar en una tabla.
 **Solo lectura**: no existe forma de escribir ni borrar auditoría por API.
 
 ---
