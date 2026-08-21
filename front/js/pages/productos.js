@@ -1,5 +1,5 @@
 import { requireSession } from '../core/auth.js';
-import { api, ApiError } from '../core/api.js';
+import { api, ApiError, API_ORIGIN } from '../core/api.js';
 import { renderShell } from '../components/shell.js';
 import { loadCatalog, activeOnly } from '../core/catalog.js';
 import { renderPagination } from '../components/pagination.js';
@@ -120,7 +120,7 @@ function filaProducto(p) {
       <td>
         <div class="table-row-with-thumb">
           <div class="table-thumb">
-            ${p.imageUrl ? `<img src="${p.imageUrl}" alt="" />` : '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 8l8-4 8 4-8 4-8-4z"/><path d="M4 8v8l8 4 8-4V8"/></svg>'}
+            ${p.imageUrl ? `<img src="${API_ORIGIN}${p.imageUrl}" alt="" />` : '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 8l8-4 8 4-8 4-8-4z"/><path d="M4 8v8l8 4 8-4V8"/></svg>'}
           </div>
           <div>
             <div class="table-cell-primary">${p.name}</div>

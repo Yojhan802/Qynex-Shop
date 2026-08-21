@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Freestyle Perú · Tienda online</title>
+  <link rel="icon" type="image/png" href="../assets/brand/logo-mark-dark.png" />
+  <link rel="stylesheet" href="../css/fonts.css" />
+  <link rel="stylesheet" href="../css/tokens.css" />
+  <link rel="stylesheet" href="../css/reset.css" />
+  <link rel="stylesheet" href="../css/base.css" />
+  <link rel="stylesheet" href="../css/components.css" />
+  <link rel="stylesheet" href="css/storefront.css" />
+</head>
+<body class="store-body">
+  <a class="skip-link" href="#store-main">Saltar al contenido</a>
+  <header class="store-header" id="store-header"></header>
+
+  <section class="store-hero">
+    <h1>Ropa y estilo urbano</h1>
+    <p>Compra online y recíbelo donde estés — pago por Yape, Plin o transferencia.</p>
+  </section>
+
+  <main class="store-main" id="store-main">
+    <div class="store-filters">
+      <label class="topbar-search" style="background: var(--color-surface); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); padding: 0 var(--space-3); height: 38px; display:flex; align-items:center; gap:var(--space-2); flex:1; min-width:220px;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+        <input type="search" id="filter-search" placeholder="Buscar producto…" aria-label="Buscar productos" style="border:none; outline:none; flex:1; font: inherit; background:transparent;" />
+      </label>
+      <select class="select" id="filter-category" aria-label="Filtrar por categoría">
+        <option value="">Todas las categorías</option>
+      </select>
+      <select class="select" id="filter-brand" aria-label="Filtrar por marca">
+        <option value="">Todas las marcas</option>
+      </select>
+    </div>
+
+    <div class="store-grid" id="product-grid">
+      <div class="skeleton" style="height:280px;"></div>
+      <div class="skeleton" style="height:280px;"></div>
+      <div class="skeleton" style="height:280px;"></div>
+      <div class="skeleton" style="height:280px;"></div>
+    </div>
+
+    <div class="pagination-bar" id="pagination"></div>
+  </main>
+
+  <footer class="store-footer" id="store-footer"></footer>
+
+  <script type="module" src="js/store/home.js"></script>
+</body>
+</html>

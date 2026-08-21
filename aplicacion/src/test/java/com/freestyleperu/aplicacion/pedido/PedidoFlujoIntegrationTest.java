@@ -1,0 +1,310 @@
+package com.freestyleperu.aplicacion.pedido;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.freestyleperu.aplicacion.catalogo.domain.Category;
+import com.freestyleperu.aplicacion.catalogo.domain.Color;
+import com.freestyleperu.aplicacion.catalogo.domain.Size;
+import com.freestyleperu.aplicacion.catalogo.repository.CategoryRepository;
+import com.freestyleperu.aplicacion.catalogo.repository.ColorRepository;
+import com.freestyleperu.aplicacion.catalogo.repository.SizeRepository;
+import com.freestyleperu.aplicacion.cliente.domain.Customer;
+import com.freestyleperu.aplicacion.cliente.repository.CustomerRepository;
+import com.freestyleperu.aplicacion.inventario.domain.Branch;
+import com.freestyleperu.aplicacion.inventario.domain.Warehouse;
+import com.freestyleperu.aplicacion.inventario.repository.BranchRepository;
+import com.freestyleperu.aplicacion.inventario.repository.WarehouseRepository;
+import com.freestyleperu.aplicacion.pago.domain.PaymentMethod;
+import com.freestyleperu.aplicacion.pago.domain.PaymentMethodType;
+import com.freestyleperu.aplicacion.pago.repository.PaymentMethodRepository;
+import com.freestyleperu.aplicacion.pedido.domain.PedidoStatus;
+import com.freestyleperu.aplicacion.pedido.dto.request.CancelarPedidoRequest;
+import com.freestyleperu.aplicacion.pedido.dto.request.CrearPedidoRequest;
+import com.freestyleperu.aplicacion.pedido.dto.request.ItemPedidoRequest;
+import com.freestyleperu.aplicacion.pedido.dto.response.PedidoResponse;
+import com.freestyleperu.aplicacion.pedido.service.PedidoService;
+import com.freestyleperu.aplicacion.producto.dto.request.CrearProductoRequest;
+import com.freestyleperu.aplicacion.producto.dto.request.CrearVarianteRequest;
+import com.freestyleperu.aplicacion.producto.dto.response.ProductoDetalleResponse;
+import com.freestyleperu.aplicacion.producto.dto.response.VarianteResponse;
+import com.freestyleperu.aplicacion.producto.repository.ProductVariantRepository;
+import com.freestyleperu.aplicacion.producto.service.ProductoService;
+import com.freestyleperu.aplicacion.producto.service.VarianteService;
+import com.freestyleperu.aplicacion.shared.domain.EstadoGeneral;
+import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
+import com.freestyleperu.aplicacion.shared.exception.ReglaDeNegocioException;
+import com.freestyleperu.aplicacion.shared.exception.StockInsuficienteException;
+import com.freestyleperu.aplicacion.usuario.domain.Rol;
+import com.freestyleperu.aplicacion.usuario.domain.Usuario;
+import com.freestyleperu.aplicacion.usuario.domain.UsuarioEstado;
+import com.freestyleperu.aplicacion.usuario.repository.RolRepository;
+import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
+import java.math.BigDecimal;
+import java.util.HashSet;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
+
+@SpringBootTest
+@ActiveProfiles("test")
+@Transactional
+class PedidoFlujoIntegrationTest {
+
+    @Autowired private CategoryRepository categoryRepository;
+    @Autowired private ColorRepository colorRepository;
+    @Autowired private SizeRepository sizeRepository;
+    @Autowired private PaymentMethodRepository paymentMethodRepository;
+    @Autowired private CustomerRepository customerRepository;
+    @Autowired private RolRepository rolRepository;
+    @Autowired private UsuarioRepository usuarioRepository;
+    @Autowired private ProductoService productoService;
+    @Autowired private VarianteService varianteService;
+    @Autowired private ProductVariantRepository variantRepository;
+    @Autowired private PedidoService pedidoService;
+    @Autowired private BranchRepository branchRepository;
+    @Autowired private WarehouseRepository warehouseRepository;
+
+    /** InventarioService.registrar exige un almacén activo — confirmarPago/cancelar pasan por ahí. */
+    private void aseguraAlmacenActivo(String sufijo) {
+        Branch branch = new Branch();
+        branch.setCode("SUC-PEDIDO-" + sufijo);
+        branch.setName("Sucursal pedido test " + sufijo);
+        branchRepository.save(branch);
+
+        Warehouse warehouse = new Warehouse();
+        warehouse.setBranch(branch);
+        warehouse.setCode("ALM-PEDIDO-" + sufijo);
+        warehouse.setName("Almacén pedido test " + sufijo);
+        warehouseRepository.save(warehouse);
+    }
+
+    @Test
+    void creaPedidoSinTocarStockYConfirmarPagoReciénLoDescuenta() {
+        aseguraAlmacenActivo("1");
+        VarianteResponse variante = crearVarianteConStock("Polo Piqué", "Blanco", "M", new BigDecimal("80.00"), 5);
+        PaymentMethod yape = metodoPago("YAPE");
+        Long customerId = nuevoCliente("cliente1@test.com").getId();
+        Long staffUserId = nuevoStaff("staff.pedidos1").getId();
+
+        PedidoResponse pedido = pedidoService.crear(
+                new CrearPedidoRequest(
+                        List.of(new ItemPedidoRequest(variante.id(), 2)),
+                        yape.getId(), "OP-999", "45678912", "Juan", "Pérez", "García", "999888777", "Av. Siempre Viva 123",
+                        "Lima", "Lima", "San Isidro", null),
+                customerId);
+
+        assertThat(pedido.status()).isEqualTo(PedidoStatus.PENDING_PAYMENT);
+        // 160.00 (2 x 80.00) + 15.00 de envío (tarifa plana sembrada por defecto).
+        assertThat(pedido.shippingCost()).isEqualByComparingTo("15.00");
+        assertThat(pedido.total()).isEqualByComparingTo("175.00");
+        assertThat(pedido.items()).hasSize(1);
+        // El stock no se toca al crear el pedido — recién se confirma el pago manualmente.
+        assertThat(variantRepository.findById(variante.id()).orElseThrow().getStock()).isEqualTo(5);
+
+        PedidoResponse confirmado = pedidoService.confirmarPago(pedido.id(), staffUserId);
+        assertThat(confirmado.status()).isEqualTo(PedidoStatus.CONFIRMED);
+        assertThat(confirmado.confirmedAt()).isNotNull();
+        assertThat(confirmado.confirmedByUsername()).isEqualTo("staff.pedidos1");
+        assertThat(variantRepository.findById(variante.id()).orElseThrow().getStock()).isEqualTo(3);
+
+        // No se puede confirmar dos veces.
+        assertThatThrownBy(() -> pedidoService.confirmarPago(pedido.id(), staffUserId))
+                .isInstanceOf(ReglaDeNegocioException.class);
+    }
+
+    @Test
+    void cancelarUnPedidoConfirmadoReingresaStockYUnoPendienteNoLoToca() {
+        aseguraAlmacenActivo("2");
+        VarianteResponse variante = crearVarianteConStock("Casaca Jean", "Azul", "L", new BigDecimal("150.00"), 4);
+        PaymentMethod yape = metodoPago("YAPE");
+        Long customerId = nuevoCliente("cliente2@test.com").getId();
+        Long staffUserId = nuevoStaff("staff.pedidos2").getId();
+
+        PedidoResponse confirmado = pedidoService.crear(
+                new CrearPedidoRequest(
+                        List.of(new ItemPedidoRequest(variante.id(), 2)),
+                        yape.getId(), null, "45678913", "Ana", "Torres", "López", "911222333", "Jr. Las Flores 45",
+                        "Lima", "Lima", "Miraflores", "Tocar timbre"),
+                customerId);
+        confirmado = pedidoService.confirmarPago(confirmado.id(), staffUserId);
+        assertThat(variantRepository.findById(variante.id()).orElseThrow().getStock()).isEqualTo(2);
+
+        PedidoResponse cancelado = pedidoService.cancelar(
+                confirmado.id(), new CancelarPedidoRequest("Cliente cambió de opinión"), staffUserId);
+        assertThat(cancelado.status()).isEqualTo(PedidoStatus.CANCELLED);
+        assertThat(cancelado.cancellationReason()).isEqualTo("Cliente cambió de opinión");
+        // El stock vuelve a como estaba antes de confirmar.
+        assertThat(variantRepository.findById(variante.id()).orElseThrow().getStock()).isEqualTo(4);
+
+        assertThatThrownBy(() -> pedidoService.cancelar(cancelado.id(), new CancelarPedidoRequest("de nuevo"), staffUserId))
+                .isInstanceOf(ReglaDeNegocioException.class);
+
+        // Un pedido nunca confirmado no debe alterar el stock al cancelarse.
+        PedidoResponse pendiente = pedidoService.crear(
+                new CrearPedidoRequest(
+                        List.of(new ItemPedidoRequest(variante.id(), 1)),
+                        yape.getId(), null, "45678914", "Luis", "Ramos", "Díaz", "955666777", "Calle Sol 1",
+                        "Lima", "Lima", "Surco", null),
+                customerId);
+        pedidoService.cancelar(pendiente.id(), new CancelarPedidoRequest("No completó el pago"), staffUserId);
+        assertThat(variantRepository.findById(variante.id()).orElseThrow().getStock()).isEqualTo(4);
+    }
+
+    @Test
+    void rechazaCrearPedidoSinStockYConfirmarSiElStockYaNoAlcanza() {
+        aseguraAlmacenActivo("3");
+        VarianteResponse variante = crearVarianteConStock("Gorra Trucker", "Negro", "Única", new BigDecimal("45.00"), 1);
+        PaymentMethod yape = metodoPago("YAPE");
+        Long customerId = nuevoCliente("cliente3@test.com").getId();
+        Long staffUserId = nuevoStaff("staff.pedidos3").getId();
+
+        assertThatThrownBy(() -> pedidoService.crear(
+                new CrearPedidoRequest(
+                        List.of(new ItemPedidoRequest(variante.id(), 2)),
+                        yape.getId(), null, "45000001", "Cliente", "Sin", "Stock", "900000000", "Dirección 1",
+                        "Lima", "Lima", "Distrito", null),
+                customerId))
+                .isInstanceOf(StockInsuficienteException.class);
+
+        // Dos pedidos piden la última unidad; el primero se confirma, el segundo ya no puede.
+        PedidoResponse pedidoA = pedidoService.crear(
+                new CrearPedidoRequest(
+                        List.of(new ItemPedidoRequest(variante.id(), 1)),
+                        yape.getId(), null, "45000002", "Cliente", "A", "Prueba", "900000001", "Dirección 1",
+                        "Lima", "Lima", "Distrito", null),
+                customerId);
+        PedidoResponse pedidoB = pedidoService.crear(
+                new CrearPedidoRequest(
+                        List.of(new ItemPedidoRequest(variante.id(), 1)),
+                        yape.getId(), null, "45000003", "Cliente", "B", "Prueba", "900000002", "Dirección 2",
+                        "Lima", "Lima", "Distrito", null),
+                customerId);
+
+        pedidoService.confirmarPago(pedidoA.id(), staffUserId);
+        assertThatThrownBy(() -> pedidoService.confirmarPago(pedidoB.id(), staffUserId))
+                .isInstanceOf(StockInsuficienteException.class);
+    }
+
+    @Test
+    void contraentregaEsGratisSoloEnHuachoYSeRechazaEnCualquierOtroDistrito() {
+        VarianteResponse variante = crearVarianteConStock("Buzo Canguro", "Gris", "L", new BigDecimal("90.00"), 3);
+        PaymentMethod contraentrega = metodoPago("CONTRAENTREGA");
+        Long customerId = nuevoCliente("cliente.huacho@test.com").getId();
+
+        PedidoResponse pedidoHuacho = pedidoService.crear(
+                new CrearPedidoRequest(
+                        List.of(new ItemPedidoRequest(variante.id(), 1)),
+                        contraentrega.getId(), null, "45000004", "Cliente", "Huacho", "Prueba", "900111222", "Jr. Comercio 200",
+                        "Lima", "Huaura", "Huacho", null),
+                customerId);
+        assertThat(pedidoHuacho.shippingCost()).isEqualByComparingTo("0.00");
+        assertThat(pedidoHuacho.total()).isEqualByComparingTo("90.00");
+
+        assertThatThrownBy(() -> pedidoService.crear(
+                new CrearPedidoRequest(
+                        List.of(new ItemPedidoRequest(variante.id(), 1)),
+                        contraentrega.getId(), null, "45000005", "Cliente", "Otro", "Distrito", "900333444", "Av. Larco 500",
+                        "Lima", "Lima", "Miraflores", null),
+                customerId))
+                .isInstanceOf(ReglaDeNegocioException.class);
+    }
+
+    @Test
+    void comprobanteDePagoSoloLoSubeElDueñoYSoloMientrasEstaPendiente() {
+        aseguraAlmacenActivo("4");
+        VarianteResponse variante = crearVarianteConStock("Camisa Lino", "Blanco", "M", new BigDecimal("70.00"), 2);
+        PaymentMethod yape = metodoPago("YAPE");
+        Long customerId = nuevoCliente("cliente.comprobante@test.com").getId();
+        Long otroClienteId = nuevoCliente("otro.cliente@test.com").getId();
+        Long staffUserId = nuevoStaff("staff.comprobante").getId();
+
+        PedidoResponse pedido = pedidoService.crear(
+                new CrearPedidoRequest(
+                        List.of(new ItemPedidoRequest(variante.id(), 1)),
+                        yape.getId(), "OP-777", "45000006", "Cliente", "Comprobante", "Prueba", "900555666", "Calle Uno 10",
+                        "Lima", "Lima", "Surco", null),
+                customerId);
+        assertThat(pedido.paymentProofUrl()).isNull();
+
+        MockMultipartFile archivo = new MockMultipartFile("file", "comprobante.jpg", "image/jpeg", new byte[] { 1, 2, 3 });
+
+        // Un cliente que no es el dueño no puede subir el comprobante.
+        assertThatThrownBy(() -> pedidoService.subirComprobante(pedido.id(), otroClienteId, archivo))
+                .isInstanceOf(RecursoNoEncontradoException.class);
+
+        PedidoResponse conComprobante = pedidoService.subirComprobante(pedido.id(), customerId, archivo);
+        assertThat(conComprobante.paymentProofUrl()).isNotBlank();
+
+        // Una vez confirmado el pedido, ya no se puede volver a adjuntar comprobante.
+        pedidoService.confirmarPago(pedido.id(), staffUserId);
+        assertThatThrownBy(() -> pedidoService.subirComprobante(pedido.id(), customerId, archivo))
+                .isInstanceOf(ReglaDeNegocioException.class);
+    }
+
+    private VarianteResponse crearVarianteConStock(String producto, String color, String talla, BigDecimal precio, int stock) {
+        Category categoria = new Category();
+        categoria.setName(producto + "-cat");
+        categoria.setSlug((producto + "-cat").toLowerCase());
+        categoryRepository.save(categoria);
+
+        Color colorEntity = new Color();
+        colorEntity.setName(color + "-" + producto);
+        colorEntity.setHexCode("#000000");
+        colorRepository.save(colorEntity);
+
+        Size sizeEntity = new Size();
+        sizeEntity.setName(talla + "-" + producto);
+        sizeEntity.setSortOrder((short) 1);
+        sizeRepository.save(sizeEntity);
+
+        ProductoDetalleResponse productoCreado = productoService.crear(new CrearProductoRequest(
+                null, null, producto, categoria.getId(), null, null, null, precio, null));
+        return varianteService.crear(productoCreado.id(),
+                new CrearVarianteRequest(colorEntity.getId(), sizeEntity.getId(), null, null, stock, 1, false));
+    }
+
+    private PaymentMethod metodoPago(String code) {
+        return paymentMethodRepository.findAllByOrderBySortOrderAsc().stream()
+                .filter(m -> m.getCode().equals(code))
+                .findFirst()
+                .orElseGet(() -> {
+                    PaymentMethod method = new PaymentMethod();
+                    method.setCode(code);
+                    method.setName(code);
+                    method.setType(PaymentMethodType.DIGITAL_WALLET);
+                    method.setAffectsCash(false);
+                    method.setRequiresReference(true);
+                    method.setSortOrder((short) 1);
+                    return paymentMethodRepository.save(method);
+                });
+    }
+
+    private Customer nuevoCliente(String email) {
+        Customer customer = new Customer();
+        customer.setFullName("Cliente de prueba");
+        customer.setEmail(email);
+        customer.setStatus(EstadoGeneral.ACTIVE);
+        return customerRepository.save(customer);
+    }
+
+    private Usuario nuevoStaff(String username) {
+        Rol rol = new Rol();
+        rol.setCode("TEST_ROL_PEDIDO_" + username.hashCode());
+        rol.setName("Rol de prueba pedidos");
+        rol.setSystem(false);
+        rolRepository.save(rol);
+
+        Usuario usuario = new Usuario();
+        usuario.setUsername(username);
+        usuario.setPasswordHash("hash");
+        usuario.setFullName("Staff de Prueba");
+        usuario.setStatus(UsuarioEstado.ACTIVE);
+        usuario.setRoles(new HashSet<>(List.of(rol)));
+        return usuarioRepository.save(usuario);
+    }
+}

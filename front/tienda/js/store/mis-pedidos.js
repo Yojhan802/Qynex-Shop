@@ -1,0 +1,126 @@
+import { storeApi, ApiError, API_ORIGIN } from './core/store-api.js';
+import { requireCustomerSession } from './core/customer-auth.js';
+import { renderStoreShell } from './components/store-shell.js';
+import { formatCurrency, formatDateTime } from '../../../js/core/format.js';
+import { openModal } from '../../../js/components/modal.js';
+import { showToast } from '../../../js/components/toast.js';
+
+const STATUS_LABELS = { PENDING_PAYMENT: 'Pendiente de pago', CONFIRMED: 'Confirmado', CANCELLED: 'Anulado' };
+const STATUS_CLASSES = { PENDING_PAYMENT: 'badge-warning', CONFIRMED: 'badge-success', CANCELLED: 'badge-danger' };
+
+function pedidoCard(p) {
+  return `
+    <div class="card" style="margin-bottom: var(--space-4); cursor:pointer;" data-id="${p.id}">
+      <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <h3>${p.orderNumber}</h3>
+          <p>${formatDateTime(p.createdAt)}</p>
+        </div>
+        <span class="badge ${STATUS_CLASSES[p.status] || 'badge-neutral'}">${STATUS_LABELS[p.status] || p.status}</span>
+      </div>
+      <div class="card-body">
+        <div class="store-summary-total"><span>Total</span><span>${formatCurrency(p.total)}</span></div>
+      </div>
+    </div>
+  `;
+}
+
+async function verDetalle(id) {
+  try {
+    const pedido = await storeApi.get(`/store/orders/${id}`, { auth: true });
+    abrirModalDetalle(pedido);
+  } catch (error) {
+    showToast({ type: 'danger', title: 'Error', message: error instanceof ApiError ? error.message : 'No se pudo cargar el pedido' });
+  }
+}
+
+function abrirModalDetalle(pedido) {
+  const itemsHtml = pedido.items
+    .map(
+      (it) => `
+    <div class="store-summary-row">
+      <span>${it.productName} (${it.colorName}/${it.sizeName}) × ${it.quantity}</span>
+      <span>${formatCurrency(it.subtotal)}</span>
+    </div>
+  `
+    )
+    .join('');
+
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <div style="margin-bottom: var(--space-4);">
+      <div><strong>Entrega:</strong> ${pedido.address}, ${pedido.district}, ${pedido.province}, ${pedido.department}</div>
+      <div><strong>Método de pago:</strong> ${pedido.paymentMethodName}</div>
+      ${pedido.confirmedAt ? `<div><strong>Confirmado:</strong> ${formatDateTime(pedido.confirmedAt)}</div>` : ''}
+      ${pedido.status === 'CANCELLED' && pedido.cancellationReason ? `<div><strong>Motivo de anulación:</strong> ${pedido.cancellationReason}</div>` : ''}
+    </div>
+
+    ${itemsHtml}
+    <div class="store-summary-row"><span>Subtotal</span><span>${formatCurrency(pedido.subtotal)}</span></div>
+    <div class="store-summary-row"><span>Envío</span><span>${pedido.shippingCost > 0 ? formatCurrency(pedido.shippingCost) : 'Gratis'}</span></div>
+    <div class="store-summary-total"><span>Total</span><span>${formatCurrency(pedido.total)}</span></div>
+
+    <div id="proof-section" style="margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-border);"></div>
+  `;
+
+  const modal = openModal({ title: pedido.orderNumber, body, maxWidth: '520px' });
+  renderSeccionComprobante(modal.body.querySelector('#proof-section'), pedido);
+}
+
+function renderSeccionComprobante(container, pedido) {
+  if (pedido.paymentProofUrl) {
+    container.innerHTML = `
+      <div class="field-label" style="margin-bottom: var(--space-2);">Comprobante de pago</div>
+      <a href="${API_ORIGIN}${pedido.paymentProofUrl}" target="_blank" rel="noopener">
+        <img src="${API_ORIGIN}${pedido.paymentProofUrl}" alt="Comprobante de pago" style="max-width:100%; border-radius: var(--radius-md); border:1px solid var(--color-border);" />
+      </a>
+    `;
+    return;
+  }
+
+  if (pedido.status !== 'PENDING_PAYMENT') return;
+
+  container.innerHTML = `
+    <div class="field-label" style="margin-bottom: var(--space-2);">Comprobante de pago (opcional)</div>
+    <input type="file" class="input" id="proof-input" accept="image/png,image/jpeg,image/webp" style="margin-bottom: var(--space-3);" />
+    <button class="btn btn-secondary" type="button" id="btn-upload-proof">Subir comprobante</button>
+  `;
+
+  container.querySelector('#btn-upload-proof').addEventListener('click', async () => {
+    const file = container.querySelector('#proof-input').files?.[0];
+    if (!file) {
+      showToast({ type: 'danger', title: 'Selecciona un archivo primero' });
+      return;
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const actualizado = await storeApi.post(`/store/orders/${pedido.id}/payment-proof`, formData, { auth: true });
+      showToast({ type: 'success', title: 'Comprobante subido' });
+      renderSeccionComprobante(container, actualizado);
+    } catch (error) {
+      showToast({ type: 'danger', title: 'Error', message: error instanceof ApiError ? error.message : 'No se pudo subir el comprobante' });
+    }
+  });
+}
+
+async function init() {
+  const session = requireCustomerSession('login.html');
+  if (!session) return;
+  renderStoreShell({ basePath: '../', active: 'pedidos' });
+
+  const contenedor = document.querySelector('#orders-list');
+  try {
+    const page = await storeApi.get('/store/orders', { auth: true, query: { size: 50 } });
+    contenedor.innerHTML = page.content.length
+      ? page.content.map(pedidoCard).join('')
+      : `<div class="empty-state"><span>Todavía no tienes pedidos.</span></div>`;
+    contenedor.querySelectorAll('[data-id]').forEach((card) => {
+      card.addEventListener('click', () => verDetalle(card.dataset.id));
+    });
+  } catch (error) {
+    contenedor.innerHTML = `<div class="empty-state"><span>${error instanceof ApiError ? error.message : 'No se pudieron cargar tus pedidos'}</span></div>`;
+  }
+}
+
+init();

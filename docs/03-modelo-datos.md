@@ -244,12 +244,21 @@ invariante verificable con una sola consulta.
 
 ### `customers`
 `id` · `full_name` NOT NULL · `doc_type` (DNI/RUC/CE/SIN_DOCUMENTO) ·
-`doc_number` **UNIQUE NULL** · `phone` · `email` · `birth_date` · `status` ·
+`doc_number` **UNIQUE NULL** · `phone` · `email` **UNIQUE NULL** (desde Fase 2) ·
+`password_hash` VARCHAR(100) NULL (desde Fase 2) · `birth_date` · `status` ·
 timestamps.
 
 DNI y email son opcionales según el requisito. El historial de compras y los
 totales acumulados **no se guardan como columnas**: se calculan consultando
 `sales`, evitando datos redundantes que puedan desincronizarse.
+
+`password_hash` es NULL salvo que el cliente se haya registrado en la tienda
+online (§14). Se reutiliza la misma tabla en vez de crear un modelo de cuenta
+aparte: si alguien se registra con un correo que ya existe (un cliente que
+compró antes en tienda física, sin contraseña), se le asigna la contraseña a
+ese mismo registro — así su historial de compras físicas queda ligado a su
+cuenta online. `email` pasa a ser **UNIQUE** con la migración V18 para que esa
+búsqueda por correo sea inequívoca.
 
 ---
 
@@ -399,7 +408,7 @@ usuario) · `action` · `entity` · `entity_id` · `old_value` JSON · `new_valu
 ### `company_settings`
 Fila única (`id = 1`): `name` · `ruc` · `address` · `phone` · `email` ·
 `logo_url` · `currency_code` (PEN) · `currency_symbol` (S/) · `igv_rate` ·
-`ticket_footer` · `updated_at` · `updated_by`.
+`ticket_footer` · `shipping_flat_rate` (desde V19, §12) · `updated_at` · `updated_by`.
 
 ### `sequences`
 `name` PK · `prefix` · `current_value` · `padding`.
@@ -410,7 +419,94 @@ mismo número.
 
 ---
 
-## 12. Redundancias evaluadas y descartadas
+## 12. Tienda online (Fase 2 — catálogo + carrito + pedido)
+
+Todo lo público vive en el paquete `tienda`, separado de `producto`/`cliente`,
+para que quede auditable de un vistazo qué endpoints son intencionalmente
+públicos. Ver docs/05-api.md §Tienda pública para los endpoints.
+
+### `customer_refresh_tokens`
+Espejo de `refresh_tokens`, pero para clientes: `id` · `customer_id` FK
+(`ON DELETE CASCADE`) · `token_hash` **UNIQUE** · `expires_at` · `revoked_at` ·
+`created_at`. Tabla separada de `refresh_tokens` (que es de staff) — un token
+de cliente lleva `ROLE_CUSTOMER` como única autoridad en el JWT y nunca debe
+poder confundirse con la sesión de un `Usuario`.
+
+### `orders`
+| Columna | Tipo | Restricciones |
+|---|---|---|
+| id | BIGINT UNSIGNED | PK |
+| order_number | VARCHAR(20) | **UNIQUE**, NOT NULL · `PED00000123` |
+| customer_id | BIGINT | FK NOT NULL |
+| department / province | VARCHAR(100) | NOT NULL (desde V19) — junto con `district`, ubicación completa a nivel de todo el Perú |
+| status | VARCHAR(20) | NOT NULL DEFAULT `PENDING_PAYMENT` · PENDING_PAYMENT/CONFIRMED/CANCELLED |
+| subtotal | DECIMAL(12,2) | NOT NULL |
+| shipping_cost | DECIMAL(12,2) | NOT NULL DEFAULT 0 (desde V19) |
+| total | DECIMAL(12,2) | NOT NULL, `CHECK (total >= 0)` · `= subtotal + shipping_cost` |
+| payment_method_id | BIGINT | FK NOT NULL |
+| payment_reference | VARCHAR(50) | NULL |
+| payment_proof_url | VARCHAR(255) | NULL (desde V19) — comprobante subido por el cliente |
+| recipient_name / phone / address / district | VARCHAR | NOT NULL — datos de entrega |
+| notes | VARCHAR(255) | NULL |
+| created_at | DATETIME(6) | NOT NULL |
+| confirmed_at | DATETIME(6) | NULL |
+| confirmed_by | BIGINT | FK → users, NULL |
+| cancelled_at | DATETIME(6) | NULL |
+| cancellation_reason | VARCHAR(255) | NULL |
+
+**Por qué `orders` no es `sales`:** `sales.user_id` y `sales.cash_session_id`
+son `NOT NULL` (toda venta exige un cajero y una caja abierta); un pedido web
+no tiene ninguno de los dos al crearse. Forzar esos campos con un usuario o
+una caja ficticios habría sido peor que tener dos tablas con un flujo de
+estados distinto.
+
+**Por qué el stock no se descuenta al crear el pedido:** el pago es manual
+(el cliente elige Yape/Plin/transferencia y el staff lo confirma a mano), así
+que "pedido creado" no significa "pago recibido". El stock recién se
+descuenta cuando el staff confirma el pago (`InventarioService.registrarPorPedido`,
+mismo mecanismo que una venta pero con `reference_type = 'ORDER'`), y se
+reingresa si un pedido confirmado se cancela después
+(`registrarPorCancelacionPedido`). Contrapartida asumida: dos clientes podrían
+pedir la última unidad antes de que el staff confirme el primero — aceptable
+para un MVP con confirmación manual, ya que el staff revisa cada pedido a
+mano de todas formas.
+
+### `order_details`
+`id` · `order_id` FK · `variant_id` FK · `quantity` `CHECK (> 0)` ·
+`unit_price` · `subtotal` ·
+**snapshot:** `product_name`, `variant_sku`, `color_name`, `size_name`.
+
+Mismo patrón de snapshot que `sale_details` (decisión D-05, §8).
+
+`inventory_movements.reference_type` gana el valor `ORDER` (además de
+SALE/RETURN/ADJUSTMENT) para que el movimiento de stock al confirmar un
+pedido pueda referenciarlo.
+
+### Envío y contraentrega (V19)
+
+`company_settings` gana `shipping_flat_rate` (tarifa única, editable desde
+Configuración) — se investigó a Shalom (la courier que usa la empresa) y no
+tiene una API pública de tarifas: cobra por peso/tamaño y destino con
+cotización manual, así que el monto lo define el staff en vez de calcularse
+contra un servicio externo.
+
+Se siembra un método de pago `CONTRAENTREGA` (`type = CASH`) en
+`payment_methods`, exclusivo para el distrito de Huacho (sede física de la
+empresa): el pedido se paga en efectivo al recibirlo y el envío es gratis
+(`shipping_cost = 0`, se asume recojo/entrega local propia del negocio, no un
+envío por courier). `PedidoService.crear()` valida el distrito exacto tanto
+si el frontend lo permitió como si alguien intenta forzarlo por API
+directamente.
+
+Departamento/provincia/distrito se arman en el frontend a partir de un
+dataset público de ubigeo (`joseluisq/ubigeos-peru`) embebido como JSON
+estático — no se valida contra una tabla en el backend (son strings simples,
+igual que `address`), la consistencia la da que el frontend arma el pedido
+desde selects en cascada, no texto libre.
+
+---
+
+## 13. Redundancias evaluadas y descartadas
 
 | Dato candidato | Decisión | Motivo |
 |---|---|---|
@@ -420,7 +516,7 @@ mismo número.
 | `product_variants.stock` | **Conservado** | Redundante frente a los movimientos, pero necesario para la velocidad del POS. Se actualiza en la misma transacción y es verificable |
 | Snapshot en `sale_details` | **Conservado** | No es redundancia: es una foto histórica que debe ser inmune a cambios posteriores |
 
-## 13. Orden de creación de las migraciones
+## 14. Orden de creación de las migraciones
 
 ```
 V1  → esquema de seguridad (users, roles, permissions, tablas puente, refresh_tokens)
@@ -435,4 +531,12 @@ V9  → devoluciones (returns, return_details)
 V10 → auditoría (audit_logs)
 V11 → datos semilla: permisos, roles, admin inicial, catálogos, métodos de pago
 V12 → datos de demostración (perfil dev únicamente)
+...
+V18 → tienda online: customers.password_hash, customer_refresh_tokens, orders,
+      order_details, reference_type ORDER, permisos PEDIDOS_*
+V19 → envío: company_settings.shipping_flat_rate, orders.department/province/
+      shipping_cost/payment_proof_url, método de pago CONTRAENTREGA
 ```
+
+(Lista ilustrativa de las primeras fases — el detalle exacto de cada migración
+vive en `src/main/resources/db/migration/`, que es la fuente de verdad.)

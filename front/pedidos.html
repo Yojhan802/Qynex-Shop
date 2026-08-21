@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pedidos · Freestyle Perú</title>
+  <link rel="icon" type="image/png" href="assets/brand/logo-mark-dark.png" />
+  <link rel="stylesheet" href="css/fonts.css" />
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/reset.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/layout.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/pages.css" />
+  <link rel="stylesheet" href="css/responsive.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Saltar al contenido</a>
+
+  <div class="app-shell">
+    <div id="shell-sidebar" style="display:contents"></div>
+    <div id="shell-topbar" style="display:contents"></div>
+
+    <main class="content" id="main-content">
+      <div class="page-header">
+        <div>
+          <h1>Pedidos</h1>
+          <p>Pedidos hechos desde la tienda online. El pago se confirma manualmente antes de descontar stock.</p>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <select class="select" id="filter-status" aria-label="Filtrar por estado">
+          <option value="">Todos los estados</option>
+          <option value="PENDING_PAYMENT">Pendiente de pago</option>
+          <option value="CONFIRMED">Confirmado</option>
+          <option value="CANCELLED">Anulado</option>
+        </select>
+      </div>
+
+      <div class="table-card">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr><th>N° pedido</th><th>Cliente</th><th>Total</th><th>Estado</th><th>Fecha</th><th></th></tr>
+            </thead>
+            <tbody id="orders-body"><tr><td colspan="6"><div class="skeleton" style="height:20px;"></div></td></tr></tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="pagination"></div>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="js/pages/pedidos.js"></script>
+</body>
+</html>

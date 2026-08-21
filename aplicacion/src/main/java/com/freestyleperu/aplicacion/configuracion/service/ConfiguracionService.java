@@ -9,8 +9,10 @@ import com.freestyleperu.aplicacion.shared.audit.AuditService;
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
 import com.freestyleperu.aplicacion.shared.util.ImageUploadService;
 import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -52,6 +54,7 @@ public class ConfiguracionService {
         settings.setCurrencySymbol(request.currencySymbol());
         settings.setIgvRate(request.igvRate());
         settings.setTicketFooter(request.ticketFooter());
+        settings.setShippingFlatRate(request.shippingFlatRate());
         settings.setUpdatedAt(LocalDateTime.now());
         settings.setUpdatedBy(userId);
         auditService.log("CONFIGURACION_ACTUALIZADA", "COMPANY_SETTINGS", SETTINGS_ID, null, request, AuditResult.SUCCESS);
@@ -68,6 +71,12 @@ public class ConfiguracionService {
         return toResponse(settings);
     }
 
+    /** Usado internamente por el módulo de pedidos para calcular el envío. */
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public BigDecimal obtenerTarifaEnvio() {
+        return buscarOFallar().getShippingFlatRate();
+    }
+
     private CompanySettings buscarOFallar() {
         return companySettingsRepository.findById(SETTINGS_ID)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Configuración de empresa", SETTINGS_ID));
@@ -80,6 +89,6 @@ public class ConfiguracionService {
         return new CompanySettingsResponse(
                 settings.getName(), settings.getRuc(), settings.getAddress(), settings.getPhone(), settings.getEmail(),
                 settings.getLogoUrl(), settings.getCurrencyCode(), settings.getCurrencySymbol(), settings.getIgvRate(),
-                settings.getTicketFooter(), settings.getUpdatedAt(), updatedByUsername);
+                settings.getTicketFooter(), settings.getShippingFlatRate(), settings.getUpdatedAt(), updatedByUsername);
     }
 }

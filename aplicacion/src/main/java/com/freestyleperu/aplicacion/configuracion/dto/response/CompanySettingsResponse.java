@@ -14,6 +14,7 @@ public record CompanySettingsResponse(
         String currencySymbol,
         BigDecimal igvRate,
         String ticketFooter,
+        BigDecimal shippingFlatRate,
         LocalDateTime updatedAt,
         String updatedByUsername) {
 }

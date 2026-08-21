@@ -58,4 +58,10 @@ public final class Permisos {
 
     public static final String PROMOTORES_CONSULTAR = "PROMOTORES_CONSULTAR";
     public static final String PROMOTORES_GESTIONAR = "PROMOTORES_GESTIONAR";
+
+    public static final String PEDIDOS_CONSULTAR = "PEDIDOS_CONSULTAR";
+    public static final String PEDIDOS_GESTIONAR = "PEDIDOS_GESTIONAR";
+
+    /** Autoridad que llevan los JWT de clientes de la tienda (no es un permiso de la tabla `permissions`). */
+    public static final String ROLE_CUSTOMER = "ROLE_CUSTOMER";
 }

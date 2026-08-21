@@ -35,6 +35,10 @@ public class Customer extends BaseEntity {
     @Column(name = "email", length = 120)
     private String email;
 
+    /** Nulo salvo que el cliente se haya registrado en la tienda online (docs §52). */
+    @Column(name = "password_hash", length = 100)
+    private String passwordHash;
+
     @Column(name = "birth_date")
     private LocalDate birthDate;
 

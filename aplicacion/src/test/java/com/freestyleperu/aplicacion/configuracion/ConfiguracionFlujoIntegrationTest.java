@@ -46,11 +46,12 @@ class ConfiguracionFlujoIntegrationTest {
 
         CompanySettingsResponse actualizado = configuracionService.actualizar(new ActualizarCompanySettingsRequest(
                 "Freestyle Perú SAC", "20123456789", "Av. Test 123", "999888777", "contacto@test.com",
-                "PEN", "S/", new BigDecimal("0.18"), "Gracias por su compra"), userId);
+                "PEN", "S/", new BigDecimal("0.18"), "Gracias por su compra", new BigDecimal("18.00")), userId);
 
         assertThat(actualizado.name()).isEqualTo("Freestyle Perú SAC");
         assertThat(actualizado.ruc()).isEqualTo("20123456789");
         assertThat(actualizado.igvRate()).isEqualByComparingTo("0.18");
+        assertThat(actualizado.shippingFlatRate()).isEqualByComparingTo("18.00");
         assertThat(actualizado.updatedByUsername()).isEqualTo("config.test");
 
         // El logo debe ser de un tipo de imagen soportado.
@@ -76,6 +77,7 @@ class ConfiguracionFlujoIntegrationTest {
         settings.setCurrencyCode("PEN");
         settings.setCurrencySymbol("S/");
         settings.setIgvRate(new BigDecimal("0.18"));
+        settings.setShippingFlatRate(new BigDecimal("15.00"));
         settings.setUpdatedAt(LocalDateTime.now());
         companySettingsRepository.save(settings);
     }

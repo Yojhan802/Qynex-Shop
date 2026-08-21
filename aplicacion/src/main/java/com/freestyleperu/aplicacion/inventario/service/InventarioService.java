@@ -104,6 +104,22 @@ public class InventarioService {
         return registrar(variantId, null, MovementType.DEVOLUCION, quantity, ReferenceType.RETURN, referenceId, null, userId);
     }
 
+    /**
+     * Invocado por {@code PedidoService} cuando el staff confirma el pago de
+     * un pedido de la tienda (recién ahí se toca stock, no al crear el
+     * pedido — ver docs/03, sección "Fase 2").
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public MovimientoResponse registrarPorPedido(Long variantId, int quantity, Long orderId, Long staffUserId) {
+        return registrar(variantId, null, MovementType.VENTA, -quantity, ReferenceType.ORDER, orderId, null, staffUserId);
+    }
+
+    /** Invocado por {@code PedidoService} al cancelar un pedido que ya tenía el pago confirmado (reingresa stock). */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public MovimientoResponse registrarPorCancelacionPedido(Long variantId, int quantity, Long orderId, Long staffUserId) {
+        return registrar(variantId, null, MovementType.DEVOLUCION, quantity, ReferenceType.ORDER, orderId, null, staffUserId);
+    }
+
     private MovimientoResponse registrar(Long variantId, Long warehouseId, MovementType type, int delta,
             ReferenceType referenceType, Long referenceId, String reason, Long userId) {
         Warehouse warehouse = resolverAlmacen(warehouseId);

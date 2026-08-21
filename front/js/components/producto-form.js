@@ -1,4 +1,4 @@
-import { api, ApiError } from '../core/api.js';
+import { api, ApiError, API_ORIGIN } from '../core/api.js';
 import { activeOnly, subcategoriesOf } from '../core/catalog.js';
 import { openModal, closeModal } from './modal.js';
 import { showToast } from './toast.js';
@@ -23,6 +23,22 @@ export function openProductoForm({ catalog, producto = null, onSaved }) {
           <span class="alert-message"></span>
         </div>
         <div class="form-grid">
+          ${
+            esEdicion
+              ? `
+          <div class="field field-span-2">
+            <span class="field-label">Foto del producto</span>
+            <div style="display:flex; align-items:center; gap: var(--space-3);">
+              <div style="width:64px; height:64px; border-radius: var(--radius-md); overflow:hidden; background: var(--color-surface-sunken); flex-shrink:0;" id="pf-image-preview-wrap">
+                ${producto.imageUrl ? `<img id="pf-image-preview" src="${API_ORIGIN}${producto.imageUrl}" alt="" style="width:100%; height:100%; object-fit:cover;" />` : ''}
+              </div>
+              <label class="btn btn-secondary btn-sm" for="pf-image-input" style="cursor:pointer;">Cambiar foto</label>
+              <input type="file" id="pf-image-input" accept="image/png,image/jpeg,image/webp" style="display:none;" />
+            </div>
+          </div>
+          `
+              : ''
+          }
           <div class="field field-span-2">
             <label class="field-label" for="pf-name">Nombre</label>
             <input class="input" id="pf-name" required maxlength="150" value="${producto?.name ?? ''}" />
@@ -84,6 +100,20 @@ export function openProductoForm({ catalog, producto = null, onSaved }) {
   categorySelect.addEventListener('change', refrescarSubcategorias);
   refrescarSubcategorias();
 
+  if (esEdicion) {
+    modal.body.querySelector('#pf-image-input').addEventListener('change', (event) => {
+      const file = event.target.files?.[0];
+      if (file) {
+        subirImagen(producto.id, file, modal.body.querySelector('#pf-image-preview-wrap'), (actualizado) => {
+          // Sin esto, "Guardar cambios" reenviaría el imageUrl viejo (o ninguno) y
+          // la foto recién subida se perdería en cuanto se editara cualquier otro campo.
+          producto.imageUrl = actualizado.imageUrl;
+          onSaved?.(actualizado);
+        });
+      }
+    });
+  }
+
   modal.footer.querySelector('[data-cancel]').addEventListener('click', closeModal);
 
   modal.body.querySelector('#producto-form').addEventListener('submit', async (event) => {
@@ -100,6 +130,9 @@ export function openProductoForm({ catalog, producto = null, onSaved }) {
       price: Number(modal.body.querySelector('#pf-price').value),
       promoPrice: modal.body.querySelector('#pf-promo-price').value ? Number(modal.body.querySelector('#pf-promo-price').value) : null,
     };
+    // La edición reenvía la imagen actual: si no se incluye, el backend la interpreta
+    // como "quitar la foto" y la borra (mismo motivo del bug que se estaba arreglando).
+    if (esEdicion) payload.imageUrl = producto.imageUrl ?? null;
 
     if (!payload.categoryId) {
       errorAlert.querySelector('.alert-message').textContent = 'Selecciona una categoría.';
@@ -130,4 +163,17 @@ export function openProductoForm({ catalog, producto = null, onSaved }) {
       submitBtn.querySelector('.spinner').hidden = true;
     }
   });
+}
+
+async function subirImagen(productId, file, previewWrap, onUploaded) {
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const actualizado = await api.post(`/products/${productId}/image`, formData);
+    previewWrap.innerHTML = `<img src="${API_ORIGIN}${actualizado.imageUrl}" alt="" style="width:100%; height:100%; object-fit:cover;" />`;
+    showToast({ type: 'success', title: 'Foto actualizada' });
+    onUploaded?.(actualizado);
+  } catch (error) {
+    showToast({ type: 'danger', title: 'Error', message: error instanceof ApiError ? error.message : 'No se pudo subir la foto' });
+  }
 }

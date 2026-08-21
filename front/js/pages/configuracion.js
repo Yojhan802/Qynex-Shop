@@ -97,6 +97,11 @@ function renderFormularioEmpresa(settings) {
           <label class="field-label" for="ef-igv">IGV (%)</label>
           <input class="input" type="number" id="ef-igv" required min="0" max="100" step="0.01" value="${(settings.igvRate * 100).toFixed(2)}" />
         </div>
+        <div class="field">
+          <label class="field-label" for="ef-shipping">Tarifa de envío (S/)</label>
+          <input class="input" type="number" id="ef-shipping" required min="0" step="0.01" value="${settings.shippingFlatRate ?? '0.00'}" />
+          <span class="field-hint">Se cobra en todos los pedidos online, salvo contraentrega en Huacho (gratis).</span>
+        </div>
         <div class="field field-span-2">
           <label class="field-label" for="ef-footer">Pie de ticket</label>
           <textarea class="input" id="ef-footer" maxlength="255" rows="2">${settings.ticketFooter ?? ''}</textarea>
@@ -132,6 +137,7 @@ function renderFormularioEmpresa(settings) {
         currencySymbol: document.querySelector('#ef-currency-symbol').value.trim(),
         igvRate: Number(document.querySelector('#ef-igv').value) / 100,
         ticketFooter: document.querySelector('#ef-footer').value.trim() || null,
+        shippingFlatRate: Number(document.querySelector('#ef-shipping').value),
       });
       showToast({ type: 'success', title: 'Configuración guardada' });
       renderFormularioEmpresa(actualizado);

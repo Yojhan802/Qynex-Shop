@@ -17,5 +17,6 @@ public record ActualizarCompanySettingsRequest(
         @NotBlank @Size(max = 3) String currencyCode,
         @NotBlank @Size(max = 5) String currencySymbol,
         @NotNull @DecimalMin("0") @DecimalMax("1") BigDecimal igvRate,
-        @Size(max = 255) String ticketFooter) {
+        @Size(max = 255) String ticketFooter,
+        @NotNull @DecimalMin("0") BigDecimal shippingFlatRate) {
 }

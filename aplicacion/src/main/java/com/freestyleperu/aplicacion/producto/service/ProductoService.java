@@ -21,6 +21,7 @@ import com.freestyleperu.aplicacion.shared.domain.EstadoGeneral;
 import com.freestyleperu.aplicacion.shared.exception.RecursoDuplicadoException;
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
 import com.freestyleperu.aplicacion.shared.exception.ReglaDeNegocioException;
+import com.freestyleperu.aplicacion.shared.util.ImageUploadService;
 import com.freestyleperu.aplicacion.shared.util.SequenceService;
 import com.freestyleperu.aplicacion.shared.util.TextNormalizer;
 import java.math.BigDecimal;
@@ -29,6 +30,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @Transactional(readOnly = true)
@@ -42,11 +44,12 @@ public class ProductoService {
     private final SequenceService sequenceService;
     private final ProductoMapper productoMapper;
     private final AuditService auditService;
+    private final ImageUploadService imageUploadService;
 
     public ProductoService(ProductRepository productRepository, ProductVariantRepository variantRepository,
             CategoryRepository categoryRepository, SubcategoryRepository subcategoryRepository,
             BrandRepository brandRepository, SequenceService sequenceService, ProductoMapper productoMapper,
-            AuditService auditService) {
+            AuditService auditService, ImageUploadService imageUploadService) {
         this.productRepository = productRepository;
         this.variantRepository = variantRepository;
         this.categoryRepository = categoryRepository;
@@ -55,6 +58,7 @@ public class ProductoService {
         this.sequenceService = sequenceService;
         this.productoMapper = productoMapper;
         this.auditService = auditService;
+        this.imageUploadService = imageUploadService;
     }
 
     public Page<ProductoResumenResponse> listar(String search, Long categoryId, Long subcategoryId, Long brandId,
@@ -122,6 +126,14 @@ public class ProductoService {
         product.setStatus(status);
         auditService.log("PRODUCTO_CAMBIO_ESTADO", "PRODUCTO", product.getId(), null, status, AuditResult.SUCCESS);
         return productoMapper.toResumen(product, variantsDe(product.getId()));
+    }
+
+    @Transactional
+    public ProductoDetalleResponse actualizarImagen(Long id, MultipartFile file) {
+        Product product = buscarOFallar(id);
+        product.setImageUrl(imageUploadService.guardar(file, "products"));
+        auditService.log("PRODUCTO_IMAGEN_ACTUALIZADA", "PRODUCTO", product.getId(), null, product.getImageUrl(), AuditResult.SUCCESS);
+        return productoMapper.toDetalle(product, variantsDe(product.getId()));
     }
 
     private void validarPrecios(BigDecimal price, BigDecimal promoPrice) {

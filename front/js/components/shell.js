@@ -12,6 +12,7 @@ const ICONS = {
   sales: '<circle cx="9" cy="19" r="1.6"/><circle cx="17" cy="19" r="1.6"/><path d="M3 4h2l2.2 11.2a2 2 0 002 1.6h7.6a2 2 0 002-1.6L21 8H6"/>',
   cash: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M7 6V5a2 2 0 012-2h6a2 2 0 012 2v1"/>',
   customers: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.2c1.5.4 2.6 1.8 2.6 3.4S17.5 11.6 16 12"/><path d="M18.5 14.3c1.9.7 3.2 2.6 3.2 5.7"/>',
+  orders: '<rect x="5" y="4" width="14" height="17" rx="1.5"/><path d="M9 3h6v3H9z"/><path d="M8 11h8M8 15h5"/>',
   reports: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   audit: '<path d="M9 3h6l1 3h3a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h3l1-3z"/><path d="M9 12l2 2 4-4"/>',
   users: '<circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M2.5 20c0-3 2.5-5.4 5.5-5.4S13.5 17 13.5 20"/><path d="M15 15.2c2.4.3 4.5 2.2 4.5 4.8"/>',
@@ -32,6 +33,7 @@ const NAV_SECTIONS = [
       { id: 'ventas', label: 'Ventas / POS', href: 'pos.html', icon: 'sales', enabled: true },
       { id: 'caja', label: 'Caja', href: 'caja.html', icon: 'cash', enabled: true },
       { id: 'clientes', label: 'Clientes', href: 'clientes.html', icon: 'customers', enabled: true },
+      { id: 'pedidos', label: 'Pedidos', href: 'pedidos.html', icon: 'orders', enabled: true },
     ],
   },
   {

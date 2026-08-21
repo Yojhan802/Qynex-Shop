@@ -51,6 +51,9 @@ public class CompanySettings {
     @Column(name = "ticket_footer", length = 255)
     private String ticketFooter;
 
+    @Column(name = "shipping_flat_rate", nullable = false, precision = 12, scale = 2)
+    private BigDecimal shippingFlatRate;
+
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 

@@ -1,0 +1,114 @@
+package com.freestyleperu.aplicacion.pedido.domain;
+
+import com.freestyleperu.aplicacion.cliente.domain.Customer;
+import com.freestyleperu.aplicacion.pago.domain.PaymentMethod;
+import com.freestyleperu.aplicacion.usuario.domain.Usuario;
+import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+
+/**
+ * Pedido de la tienda online. Deliberadamente NO es un {@code Sale}: una
+ * venta exige cajero y caja abierta (ambos NOT NULL), que un pedido web no
+ * tiene al crearse — ver plan de Fase 2 en docs/03-modelo-datos.md.
+ */
+@Getter
+@Setter
+@NoArgsConstructor
+@Entity
+@Table(name = "orders")
+public class Pedido {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(name = "order_number", nullable = false, unique = true, length = 20)
+    private String orderNumber;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "customer_id", nullable = false)
+    private Customer customer;
+
+    @Column(name = "department", nullable = false, length = 100)
+    private String department;
+
+    @Column(name = "province", nullable = false, length = 100)
+    private String province;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private PedidoStatus status = PedidoStatus.PENDING_PAYMENT;
+
+    @Column(name = "subtotal", nullable = false, precision = 12, scale = 2)
+    private BigDecimal subtotal;
+
+    @Column(name = "shipping_cost", nullable = false, precision = 12, scale = 2)
+    private BigDecimal shippingCost;
+
+    @Column(name = "total", nullable = false, precision = 12, scale = 2)
+    private BigDecimal total;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "payment_method_id", nullable = false)
+    private PaymentMethod paymentMethod;
+
+    @Column(name = "payment_reference", length = 50)
+    private String paymentReference;
+
+    @Column(name = "payment_proof_url", length = 255)
+    private String paymentProofUrl;
+
+    @Column(name = "recipient_dni", nullable = false, length = 15)
+    private String recipientDni;
+
+    @Column(name = "recipient_first_name", nullable = false, length = 100)
+    private String recipientFirstName;
+
+    @Column(name = "recipient_last_name_paterno", nullable = false, length = 60)
+    private String recipientLastNamePaterno;
+
+    @Column(name = "recipient_last_name_materno", nullable = false, length = 60)
+    private String recipientLastNameMaterno;
+
+    @Column(name = "phone", nullable = false, length = 20)
+    private String phone;
+
+    @Column(name = "address", nullable = false, length = 255)
+    private String address;
+
+    @Column(name = "district", nullable = false, length = 100)
+    private String district;
+
+    @Column(name = "notes", length = 255)
+    private String notes;
+
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @Column(name = "confirmed_at")
+    private LocalDateTime confirmedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "confirmed_by")
+    private Usuario confirmedBy;
+
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    @Column(name = "cancellation_reason", length = 255)
+    private String cancellationReason;
+}

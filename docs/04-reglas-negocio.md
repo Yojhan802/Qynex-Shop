@@ -175,6 +175,27 @@ Ningún endpoint comprueba el nombre del rol. Todos usan
 `@PreAuthorize("hasAuthority('PERMISO')")`. Así, cambiar qué puede hacer un rol
 es modificar datos, no recompilar la aplicación.
 
+## RN-21 · Un pedido online no descuenta stock hasta que se confirma el pago
+
+Crear un pedido (`POST /api/store/orders`) solo valida que haya stock
+suficiente en ese momento — no lo reserva ni lo descuenta. El descuento real
+ocurre recién en `POST /api/orders/{id}/confirm`, cuando el staff confirma
+manualmente que el pago (Yape/Plin/transferencia) llegó. Si un pedido
+confirmado se anula después, el stock se reingresa. Motivo: el pago es
+manual (Fase 2 no integra pasarela), así que "pedido creado" no equivale a
+"pago recibido" — descontar antes sería mostrar como vendido algo que todavía
+podría no pagarse nunca.
+
+## RN-22 · Envío: tarifa plana, salvo contraentrega exclusiva de Huacho
+
+`total = subtotal + shippingCost`. `shippingCost` es la tarifa plana
+configurada en Configuración (Shalom, la courier que usa la empresa, no tiene
+API pública de tarifas — el monto lo define el staff), salvo que el método de
+pago sea `CONTRAENTREGA`, en cuyo caso `shippingCost = 0` y el pedido **debe**
+tener `district = "Huacho"` exactamente (sede física de la empresa) — el
+backend rechaza cualquier otro distrito con `CONTRAENTREGA`, sin importar lo
+que haya permitido el frontend.
+
 ---
 
 ## Matriz rol → permisos (semilla inicial)
@@ -202,6 +223,8 @@ es modificar datos, no recompilar la aplicación.
 | `CLIENTES_CONSULTAR` | ✔ | ✔ | ✔ | |
 | `CLIENTES_CREAR` | ✔ | ✔ | ✔ | |
 | `CLIENTES_EDITAR` | ✔ | ✔ | | |
+| `PEDIDOS_CONSULTAR` | ✔ | ✔ | ✔ | |
+| `PEDIDOS_GESTIONAR` | ✔ | ✔ | | |
 | `CAJA_ABRIR` | ✔ | ✔ | ✔ | |
 | `CAJA_CERRAR` | ✔ | ✔ | | |
 | `CAJA_CONSULTAR` | ✔ | ✔ | propia | |

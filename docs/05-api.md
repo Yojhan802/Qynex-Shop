@@ -453,6 +453,10 @@ Filtros: `?userId=&action=&entity=&result=&from=&to=`.
 | PUT | `/api/settings/company` | `CONFIGURACION_EDITAR` |
 | POST | `/api/settings/company/logo` | `CONFIGURACION_EDITAR` |
 
+`shippingFlatRate` (desde Fase 2) es la tarifa de envío que se cobra en todo
+pedido online salvo contraentrega en Huacho — se edita aquí, no hay un
+servicio externo del que leerla (ver docs/03 §12).
+
 ---
 
 ## 17. Búsqueda global — `/api/search`
@@ -460,3 +464,138 @@ Filtros: `?userId=&action=&entity=&result=&from=&to=`.
 `GET /api/search?q=polo` — devuelve resultados agrupados por tipo (productos,
 variantes, clientes, ventas). Previsto en el diseño, se implementa al final de la
 Fase 2.
+
+---
+
+## 18. Pedidos (staff) — `/api/orders`
+
+Vista de staff sobre los pedidos hechos desde la tienda online. Ver §19 para el
+lado del cliente (`/api/store/orders`).
+
+| Método | Ruta | Permiso | Descripción |
+|---|---|---|---|
+| GET | `/api/orders` | `PEDIDOS_CONSULTAR` | Listado con filtros `status`, `from`, `to` |
+| GET | `/api/orders/{id}` | `PEDIDOS_CONSULTAR` | Detalle completo con items |
+| POST | `/api/orders/{id}/confirm` | `PEDIDOS_GESTIONAR` | Confirma el pago — **descuenta stock** y pasa a `CONFIRMED` |
+| POST | `/api/orders/{id}/cancel` | `PEDIDOS_GESTIONAR` | Anula — si estaba `CONFIRMED`, **reingresa stock** |
+
+```json
+// POST /api/orders/{id}/cancel
+{ "reason": "El cliente no completó el pago a tiempo" }
+```
+
+Errores posibles: `409 BUSINESS_RULE_VIOLATION` (confirmar un pedido que no
+está `PENDING_PAYMENT`, o anular uno ya `CANCELLED`), `409 INSUFFICIENT_STOCK`
+(al confirmar, si el stock ya no alcanza — puede pasar si otro pedido o venta
+se adelantó).
+
+---
+
+## 19. Tienda pública — `/api/store/**`
+
+Todo bajo `/api/store` es intencionalmente distinto del resto de la API: el
+catálogo es público (sin token) y la autenticación de clientes es un sistema
+paralelo al de staff — un JWT de cliente lleva `ROLE_CUSTOMER` como única
+autoridad y nunca sirve para pasar un `hasAuthority('VENTAS_...')` de staff,
+ni viceversa. Ver docs/03-modelo-datos.md §12.
+
+### Catálogo — `/api/store/catalog` (público, sin autenticación)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/api/store/catalog/products` | Paginado; filtros `search`, `categoryId`, `brandId` |
+| GET | `/api/store/catalog/products/{id}` | Detalle + variantes (color/talla) con `inStock` |
+| GET | `/api/store/catalog/categories` | Solo categorías activas |
+| GET | `/api/store/catalog/brands` | Solo marcas activas |
+| GET | `/api/store/catalog/payment-methods` | Métodos activos, con QR/cuenta para pagar. Incluye `code` (ej. `CONTRAENTREGA`) para que el checkout decida cuándo mostrar cada opción |
+| GET | `/api/store/catalog/shipping-info` | `{ flatRate, freeShippingDistrict }` — tarifa de envío vigente y el distrito con envío gratis (Huacho) |
+
+Las respuestas usan DTOs propios (`Public*Response`) que **nunca** exponen
+`internalCode`, SKU/barcode interno, ni `stock`/`minStock` exactos — solo
+`inStock` booleano. Esto es deliberado: son datos operativos internos, no
+información de cara al público.
+
+```json
+// GET /api/store/catalog/products/{id}
+{
+  "id": 1,
+  "name": "Polo Oversize",
+  "description": "Polo oversize de algodón peruano 100%",
+  "price": 49.90,
+  "promoPrice": 39.90,
+  "imageUrl": "/uploads/products/....jpg",
+  "categoryName": "Polos",
+  "brandName": null,
+  "variants": [
+    { "variantId": 145, "colorId": 3, "colorName": "Negro", "colorHex": "#000000", "sizeId": 2, "sizeName": "M", "inStock": true }
+  ]
+}
+```
+
+### Autenticación de clientes — `/api/store/auth`
+
+| Método | Ruta | Permiso | Descripción |
+|---|---|---|---|
+| POST | `/api/store/auth/register` | público | Crea cuenta o reclama un `Customer` existente sin contraseña por email |
+| POST | `/api/store/auth/login` | público | |
+| POST | `/api/store/auth/refresh` | público | Mismo formato que `/api/auth/refresh` |
+| GET | `/api/store/auth/me` | `ROLE_CUSTOMER` | Datos del cliente autenticado |
+
+```json
+// POST /api/store/auth/register
+{ "email": "maria@example.com", "password": "Maria2026", "fullName": "María Quispe", "phone": "987654321" }
+```
+```json
+{
+  "accessToken": "eyJhbGci...",
+  "refreshToken": "9f2c...",
+  "tokenType": "Bearer",
+  "expiresIn": 1800,
+  "customer": { "id": 12, "fullName": "María Quispe", "email": "maria@example.com", "phone": "987654321" }
+}
+```
+
+Si ya existía un `Customer` con ese email (de una compra en tienda física,
+sin contraseña), el registro **reclama ese mismo registro** en vez de crear
+uno duplicado — así el historial de compras físicas queda ligado a la cuenta
+online. `409 DUPLICATE_RESOURCE` si el email ya tiene contraseña.
+
+### Pedidos del cliente — `/api/store/orders` (`ROLE_CUSTOMER`)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| POST | `/api/store/orders` | Crea el pedido — el precio se resuelve server-side, nunca viaja del cliente |
+| GET | `/api/store/orders` | Pedidos propios, paginado |
+| GET | `/api/store/orders/{id}` | Detalle propio (404 si no es del cliente autenticado) |
+| POST | `/api/store/orders/{id}/payment-proof` | Multipart; sube/reemplaza el comprobante de pago (opcional, solo si `PENDING_PAYMENT`) |
+
+```json
+// POST /api/store/orders
+{
+  "items": [{ "variantId": 145, "quantity": 2 }],
+  "paymentMethodId": 2,
+  "paymentReference": null,
+  "recipientName": "María Quispe",
+  "phone": "987654321",
+  "address": "Av. Siempre Viva 123",
+  "department": "Lima",
+  "province": "Lima",
+  "district": "San Isidro",
+  "notes": null
+}
+```
+
+`201 Created`, status inicial `PENDING_PAYMENT`. `total = subtotal + shippingCost`:
+el envío es la tarifa plana vigente (`/api/store/catalog/shipping-info`),
+salvo que el método de pago sea `CONTRAENTREGA` (solo permitido si
+`district = "Huacho"`, validado también en el backend), en cuyo caso
+`shippingCost = 0`. El stock **no** se descuenta en este paso — recién al
+confirmar el pago desde `/api/orders/{id}/confirm` (§18). El endpoint sí
+valida que haya stock suficiente en el momento de crear el pedido (chequeo
+informativo, no una reserva).
+
+```json
+// POST /api/store/orders/{id}/payment-proof (multipart, campo "file")
+```
+Devuelve el pedido completo con `paymentProofUrl` actualizado. El staff lo ve
+en `GET /api/orders/{id}` (§18) al revisar el pedido antes de confirmar.
