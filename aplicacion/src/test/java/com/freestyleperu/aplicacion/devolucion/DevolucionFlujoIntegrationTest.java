@@ -142,7 +142,7 @@ class DevolucionFlujoIntegrationTest {
         paymentMethodRepository.save(efectivo);
 
         VentaResponse venta = ventaService.registrarVenta(new CrearVentaRequest(
-                        null, sesion.id(), null, null,
+                        null, null, sesion.id(), null, null,
                         List.of(new ItemVentaRequest(variante.id(), 5, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("200.00"), null))),
                 userId, Set.of());

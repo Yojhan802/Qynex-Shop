@@ -57,4 +57,14 @@ public interface SaleRepository extends JpaRepository<Sale, Long> {
             ORDER BY SUM(s.total) DESC
             """)
     List<Object[]> ventasPorVendedor(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /** Una fila [nombre del promotor, cantidad de ventas, total] por cada promotor con al menos una venta en el rango. */
+    @Query("""
+            SELECT s.promoter.name, COUNT(s), COALESCE(SUM(s.total), 0)
+            FROM Sale s
+            WHERE s.status = 'COMPLETED' AND s.promoter IS NOT NULL AND s.createdAt >= :from AND s.createdAt < :to
+            GROUP BY s.promoter.id, s.promoter.name
+            ORDER BY COUNT(s) DESC
+            """)
+    List<Object[]> ventasPorPromotor(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

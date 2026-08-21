@@ -2,6 +2,7 @@ package com.freestyleperu.aplicacion.venta.domain;
 
 import com.freestyleperu.aplicacion.caja.domain.CashSession;
 import com.freestyleperu.aplicacion.cliente.domain.Customer;
+import com.freestyleperu.aplicacion.promotor.domain.Promoter;
 import com.freestyleperu.aplicacion.usuario.domain.Usuario;
 import jakarta.persistence.Column;
 import jakarta.persistence.EnumType;
@@ -41,6 +42,11 @@ public class Sale {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private Usuario user;
+
+    /** Quién ofreció la prenda en piso, si alguien lo hizo (opcional, solo para comisión/reportes). */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "promoter_id")
+    private Promoter promoter;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "cash_session_id", nullable = false)

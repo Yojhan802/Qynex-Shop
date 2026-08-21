@@ -10,6 +10,8 @@ import com.freestyleperu.aplicacion.inventario.service.InventarioService;
 import com.freestyleperu.aplicacion.pago.domain.PaymentMethod;
 import com.freestyleperu.aplicacion.pago.service.PagoService;
 import com.freestyleperu.aplicacion.producto.domain.ProductVariant;
+import com.freestyleperu.aplicacion.promotor.domain.Promoter;
+import com.freestyleperu.aplicacion.promotor.service.PromoterService;
 import com.freestyleperu.aplicacion.producto.repository.ProductVariantRepository;
 import com.freestyleperu.aplicacion.shared.audit.AuditResult;
 import com.freestyleperu.aplicacion.shared.audit.AuditService;
@@ -69,6 +71,7 @@ public class VentaService {
     private final InventarioService inventarioService;
     private final CajaService cajaService;
     private final PagoService pagoService;
+    private final PromoterService promoterService;
     private final SequenceService sequenceService;
     private final AuditService auditService;
 
@@ -76,7 +79,8 @@ public class VentaService {
             PaymentRepository paymentRepository, ProductVariantRepository variantRepository,
             CustomerRepository customerRepository, CashSessionRepository cashSessionRepository,
             UsuarioRepository usuarioRepository, InventarioService inventarioService, CajaService cajaService,
-            PagoService pagoService, SequenceService sequenceService, AuditService auditService) {
+            PagoService pagoService, PromoterService promoterService, SequenceService sequenceService,
+            AuditService auditService) {
         this.saleRepository = saleRepository;
         this.saleDetailRepository = saleDetailRepository;
         this.paymentRepository = paymentRepository;
@@ -87,6 +91,7 @@ public class VentaService {
         this.inventarioService = inventarioService;
         this.cajaService = cajaService;
         this.pagoService = pagoService;
+        this.promoterService = promoterService;
         this.sequenceService = sequenceService;
         this.auditService = auditService;
     }
@@ -114,6 +119,7 @@ public class VentaService {
                 ? customerRepository.findById(request.customerId())
                         .orElseThrow(() -> RecursoNoEncontradoException.de("Cliente", request.customerId()))
                 : null;
+        Promoter promoter = request.promoterId() != null ? promoterService.obtenerActivoOFallar(request.promoterId()) : null;
 
         List<ItemVentaRequest> itemsOrdenados = request.items().stream()
                 .sorted(Comparator.comparing(ItemVentaRequest::variantId))
@@ -148,6 +154,7 @@ public class VentaService {
         Sale sale = new Sale();
         sale.setSaleNumber(sequenceService.next("VENTA", "V001", 8));
         sale.setCustomer(customer);
+        sale.setPromoter(promoter);
         sale.setUser(vendedor);
         sale.setCashSession(session);
         sale.setSubtotal(subtotal);
@@ -299,6 +306,8 @@ public class VentaService {
                 sale.getSaleNumber(),
                 sale.getCustomer() != null ? sale.getCustomer().getId() : null,
                 sale.getCustomer() != null ? sale.getCustomer().getFullName() : null,
+                sale.getPromoter() != null ? sale.getPromoter().getId() : null,
+                sale.getPromoter() != null ? sale.getPromoter().getName() : null,
                 sale.getUser().getId(),
                 sale.getUser().getFullName(),
                 sale.getSubtotal(),

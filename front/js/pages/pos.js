@@ -11,6 +11,7 @@ import { formatCurrency, formatDateTime } from '../core/format.js';
 import { debounce } from '../core/debounce.js';
 import { renderPagination } from '../components/pagination.js';
 import { imprimirTicket } from '../components/ticket.js';
+import { statusBadge } from '../components/status-badge.js';
 
 const SALE_STATUS_LABELS = { COMPLETED: 'Completada', CANCELLED: 'Anulada', PARTIALLY_RETURNED: 'Parcialmente devuelta', RETURNED: 'Devuelta' };
 const SALE_STATUS_CLASSES = { COMPLETED: 'badge-success', CANCELLED: 'badge-danger', PARTIALLY_RETURNED: 'badge-warning', RETURNED: 'badge-neutral' };
@@ -22,6 +23,7 @@ let customerPicker = null;
 let permissions = new Set(session?.user.permissions ?? []);
 let historialPage = 0;
 let devolucionesPage = 0;
+let promotoresCache = [];
 
 if (session) {
   renderShell('ventas');
@@ -36,14 +38,17 @@ async function init() {
       document.querySelector('#panel-nueva').hidden = activo !== 'nueva';
       document.querySelector('#panel-historial').hidden = activo !== 'historial';
       document.querySelector('#panel-devoluciones').hidden = activo !== 'devoluciones';
+      document.querySelector('#panel-promotores').hidden = activo !== 'promotores';
       if (activo === 'historial') cargarHistorial();
       if (activo === 'devoluciones') cargarDevoluciones();
+      if (activo === 'promotores') cargarPromotores();
     });
   });
   document.querySelector('#btn-filtrar-historial').addEventListener('click', () => {
     historialPage = 0;
     cargarHistorial();
   });
+  document.querySelector('#btn-nuevo-promotor').addEventListener('click', () => abrirFormularioPromotor(null));
 
   cashSession = await fetchCurrentSession();
   if (!cashSession) {
@@ -240,9 +245,10 @@ async function cobrar() {
 
   await openPagoModal({
     total: subtotal,
-    onConfirm: async (payments) => {
+    onConfirm: async ({ payments, promoterId }) => {
       const request = {
         customerId: cliente?.id ?? null,
+        promoterId,
         cashSessionId: cashSession.id,
         discountAmount: 0,
         notes: null,
@@ -358,7 +364,7 @@ async function verDetalleVenta(saleId) {
 
   const modal = openModal({
     title: venta.saleNumber,
-    subtitle: `${formatDateTime(venta.createdAt)} · Vendedor: ${venta.sellerName}${venta.customerName ? ` · Cliente: ${venta.customerName}` : ''}`,
+    subtitle: `${formatDateTime(venta.createdAt)} · Vendedor: ${venta.sellerName}${venta.customerName ? ` · Cliente: ${venta.customerName}` : ''}${venta.promoterName ? ` · Promotor: ${venta.promoterName}` : ''}`,
     maxWidth: '480px',
     body: `
       <div style="display:flex; flex-direction:column; gap:var(--space-2); font-size:var(--font-size-sm);">
@@ -578,5 +584,98 @@ async function cargarDevoluciones() {
     });
   } catch (error) {
     body.innerHTML = `<tr><td colspan="7"><div class="empty-state"><span>${error instanceof ApiError ? error.message : 'Error al cargar devoluciones'}</span></div></td></tr>`;
+  }
+}
+
+async function cargarPromotores() {
+  const body = document.querySelector('#promotores-body');
+  try {
+    promotoresCache = await api.get('/promoters');
+    body.innerHTML = promotoresCache.length
+      ? promotoresCache
+          .map(
+            (p) => `
+        <tr>
+          <td class="table-cell-primary">${p.name}</td>
+          <td>${statusBadge(p.status)}</td>
+          <td>
+            <div class="table-actions">
+              <button class="btn btn-ghost btn-sm" type="button" data-editar-promotor="${p.id}">Editar</button>
+              <button class="btn btn-ghost btn-sm" type="button" data-toggle-promotor="${p.id}" data-status="${p.status}">
+                ${p.status === 'ACTIVE' ? 'Desactivar' : 'Activar'}
+              </button>
+            </div>
+          </td>
+        </tr>
+      `
+          )
+          .join('')
+      : `<tr><td colspan="3"><div class="empty-state"><span>Todavía no hay promotores registrados.</span></div></td></tr>`;
+
+    body.querySelectorAll('[data-editar-promotor]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const promotor = promotoresCache.find((p) => String(p.id) === btn.dataset.editarPromotor);
+        abrirFormularioPromotor(promotor);
+      });
+    });
+    body.querySelectorAll('[data-toggle-promotor]').forEach((btn) => {
+      btn.addEventListener('click', () => cambiarEstadoPromotor(btn.dataset.togglePromotor, btn.dataset.status));
+    });
+  } catch (error) {
+    body.innerHTML = `<tr><td colspan="3"><div class="empty-state"><span>${error instanceof ApiError ? error.message : 'Error al cargar promotores'}</span></div></td></tr>`;
+  }
+}
+
+function abrirFormularioPromotor(promotor) {
+  const esEdicion = Boolean(promotor);
+  const modal = openModal({
+    title: esEdicion ? 'Editar promotor' : 'Nuevo promotor',
+    maxWidth: '380px',
+    body: `
+      <form id="promotor-form" novalidate>
+        <div class="alert alert-danger" id="promotor-form-error" role="alert" hidden>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="8"/><path d="M10 6v5M10 14h.01" stroke-linecap="round"/></svg>
+          <span class="alert-message"></span>
+        </div>
+        <div class="field">
+          <label class="field-label" for="pm-nombre">Nombre</label>
+          <input class="input" id="pm-nombre" maxlength="120" required value="${promotor?.name ?? ''}" />
+        </div>
+      </form>
+    `,
+    footer: `
+      <button class="btn btn-secondary" type="button" data-cancel>Cancelar</button>
+      <button class="btn btn-primary" type="submit" form="promotor-form">${esEdicion ? 'Guardar cambios' : 'Crear'}</button>
+    `,
+  });
+  modal.footer.querySelector('[data-cancel]').addEventListener('click', () => closeModal());
+  modal.body.querySelector('#promotor-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const errorAlert = modal.body.querySelector('#promotor-form-error');
+    const nombre = modal.body.querySelector('#pm-nombre').value.trim();
+    try {
+      if (esEdicion) {
+        await api.put(`/promoters/${promotor.id}`, { name: nombre });
+      } else {
+        await api.post('/promoters', { name: nombre });
+      }
+      closeModal();
+      showToast({ type: 'success', title: esEdicion ? 'Promotor actualizado' : 'Promotor creado' });
+      cargarPromotores();
+    } catch (error) {
+      errorAlert.querySelector('.alert-message').textContent = error instanceof ApiError ? error.message : 'No se pudo guardar';
+      errorAlert.hidden = false;
+    }
+  });
+}
+
+async function cambiarEstadoPromotor(id, currentStatus) {
+  const nuevoEstado = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+  try {
+    await api.patch(`/promoters/${id}/status`, { status: nuevoEstado });
+    showToast({ type: 'success', title: 'Estado actualizado' });
+    cargarPromotores();
+  } catch (error) {
+    showToast({ type: 'danger', title: 'Error', message: error instanceof ApiError ? error.message : 'No se pudo actualizar' });
   }
 }

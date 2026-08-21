@@ -134,7 +134,7 @@ class ReporteFlujoIntegrationTest {
         paymentMethodRepository.save(efectivo);
 
         ventaService.registrarVenta(new CrearVentaRequest(
-                        null, sesion.id(), null, null,
+                        null, null, sesion.id(), null, null,
                         List.of(new ItemVentaRequest(variante.id(), 3, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("150.00"), null))),
                 userId, Set.of());

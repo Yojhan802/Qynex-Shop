@@ -84,7 +84,7 @@ class VentaFlujoIntegrationTest {
         PaymentMethod yape = metodoPago("YAPE");
 
         CrearVentaRequest request = new CrearVentaRequest(
-                null, sesion.id(), null, null,
+                null, null, sesion.id(), null, null,
                 List.of(new ItemVentaRequest(variante.id(), 2, null)),
                 List.of(
                         new PagoVentaRequest(efectivo.getId(), new BigDecimal("100.00"), null),
@@ -106,7 +106,7 @@ class VentaFlujoIntegrationTest {
 
         // No se puede vender más de lo disponible (999 * 120.00 = 119880.00, pago exacto para llegar al chequeo de stock).
         assertThatThrownBy(() -> ventaService.registrarVenta(
-                new CrearVentaRequest(null, sesion.id(), null, null,
+                new CrearVentaRequest(null, null, sesion.id(), null, null,
                         List.of(new ItemVentaRequest(variante.id(), 999, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("119880.00"), null))),
                 userId, AUTORIDADES_SIN_DESCUENTO))
@@ -114,7 +114,7 @@ class VentaFlujoIntegrationTest {
 
         // El descuento sin permiso se rechaza.
         assertThatThrownBy(() -> ventaService.registrarVenta(
-                new CrearVentaRequest(null, sesion.id(), new BigDecimal("10.00"), null,
+                new CrearVentaRequest(null, null, sesion.id(), new BigDecimal("10.00"), null,
                         List.of(new ItemVentaRequest(variante.id(), 1, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("110.00"), null))),
                 userId, AUTORIDADES_SIN_DESCUENTO))
@@ -122,7 +122,7 @@ class VentaFlujoIntegrationTest {
 
         // Pagos que no cuadran con el total se rechazan.
         assertThatThrownBy(() -> ventaService.registrarVenta(
-                new CrearVentaRequest(null, sesion.id(), null, null,
+                new CrearVentaRequest(null, null, sesion.id(), null, null,
                         List.of(new ItemVentaRequest(variante.id(), 1, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("50.00"), null))),
                 userId, AUTORIDADES_SIN_DESCUENTO))
@@ -143,7 +143,7 @@ class VentaFlujoIntegrationTest {
 
         // Un pago que supera el total también se rechaza (no solo el que queda corto).
         assertThatThrownBy(() -> ventaService.registrarVenta(
-                new CrearVentaRequest(null, sesion.id(), null, null,
+                new CrearVentaRequest(null, null, sesion.id(), null, null,
                         List.of(new ItemVentaRequest(variante.id(), 1, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("200.00"), null))),
                 userId, AUTORIDADES_SIN_DESCUENTO))
@@ -152,7 +152,7 @@ class VentaFlujoIntegrationTest {
         // No se puede vender con la caja cerrada.
         cajaService.cerrarCaja(sesion.id(), new CerrarCajaRequest(new BigDecimal("300.00"), "Cierre de turno"), userId);
         assertThatThrownBy(() -> ventaService.registrarVenta(
-                new CrearVentaRequest(null, sesion.id(), null, null,
+                new CrearVentaRequest(null, null, sesion.id(), null, null,
                         List.of(new ItemVentaRequest(variante.id(), 1, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("120.00"), null))),
                 userId, AUTORIDADES_SIN_DESCUENTO))
@@ -168,7 +168,7 @@ class VentaFlujoIntegrationTest {
         VarianteResponse sinStock = crearVarianteConStock("Gorra Snapback", "Azul", "Única", new BigDecimal("60.00"), 0);
 
         assertThatThrownBy(() -> ventaService.registrarVenta(
-                new CrearVentaRequest(null, sesion.id(), null, null,
+                new CrearVentaRequest(null, null, sesion.id(), null, null,
                         List.of(new ItemVentaRequest(sinStock.id(), 1, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("60.00"), null))),
                 userId, AUTORIDADES_SIN_DESCUENTO))

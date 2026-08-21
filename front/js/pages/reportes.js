@@ -46,13 +46,14 @@ function cargarPanelActivo() {
 
 async function cargarVentas() {
   try {
-    const [porCategoria, porMetodo, porProducto, porVendedor] = await Promise.all([
+    const [porCategoria, porMetodo, porProducto, porVendedor, porPromotor] = await Promise.all([
       api.get('/reports/sales/by-category', { query: range }),
       api.get('/reports/sales/by-payment-method', { query: range }),
       api.get('/reports/products/top-selling', { query: { ...range, limit: 10 } }),
       api.get('/reports/sales/by-seller', { query: range }),
+      api.get('/reports/sales/by-promoter', { query: range }),
     ]);
-    ultimoReporteVentas = { porCategoria, porMetodo, porProducto, porVendedor };
+    ultimoReporteVentas = { porCategoria, porMetodo, porProducto, porVendedor, porPromotor };
 
     renderChartOrEmpty('#chart-categoria', porCategoria, 'label', 'total');
     renderChartOrEmpty('#chart-vendedor', porVendedor, 'label', 'total');
@@ -69,6 +70,22 @@ async function cargarVentas() {
     } else {
       const conColor = porMetodo.map((m, i) => ({ ...m, color: colorForPaymentMethod(m.label, i) }));
       renderStackedBar(metodoContainer, conColor, { valueKey: 'total', labelKey: 'label', colorKey: 'color' });
+    }
+
+    const cardPromotores = document.querySelector('#card-promotores');
+    cardPromotores.hidden = porPromotor.length === 0;
+    if (porPromotor.length > 0) {
+      document.querySelector('#tabla-promotores').innerHTML = porPromotor
+        .map(
+          (p) => `
+        <tr>
+          <td class="table-cell-primary">${p.promoterName}</td>
+          <td>${p.salesCount}</td>
+          <td class="mono">${formatCurrency(p.total)}</td>
+        </tr>
+      `
+        )
+        .join('');
     }
   } catch (error) {
     showErrorEnTodos(error);
@@ -125,7 +142,7 @@ function exportarCsv() {
 
   if (activeTab === 'ventas') {
     if (!ultimoReporteVentas) return;
-    const { porCategoria, porMetodo, porProducto, porVendedor } = ultimoReporteVentas;
+    const { porCategoria, porMetodo, porProducto, porVendedor, porPromotor } = ultimoReporteVentas;
     const filas = [
       [`Reporte de ventas${rango}`],
       [],
@@ -144,6 +161,10 @@ function exportarCsv() {
       ['Ventas por vendedor'],
       ['Vendedor', 'Total', '% del período'],
       ...porVendedor.map((r) => [r.label, r.total, r.percentage != null ? `${r.percentage.toFixed(1)}%` : '']),
+      [],
+      ['Ventas por promotor'],
+      ['Promotor', 'Ventas', 'Total'],
+      ...porPromotor.map((r) => [r.promoterName, r.salesCount, r.total]),
     ];
     descargarCsv(`reporte-ventas-${fecha}.csv`, filas);
   } else {

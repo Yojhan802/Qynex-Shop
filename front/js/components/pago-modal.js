@@ -2,9 +2,12 @@ import { api, ApiError, API_ORIGIN } from '../core/api.js';
 import { openModal, closeModal } from './modal.js';
 import { formatCurrency } from '../core/format.js';
 
-/** Modal de cobro con soporte de pago mixto. `onConfirm(payments)` recibe la lista final. */
+/** Modal de cobro con soporte de pago mixto. `onConfirm({ payments, promoterId })` recibe la venta a registrar. */
 export async function openPagoModal({ total, onConfirm }) {
-  const metodos = (await api.get('/payment-methods')).filter((m) => m.status === 'ACTIVE');
+  const [metodos, promotores] = await Promise.all([
+    api.get('/payment-methods').then((lista) => lista.filter((m) => m.status === 'ACTIVE')),
+    api.get('/promoters').then((lista) => lista.filter((p) => p.status === 'ACTIVE')).catch(() => []),
+  ]);
 
   const modal = openModal({
     title: 'Cobrar venta',
@@ -16,6 +19,19 @@ export async function openPagoModal({ total, onConfirm }) {
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="8"/><path d="M10 6v5M10 14h.01" stroke-linecap="round"/></svg>
           <span class="alert-message"></span>
         </div>
+        ${
+          promotores.length > 0
+            ? `
+        <div class="field" style="margin-bottom: var(--space-4);">
+          <label class="field-label" for="pago-promotor">Promotor (opcional)</label>
+          <select class="select" id="pago-promotor">
+            <option value="">Ninguno — solo el vendedor de caja</option>
+            ${promotores.map((p) => `<option value="${p.id}">${p.name}</option>`).join('')}
+          </select>
+        </div>
+        `
+            : ''
+        }
         <div style="display:flex; flex-direction:column; gap: var(--space-3);">
           ${metodos
             .map(
@@ -105,9 +121,12 @@ export async function openPagoModal({ total, onConfirm }) {
       return;
     }
 
+    const promotorSelect = modal.body.querySelector('#pago-promotor');
+    const promoterId = promotorSelect?.value ? Number(promotorSelect.value) : null;
+
     confirmBtn.disabled = true;
     try {
-      await onConfirm(payments);
+      await onConfirm({ payments, promoterId });
       // Cierra esta instancia concreta: onConfirm puede haber abierto ya un
       // modal nuevo (p. ej. el ticket) que no debe cerrarse por accidente.
       modal.close();

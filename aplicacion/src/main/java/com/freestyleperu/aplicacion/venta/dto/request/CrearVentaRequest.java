@@ -10,6 +10,7 @@ import java.util.List;
 
 public record CrearVentaRequest(
         Long customerId,
+        Long promoterId,
         @NotNull Long cashSessionId,
         @DecimalMin(value = "0.00") BigDecimal discountAmount,
         @Size(max = 255) String notes,

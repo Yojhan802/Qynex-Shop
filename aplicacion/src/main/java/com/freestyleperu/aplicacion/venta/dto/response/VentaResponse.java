@@ -10,6 +10,8 @@ public record VentaResponse(
         String saleNumber,
         Long customerId,
         String customerName,
+        Long promoterId,
+        String promoterName,
         Long sellerId,
         String sellerName,
         BigDecimal subtotal,

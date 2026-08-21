@@ -26,6 +26,7 @@
         <button class="tab" type="button" data-tab="nueva" role="tab" aria-selected="true">Nueva venta</button>
         <button class="tab" type="button" data-tab="historial" role="tab" aria-selected="false">Historial de ventas</button>
         <button class="tab" type="button" data-tab="devoluciones" role="tab" aria-selected="false">Devoluciones</button>
+        <button class="tab" type="button" data-tab="promotores" role="tab" aria-selected="false">Promotores</button>
       </div>
 
       <div id="panel-nueva">
@@ -137,6 +138,25 @@
             </table>
           </div>
           <div class="pagination-bar" id="devoluciones-pagination"></div>
+        </div>
+      </section>
+
+      <section id="panel-promotores" hidden>
+        <div class="page-actions" style="justify-content:flex-end; margin-bottom: var(--space-4);">
+          <button class="btn btn-primary" type="button" id="btn-nuevo-promotor">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+            Nuevo promotor
+          </button>
+        </div>
+        <div class="table-card">
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr><th>Nombre</th><th>Estado</th><th></th></tr>
+              </thead>
+              <tbody id="promotores-body"><tr><td colspan="3"><div class="skeleton" style="height:20px;"></div></td></tr></tbody>
+            </table>
+          </div>
         </div>
       </section>
     </main>

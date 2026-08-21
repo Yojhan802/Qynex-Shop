@@ -3,6 +3,7 @@ package com.freestyleperu.aplicacion.reporte.web;
 import com.freestyleperu.aplicacion.reporte.dto.response.CajaSesionResumenResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.DashboardResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.ProductoTopResponse;
+import com.freestyleperu.aplicacion.reporte.dto.response.PromotorReporteResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.SerieDiaResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.SerieEtiquetaResponse;
 import com.freestyleperu.aplicacion.reporte.service.ReporteService;
@@ -49,6 +50,13 @@ public class ReporteController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return reporteService.ventasPorVendedor(from, to);
+    }
+
+    @GetMapping("/api/reports/sales/by-promoter")
+    public List<PromotorReporteResponse> ventasPorPromotor(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return reporteService.ventasPorPromotor(from, to);
     }
 
     @GetMapping("/api/reports/sales/by-payment-method")

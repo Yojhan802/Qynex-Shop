@@ -55,4 +55,7 @@ public final class Permisos {
     public static final String CONFIGURACION_VER = "CONFIGURACION_VER";
     public static final String CONFIGURACION_EDITAR = "CONFIGURACION_EDITAR";
     public static final String CONFIGURACION_PAGOS = "CONFIGURACION_PAGOS";
+
+    public static final String PROMOTORES_CONSULTAR = "PROMOTORES_CONSULTAR";
+    public static final String PROMOTORES_GESTIONAR = "PROMOTORES_GESTIONAR";
 }

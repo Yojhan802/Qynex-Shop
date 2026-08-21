@@ -6,6 +6,7 @@ import com.freestyleperu.aplicacion.inventario.service.InventarioService;
 import com.freestyleperu.aplicacion.reporte.dto.response.CajaSesionResumenResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.DashboardResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.ProductoTopResponse;
+import com.freestyleperu.aplicacion.reporte.dto.response.PromotorReporteResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.ResumenPeriodoResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.SerieDiaResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.SerieEtiquetaResponse;
@@ -82,6 +83,13 @@ public class ReporteService {
     public List<SerieEtiquetaResponse> ventasPorVendedor(LocalDate from, LocalDate to) {
         LocalDateTime[] rango = rango(from, to);
         return distribucion(saleRepository.ventasPorVendedor(rango[0], rango[1]));
+    }
+
+    public List<PromotorReporteResponse> ventasPorPromotor(LocalDate from, LocalDate to) {
+        LocalDateTime[] rango = rango(from, to);
+        return saleRepository.ventasPorPromotor(rango[0], rango[1]).stream()
+                .map(fila -> new PromotorReporteResponse((String) fila[0], (Long) fila[1], (BigDecimal) fila[2]))
+                .toList();
     }
 
     public List<SerieEtiquetaResponse> distribucionPorMetodoPago(LocalDate from, LocalDate to) {
