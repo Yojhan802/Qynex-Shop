@@ -466,9 +466,26 @@ servicio externo del que leerla (ver docs/03 §12).
 
 ## 17. Búsqueda global — `/api/search`
 
-`GET /api/search?q=polo` — devuelve resultados agrupados por tipo (productos,
-variantes, clientes, ventas). Previsto en el diseño, se implementa al final de la
-Fase 2.
+`GET /api/search?q=polo` (autenticado, sin un único permiso que bloquee todo
+el endpoint) — devuelve resultados agrupados por tipo. `q` con menos de 2
+caracteres devuelve todos los grupos vacíos.
+
+```json
+{
+  "products": [{ "type": "PRODUCTO", "id": 12, "title": "Polo Oversize", "subtitle": "POL-00125", "url": "producto-detalle.html?id=12" }],
+  "customers": [{ "type": "CLIENTE", "id": 3, "title": "María Quispe", "subtitle": "45678912", "url": "clientes.html" }],
+  "sales": [{ "type": "VENTA", "id": 1523, "title": "V001-00001523", "subtitle": "María Quispe", "url": "pos.html?ventaId=1523" }],
+  "users": [{ "type": "USUARIO", "id": 5, "title": "Carlos Ramírez", "subtitle": "carlos.ramirez", "url": "usuarios.html" }]
+}
+```
+
+Busca producto por nombre/SKU/código interno **y** por SKU/código de barras
+de variante (unificado en un solo resultado de producto). Cada grupo
+(`products`/`customers`/`sales`/`users`) solo se llena si el usuario
+autenticado tiene el permiso `*_CONSULTAR` correspondiente — la
+autorización se aplica por categoría dentro del service, no bloqueando todo
+el endpoint (RN-20). `pos.html?ventaId=` abre directo el detalle de esa
+venta al cargar la página.
 
 ---
 

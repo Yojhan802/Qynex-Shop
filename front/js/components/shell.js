@@ -3,7 +3,10 @@ import { initSidebar } from './sidebar.js';
 import { fetchCurrentSession } from '../core/cash-session.js';
 import { openAbrirCajaModal } from './abrir-caja.js';
 import { fetchCompanySettings, getCachedCompanySettings } from '../core/settings.js';
-import { API_ORIGIN } from '../core/api.js';
+import { api, ApiError, API_ORIGIN } from '../core/api.js';
+import { debounce } from '../core/debounce.js';
+
+const GROUP_LABELS = { products: 'Productos', customers: 'Clientes', sales: 'Ventas', users: 'Usuarios' };
 
 const ICONS = {
   dashboard: '<path d="M4 13h6V4H4v9zm0 7h6v-5H4v5zm10 0h6V11h-6v9zm0-16v5h6V4h-6z"/>',
@@ -111,7 +114,8 @@ export function renderShell(activePage) {
         </button>
         <label class="topbar-search">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
-          <input type="search" placeholder="Buscar producto, SKU, cliente…" aria-label="Búsqueda global" />
+          <input type="search" id="global-search-input" placeholder="Buscar producto, SKU, cliente…" aria-label="Búsqueda global" autocomplete="off" />
+          <div class="global-search-results" id="global-search-results" hidden></div>
         </label>
       </div>
       <div class="topbar-actions">
@@ -136,6 +140,7 @@ export function renderShell(activePage) {
   initSidebar();
   actualizarEstadoCaja();
   actualizarMarca();
+  initBusquedaGlobal();
 
   const mediaQuery = window.matchMedia('(max-width: 767px)');
   const mobileOpenBtn = document.querySelector('[data-sidebar-open]');
@@ -159,6 +164,63 @@ async function actualizarMarca() {
     const logoEl = document.querySelector('#sidebar-brand-logo');
     if (logoEl) logoEl.src = `${API_ORIGIN}${settings.logoUrl}`;
   }
+}
+
+function initBusquedaGlobal() {
+  const input = document.querySelector('#global-search-input');
+  const resultados = document.querySelector('#global-search-results');
+  if (!input || !resultados) return;
+
+  const buscar = debounce(async (q) => {
+    if (q.trim().length < 2) {
+      resultados.hidden = true;
+      return;
+    }
+    try {
+      const data = await api.get('/search', { query: { q } });
+      renderResultadosBusqueda(resultados, data);
+    } catch (error) {
+      resultados.innerHTML = `<div class="global-search-empty">${error instanceof ApiError ? error.message : 'No se pudo buscar'}</div>`;
+      resultados.hidden = false;
+    }
+  }, 300);
+
+  input.addEventListener('input', (event) => buscar(event.target.value));
+  input.addEventListener('focus', () => {
+    if (input.value.trim().length >= 2 && resultados.innerHTML) resultados.hidden = false;
+  });
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.topbar-search')) resultados.hidden = true;
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') resultados.hidden = true;
+  });
+}
+
+function renderResultadosBusqueda(contenedor, data) {
+  const grupos = Object.entries(data).filter(([, items]) => items.length > 0);
+
+  contenedor.innerHTML = grupos.length
+    ? grupos
+        .map(
+          ([grupo, items]) => `
+      <div class="global-search-group-label">${GROUP_LABELS[grupo] || grupo}</div>
+      ${items
+        .map(
+          (item) => `
+        <a class="global-search-item" href="${item.url}">
+          <span class="global-search-item-title">${item.title}</span>
+          ${item.subtitle ? `<span class="global-search-item-subtitle">${item.subtitle}</span>` : ''}
+        </a>
+      `
+        )
+        .join('')}
+    `
+        )
+        .join('')
+    : '<div class="global-search-empty">Sin resultados</div>';
+
+  contenedor.hidden = false;
 }
 
 export async function actualizarEstadoCaja() {

@@ -36,6 +36,11 @@ public interface SaleRepository extends JpaRepository<Sale, Long> {
     @EntityGraph(attributePaths = { "customer", "user", "cashSession", "cancelledBy" })
     Optional<Sale> findById(Long id);
 
+    /** Usado por la búsqueda global — coincidencia parcial de sale_number, más recientes primero. */
+    @EntityGraph(attributePaths = { "customer", "user" })
+    @Query("SELECT s FROM Sale s WHERE LOWER(s.saleNumber) LIKE LOWER(CONCAT('%', :query, '%')) ORDER BY s.createdAt DESC")
+    List<Sale> buscarPorNumero(@Param("query") String query, Pageable pageable);
+
     /** Una fila [count, total] de ventas completadas en el rango [from, to). Usado por los reportes. */
     @Query("SELECT COUNT(s), COALESCE(SUM(s.total), 0) FROM Sale s WHERE s.status = 'COMPLETED' AND s.createdAt >= :from AND s.createdAt < :to")
     List<Object[]> resumen(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);

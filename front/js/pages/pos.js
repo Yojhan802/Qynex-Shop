@@ -50,6 +50,15 @@ async function init() {
   });
   document.querySelector('#btn-nuevo-promotor').addEventListener('click', () => abrirFormularioPromotor(null));
 
+  const ventaId = new URLSearchParams(window.location.search).get('ventaId');
+  if (ventaId) {
+    document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', String(t.dataset.tab === 'historial')));
+    document.querySelector('#panel-nueva').hidden = true;
+    document.querySelector('#panel-historial').hidden = false;
+    cargarHistorial();
+    verDetalleVenta(Number(ventaId));
+  }
+
   cashSession = await fetchCurrentSession();
   if (!cashSession) {
     document.querySelector('#pos-blocked').hidden = false;
