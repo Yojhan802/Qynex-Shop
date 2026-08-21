@@ -2,6 +2,7 @@ package com.freestyleperu.aplicacion.configuracion.web;
 
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarCompanySettingsRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.response.CompanySettingsResponse;
+import com.freestyleperu.aplicacion.configuracion.dto.response.SystemInfoResponse;
 import com.freestyleperu.aplicacion.configuracion.service.ConfiguracionService;
 import com.freestyleperu.aplicacion.shared.security.AuthenticatedUser;
 import com.freestyleperu.aplicacion.shared.security.Permisos;
@@ -45,5 +46,14 @@ public class ConfiguracionController {
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal AuthenticatedUser currentUser) {
         return configuracionService.actualizarLogo(file, currentUser.id());
+    }
+
+    /**
+     * Ficha pública mínima (nombre, plan, versión) para un panel externo de
+     * monitoreo — sin autenticación, a propósito. Ver SystemInfoResponse.
+     */
+    @GetMapping("/api/system/info")
+    public SystemInfoResponse infoSistema() {
+        return configuracionService.obtenerInfoSistema();
     }
 }

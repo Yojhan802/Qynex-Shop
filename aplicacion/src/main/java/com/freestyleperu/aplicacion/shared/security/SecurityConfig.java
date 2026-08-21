@@ -64,6 +64,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/store/auth/register", "/api/store/auth/login", "/api/store/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/store/catalog/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/system/info").permitAll()
                         .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -475,6 +475,22 @@ servicio externo del que leerla (ver docs/03 §12).
 cambiar desde la API por diseño; solo lo cambia el operador de la plataforma
 directo en la base de datos (ver docs/03 §15, RN-23).
 
+### Ficha pública de la instalación — `GET /api/system/info`
+
+Sin autenticación, a propósito — es lo único que un panel externo de
+monitoreo (fuera de este sistema, ver docs/03 §15) puede preguntarle a cada
+instalación cliente sin credenciales:
+
+```json
+{ "name": "Freestyle Perú", "plan": "ECOMMERCE", "version": "0.0.1-SNAPSHOT" }
+```
+
+Deliberadamente mínimo: nada de RUC, dirección ni datos de contacto (eso
+sigue detrás de login en `/api/settings/company`). `version` viene de
+`spring-boot-maven-plugin` (goal `build-info`, generado en el empaquetado);
+si el bean `BuildProperties` no existe (ej. corriendo con `spring-boot:run`
+sin pasar por `package`), cae a `"dev"`.
+
 ---
 
 ## 17. Búsqueda global — `/api/search`

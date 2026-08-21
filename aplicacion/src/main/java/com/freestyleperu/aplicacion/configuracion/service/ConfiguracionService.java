@@ -3,6 +3,7 @@ package com.freestyleperu.aplicacion.configuracion.service;
 import com.freestyleperu.aplicacion.configuracion.domain.CompanySettings;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarCompanySettingsRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.response.CompanySettingsResponse;
+import com.freestyleperu.aplicacion.configuracion.dto.response.SystemInfoResponse;
 import com.freestyleperu.aplicacion.configuracion.repository.CompanySettingsRepository;
 import com.freestyleperu.aplicacion.shared.audit.AuditResult;
 import com.freestyleperu.aplicacion.shared.audit.AuditService;
@@ -11,6 +12,8 @@ import com.freestyleperu.aplicacion.shared.util.ImageUploadService;
 import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.info.BuildProperties;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,16 +29,19 @@ public class ConfiguracionService {
     private final UsuarioRepository usuarioRepository;
     private final AuditService auditService;
     private final ImageUploadService imageUploadService;
+    private final ObjectProvider<BuildProperties> buildPropertiesProvider;
 
     public ConfiguracionService(
             CompanySettingsRepository companySettingsRepository,
             UsuarioRepository usuarioRepository,
             AuditService auditService,
-            ImageUploadService imageUploadService) {
+            ImageUploadService imageUploadService,
+            ObjectProvider<BuildProperties> buildPropertiesProvider) {
         this.companySettingsRepository = companySettingsRepository;
         this.usuarioRepository = usuarioRepository;
         this.auditService = auditService;
         this.imageUploadService = imageUploadService;
+        this.buildPropertiesProvider = buildPropertiesProvider;
     }
 
     public CompanySettingsResponse obtener() {
@@ -75,6 +81,14 @@ public class ConfiguracionService {
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public BigDecimal obtenerTarifaEnvio() {
         return buscarOFallar().getShippingFlatRate();
+    }
+
+    /** Ficha pública mínima para un panel externo de monitoreo — ver SystemInfoResponse. */
+    public SystemInfoResponse obtenerInfoSistema() {
+        CompanySettings settings = buscarOFallar();
+        BuildProperties buildProperties = buildPropertiesProvider.getIfAvailable();
+        String version = buildProperties != null ? buildProperties.getVersion() : "dev";
+        return new SystemInfoResponse(settings.getName(), settings.getPlan(), version);
     }
 
     private CompanySettings buscarOFallar() {
