@@ -261,7 +261,8 @@ totales acumulados **no se guardan como columnas**: se calculan consultando
 | id | BIGINT UNSIGNED | PK |
 | sale_number | VARCHAR(20) | **UNIQUE**, NOT NULL · `V001-00000123` |
 | customer_id | BIGINT | FK NULL |
-| user_id | BIGINT | FK NOT NULL — vendedor |
+| user_id | BIGINT | FK NOT NULL — vendedor (quien opera la caja, el que figura en el ticket) |
+| promoter_id | BIGINT | FK NULL — promotor de piso que ofreció la prenda, si hubo uno (opcional, solo para comisión/reportes; **nunca aparece en el ticket**) |
 | cash_session_id | BIGINT | FK NOT NULL |
 | subtotal | DECIMAL(12,2) | NOT NULL |
 | discount_amount | DECIMAL(12,2) | NOT NULL DEFAULT 0 |
@@ -311,6 +312,16 @@ quien tenga `CONFIGURACION_PAGOS` — nunca desde el POS (regla 8).
 Varias filas por venta ⇒ **pago mixto**. La invariante
 `SUM(payments.amount) = sales.total` se valida en el service dentro de la
 transacción.
+
+### `promoters`
+`id` · `name` · `status` (ACTIVE/INACTIVE) · `created_at` · `updated_at`.
+
+Personal de piso que ofrece la prenda pero no opera la caja. **No es un
+usuario del sistema** (sin login, sin contraseña) — es solo un nombre
+seleccionable, opcional, al momento de cobrar. Sirve para medir comisión con
+el reporte "ventas por promotor" (conteo + total por promotor). Deliberadamente
+separado de `users`: crear una cuenta con contraseña para alguien que nunca va
+a loguearse no tenía sentido.
 
 ---
 

@@ -271,6 +271,7 @@ lo aplica el service, no el cliente.
 ```json
 {
   "customerId": 12,
+  "promoterId": null,
   "cashSessionId": 4,
   "discountAmount": 0.00,
   "notes": null,
@@ -304,6 +305,20 @@ lo aplica el service, no el cliente.
 
 Errores posibles: `409 INSUFFICIENT_STOCK`, `409 BUSINESS_RULE_VIOLATION`
 (pagos ≠ total, sin caja abierta), `403 ACCESS_DENIED` (descuento sin permiso).
+
+### Promotores — `/api/promoters`
+
+| Método | Ruta | Permiso | Descripción |
+|---|---|---|---|
+| GET | `/api/promoters` | `PROMOTORES_CONSULTAR` | Listado (para el select opcional del POS) |
+| POST | `/api/promoters` | `PROMOTORES_GESTIONAR` | Crear |
+| PUT | `/api/promoters/{id}` | `PROMOTORES_GESTIONAR` | Editar nombre |
+| PATCH | `/api/promoters/{id}/status` | `PROMOTORES_GESTIONAR` | Activar/desactivar |
+
+Un promotor **no es un usuario del sistema**: sin login, sin contraseña, solo
+un nombre. `promoterId` en `POST /api/sales` es opcional — se deja `null`
+cuando nadie de piso ofreció la prenda. Nunca se imprime en el ticket, solo
+sirve para el reporte de comisión (`/api/reports/sales/by-promoter`).
 
 ---
 
@@ -388,6 +403,7 @@ Todos aceptan `?from=2026-08-01&to=2026-08-19` y requieren `REPORTES_CONSULTAR`.
 | `/api/reports/sales/by-day` | Serie temporal |
 | `/api/reports/sales/by-category` | Ventas por categoría |
 | `/api/reports/sales/by-seller` | Ventas por vendedor |
+| `/api/reports/sales/by-promoter` | Ventas por promotor (conteo + total, para comisión) |
 | `/api/reports/sales/by-payment-method` | Distribución de cobros |
 | `/api/reports/products/top-selling` | Más vendidos |
 | `/api/reports/products/no-movement` | Sin rotación |

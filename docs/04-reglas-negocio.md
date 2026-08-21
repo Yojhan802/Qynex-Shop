@@ -197,6 +197,8 @@ es modificar datos, no recompilar la aplicación.
 | `VENTAS_ANULAR` | ✔ | ✔ | | |
 | `VENTAS_DESCUENTO` | ✔ | ✔ | | |
 | `VENTAS_DEVOLVER` | ✔ | ✔ | | |
+| `PROMOTORES_CONSULTAR` | ✔ | ✔ | ✔ | |
+| `PROMOTORES_GESTIONAR` | ✔ | ✔ | | |
 | `CLIENTES_CONSULTAR` | ✔ | ✔ | ✔ | |
 | `CLIENTES_CREAR` | ✔ | ✔ | ✔ | |
 | `CLIENTES_EDITAR` | ✔ | ✔ | | |
