@@ -198,6 +198,21 @@ que haya permitido el frontend.
 
 ---
 
+## RN-23 · El plan de suscripción gatea módulos, no solo el rol del usuario
+
+Cada instalación (un despliegue por cliente, ver docs/03-modelo-datos.md §15)
+tiene un `company_settings.plan` (`STARTER < PROFESIONAL < ECOMMERCE < IA`).
+Un usuario puede tener el permiso de un módulo y aun así no poder usarlo si el
+plan de su instalación no lo incluye — el permiso de rol y el plan son dos
+verificaciones independientes, ambas deben pasar
+(`hasAuthority('PERMISO') and @planGate.tienePlan('...')`). El plan **no lo
+edita el cliente**: solo lo cambia el operador de la plataforma directo en la
+base de datos. El plan `STARTER` además limita a 3 usuarios activos
+(`UsuarioService.crear()` lo rechaza con `OperacionNoPermitidaException` al
+superarlo).
+
+---
+
 ## Matriz rol → permisos (semilla inicial)
 
 | Permiso | ADMIN | SUPERVISOR | VENDEDOR | ALMACENERO |

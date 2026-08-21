@@ -25,7 +25,7 @@ public class AuditoriaController {
     }
 
     @GetMapping("/api/audit")
-    @PreAuthorize("hasAuthority('" + Permisos.AUDITORIA_CONSULTAR + "')")
+    @PreAuthorize("hasAuthority('" + Permisos.AUDITORIA_CONSULTAR + "') and @planGate.tienePlan('PROFESIONAL')")
     public PageResponse<AuditLogResumenResponse> listar(
             @RequestParam(required = false) Long userId,
             @RequestParam(required = false) String action,
@@ -38,7 +38,7 @@ public class AuditoriaController {
     }
 
     @GetMapping("/api/audit/{id}")
-    @PreAuthorize("hasAuthority('" + Permisos.AUDITORIA_CONSULTAR + "')")
+    @PreAuthorize("hasAuthority('" + Permisos.AUDITORIA_CONSULTAR + "') and @planGate.tienePlan('PROFESIONAL')")
     public AuditLogResponse obtener(@PathVariable Long id) {
         return auditoriaService.obtener(id);
     }

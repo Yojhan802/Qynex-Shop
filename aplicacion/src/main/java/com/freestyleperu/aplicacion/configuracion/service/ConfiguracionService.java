@@ -89,6 +89,6 @@ public class ConfiguracionService {
         return new CompanySettingsResponse(
                 settings.getName(), settings.getRuc(), settings.getAddress(), settings.getPhone(), settings.getEmail(),
                 settings.getLogoUrl(), settings.getCurrencyCode(), settings.getCurrencySymbol(), settings.getIgvRate(),
-                settings.getTicketFooter(), settings.getShippingFlatRate(), settings.getUpdatedAt(), updatedByUsername);
+                settings.getTicketFooter(), settings.getShippingFlatRate(), settings.getPlan(), settings.getUpdatedAt(), updatedByUsername);
     }
 }

@@ -8,6 +8,28 @@ import { formatDateTime } from '../core/format.js';
 
 const TIPO_LABELS = { CASH: 'Efectivo', DIGITAL_WALLET: 'Billetera digital', CARD: 'Tarjeta', TRANSFER: 'Transferencia' };
 
+const PLAN_ORDER = ['STARTER', 'PROFESIONAL', 'ECOMMERCE', 'IA'];
+const PLAN_LABELS = { STARTER: 'Starter', PROFESIONAL: 'Profesional', ECOMMERCE: 'Ecommerce', IA: 'IA' };
+const PLAN_BADGE_CLASS = { STARTER: 'badge-neutral', PROFESIONAL: 'badge-info', ECOMMERCE: 'badge-success', IA: 'badge-warning' };
+const PLAN_DESCRIPTIONS = {
+  STARTER: 'Ventas, inventario y caja para empezar — hasta 3 usuarios.',
+  PROFESIONAL: 'Todo Starter, más promotores, auditoría y usuarios ilimitados.',
+  ECOMMERCE: 'Todo Profesional, más tienda online: catálogo, carrito y pedidos.',
+  IA: 'Todo Ecommerce, más funciones de inteligencia artificial.',
+};
+const PLAN_MODULES = [
+  { label: 'Ventas y POS', minPlan: 'STARTER' },
+  { label: 'Inventario y almacén', minPlan: 'STARTER' },
+  { label: 'Caja', minPlan: 'STARTER' },
+  { label: 'Clientes', minPlan: 'STARTER' },
+  { label: 'Reportes', minPlan: 'STARTER' },
+  { label: 'Usuarios y roles (hasta 3 en Starter, ilimitado desde Profesional)', minPlan: 'STARTER' },
+  { label: 'Promotores', minPlan: 'PROFESIONAL' },
+  { label: 'Auditoría', minPlan: 'PROFESIONAL' },
+  { label: 'Tienda online (catálogo, carrito, pedidos)', minPlan: 'ECOMMERCE' },
+  { label: 'Inteligencia artificial', minPlan: 'IA' },
+];
+
 let activeTab = 'empresa';
 
 function init() {
@@ -33,10 +55,41 @@ async function cargarEmpresa() {
   const content = document.querySelector('#empresa-content');
   try {
     const settings = await api.get('/settings/company');
+    renderPlanCard(settings);
     renderFormularioEmpresa(settings);
   } catch (error) {
     content.innerHTML = `<div class="empty-state"><span>${error instanceof ApiError ? error.message : 'No se pudo cargar la configuración'}</span></div>`;
   }
+}
+
+function renderPlanCard(settings) {
+  const container = document.querySelector('#plan-content');
+  const plan = settings.plan;
+  const planIndex = PLAN_ORDER.indexOf(plan);
+
+  const items = PLAN_MODULES.map((mod) => {
+    const incluido = planIndex >= PLAN_ORDER.indexOf(mod.minPlan);
+    const icon = incluido
+      ? `<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--color-success); flex-shrink:0;"><path d="M4 10l4 4 8-8" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+      : `<svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--color-text-muted); flex-shrink:0;"><path d="M6 6l8 8M14 6l-8 8" stroke-linecap="round"/></svg>`;
+    return `<li style="display:flex; align-items:center; gap: var(--space-2); ${incluido ? '' : 'color: var(--color-text-muted);'}">${icon}<span>${mod.label}</span></li>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: var(--space-4);">
+      <div>
+        <p class="table-cell-muted" style="margin-bottom: var(--space-1);">Plan actual</p>
+        <div style="display:flex; align-items:center; gap: var(--space-2);">
+          <span class="badge ${PLAN_BADGE_CLASS[plan] ?? 'badge-neutral'}">${PLAN_LABELS[plan] ?? plan}</span>
+        </div>
+      </div>
+    </div>
+    <p style="margin-bottom: var(--space-4);">${PLAN_DESCRIPTIONS[plan] ?? ''}</p>
+    <ul style="list-style:none; padding:0; margin:0; display:grid; gap: var(--space-2);">${items}</ul>
+    <p class="table-cell-muted" style="margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-border);">
+      El plan lo gestiona el proveedor del sistema — contáctalo para ampliarlo.
+    </p>
+  `;
 }
 
 function renderFormularioEmpresa(settings) {

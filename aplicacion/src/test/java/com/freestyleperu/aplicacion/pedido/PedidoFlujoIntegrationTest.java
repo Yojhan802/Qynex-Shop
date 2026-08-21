@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.freestyleperu.aplicacion.catalogo.domain.Category;
+import com.freestyleperu.aplicacion.configuracion.domain.CompanySettings;
+import com.freestyleperu.aplicacion.configuracion.domain.Plan;
+import com.freestyleperu.aplicacion.configuracion.repository.CompanySettingsRepository;
 import com.freestyleperu.aplicacion.catalogo.domain.Color;
 import com.freestyleperu.aplicacion.catalogo.domain.Size;
 import com.freestyleperu.aplicacion.catalogo.repository.CategoryRepository;
@@ -68,6 +71,24 @@ class PedidoFlujoIntegrationTest {
     @Autowired private PedidoService pedidoService;
     @Autowired private BranchRepository branchRepository;
     @Autowired private WarehouseRepository warehouseRepository;
+    @Autowired private CompanySettingsRepository companySettingsRepository;
+
+    /** PedidoService.resolverCostoEnvio exige una tarifa plana configurada (salvo contraentrega). */
+    private void aseguraConfiguracionEmpresa() {
+        if (companySettingsRepository.existsById(1L)) {
+            return;
+        }
+        CompanySettings settings = new CompanySettings();
+        settings.setId(1L);
+        settings.setName("Freestyle Perú (semilla test)");
+        settings.setCurrencyCode("PEN");
+        settings.setCurrencySymbol("S/");
+        settings.setIgvRate(new BigDecimal("0.18"));
+        settings.setShippingFlatRate(new BigDecimal("15.00"));
+        settings.setPlan(Plan.ECOMMERCE);
+        settings.setUpdatedAt(java.time.LocalDateTime.now());
+        companySettingsRepository.save(settings);
+    }
 
     /** InventarioService.registrar exige un almacén activo — confirmarPago/cancelar pasan por ahí. */
     private void aseguraAlmacenActivo(String sufijo) {
@@ -85,6 +106,7 @@ class PedidoFlujoIntegrationTest {
 
     @Test
     void creaPedidoSinTocarStockYConfirmarPagoReciénLoDescuenta() {
+        aseguraConfiguracionEmpresa();
         aseguraAlmacenActivo("1");
         VarianteResponse variante = crearVarianteConStock("Polo Piqué", "Blanco", "M", new BigDecimal("80.00"), 5);
         PaymentMethod yape = metodoPago("YAPE");
@@ -119,6 +141,7 @@ class PedidoFlujoIntegrationTest {
 
     @Test
     void cancelarUnPedidoConfirmadoReingresaStockYUnoPendienteNoLoToca() {
+        aseguraConfiguracionEmpresa();
         aseguraAlmacenActivo("2");
         VarianteResponse variante = crearVarianteConStock("Casaca Jean", "Azul", "L", new BigDecimal("150.00"), 4);
         PaymentMethod yape = metodoPago("YAPE");
@@ -157,6 +180,7 @@ class PedidoFlujoIntegrationTest {
 
     @Test
     void rechazaCrearPedidoSinStockYConfirmarSiElStockYaNoAlcanza() {
+        aseguraConfiguracionEmpresa();
         aseguraAlmacenActivo("3");
         VarianteResponse variante = crearVarianteConStock("Gorra Trucker", "Negro", "Única", new BigDecimal("45.00"), 1);
         PaymentMethod yape = metodoPago("YAPE");
@@ -216,6 +240,7 @@ class PedidoFlujoIntegrationTest {
 
     @Test
     void comprobanteDePagoSoloLoSubeElDueñoYSoloMientrasEstaPendiente() {
+        aseguraConfiguracionEmpresa();
         aseguraAlmacenActivo("4");
         VarianteResponse variante = crearVarianteConStock("Camisa Lino", "Blanco", "M", new BigDecimal("70.00"), 2);
         PaymentMethod yape = metodoPago("YAPE");

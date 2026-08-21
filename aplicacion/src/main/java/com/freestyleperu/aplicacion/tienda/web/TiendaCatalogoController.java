@@ -10,13 +10,20 @@ import com.freestyleperu.aplicacion.tienda.dto.response.PublicShippingInfoRespon
 import com.freestyleperu.aplicacion.tienda.service.TiendaCatalogoService;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Catálogo público de la tienda online — todo bajo /api/store/catalog, sin autenticación. */
+/**
+ * Catálogo público de la tienda online — todo bajo /api/store/catalog, sin
+ * autenticación. Gateado por plan de suscripción (no todos los planes
+ * incluyen tienda online) — {@code @PreAuthorize} funciona igual sobre un
+ * endpoint público: no exige estar autenticado, solo evalúa la expresión.
+ */
 @RestController
+@PreAuthorize("@planGate.tienePlan('ECOMMERCE')")
 public class TiendaCatalogoController {
 
     private final TiendaCatalogoService catalogoService;

@@ -1,7 +1,9 @@
 package com.freestyleperu.aplicacion.usuario.service;
 
+import com.freestyleperu.aplicacion.configuracion.PlanGate;
 import com.freestyleperu.aplicacion.shared.audit.AuditResult;
 import com.freestyleperu.aplicacion.shared.audit.AuditService;
+import com.freestyleperu.aplicacion.shared.exception.OperacionNoPermitidaException;
 import com.freestyleperu.aplicacion.shared.exception.RecursoDuplicadoException;
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
 import com.freestyleperu.aplicacion.usuario.domain.Rol;
@@ -38,17 +40,19 @@ public class UsuarioService {
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
     private final ApplicationEventPublisher eventPublisher;
+    private final PlanGate planGate;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public UsuarioService(UsuarioRepository usuarioRepository, RolRepository rolRepository,
             UsuarioMapper usuarioMapper, PasswordEncoder passwordEncoder, AuditService auditService,
-            ApplicationEventPublisher eventPublisher) {
+            ApplicationEventPublisher eventPublisher, PlanGate planGate) {
         this.usuarioRepository = usuarioRepository;
         this.rolRepository = rolRepository;
         this.usuarioMapper = usuarioMapper;
         this.passwordEncoder = passwordEncoder;
         this.auditService = auditService;
         this.eventPublisher = eventPublisher;
+        this.planGate = planGate;
     }
 
     public Page<UsuarioResponse> listar(String search, UsuarioEstado status, Pageable pageable) {
@@ -61,6 +65,10 @@ public class UsuarioService {
 
     @Transactional
     public UsuarioResponse crear(CrearUsuarioRequest request) {
+        if (usuarioRepository.count() >= planGate.limiteUsuarios()) {
+            throw new OperacionNoPermitidaException(
+                    "Tu plan permite hasta " + planGate.limiteUsuarios() + " usuarios — contacta a soporte para ampliar tu plan");
+        }
         if (usuarioRepository.existsByUsername(request.username())) {
             throw new RecursoDuplicadoException("El nombre de usuario " + request.username() + " ya está en uso");
         }

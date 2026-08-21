@@ -3,6 +3,9 @@ package com.freestyleperu.aplicacion.usuario;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.freestyleperu.aplicacion.configuracion.domain.CompanySettings;
+import com.freestyleperu.aplicacion.configuracion.domain.Plan;
+import com.freestyleperu.aplicacion.configuracion.repository.CompanySettingsRepository;
 import com.freestyleperu.aplicacion.shared.exception.OperacionNoPermitidaException;
 import com.freestyleperu.aplicacion.shared.exception.RecursoDuplicadoException;
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
@@ -43,9 +46,28 @@ class UsuarioRolFlujoIntegrationTest {
     @Autowired private RolRepository rolRepository;
     @Autowired private PermisoRepository permisoRepository;
     @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private CompanySettingsRepository companySettingsRepository;
+
+    /** El plan Starter limita usuarios a 3; este flujo no evalúa ese límite, solo el CRUD de usuarios/roles. */
+    private void aseguraPlanSinLimiteDeUsuarios() {
+        if (companySettingsRepository.existsById(1L)) {
+            return;
+        }
+        CompanySettings settings = new CompanySettings();
+        settings.setId(1L);
+        settings.setName("Freestyle Perú (semilla test)");
+        settings.setCurrencyCode("PEN");
+        settings.setCurrencySymbol("S/");
+        settings.setIgvRate(new java.math.BigDecimal("0.18"));
+        settings.setShippingFlatRate(new java.math.BigDecimal("15.00"));
+        settings.setPlan(Plan.PROFESIONAL);
+        settings.setUpdatedAt(java.time.LocalDateTime.now());
+        companySettingsRepository.save(settings);
+    }
 
     @Test
     void gestionaCicloDeVidaDeUsuariosYPermisosDeRolesConSusReglasDeNegocio() {
+        aseguraPlanSinLimiteDeUsuarios();
         Permiso permiso = permisoRepository.save(Permiso.builder()
                 .code("TEST_PERMISO_USUARIO").module("TEST").description("Permiso de prueba").build());
 

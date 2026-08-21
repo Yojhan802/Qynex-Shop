@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.freestyleperu.aplicacion.configuracion.domain.CompanySettings;
+import com.freestyleperu.aplicacion.configuracion.domain.Plan;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarCompanySettingsRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.response.CompanySettingsResponse;
 import com.freestyleperu.aplicacion.configuracion.repository.CompanySettingsRepository;
@@ -78,6 +79,7 @@ class ConfiguracionFlujoIntegrationTest {
         settings.setCurrencySymbol("S/");
         settings.setIgvRate(new BigDecimal("0.18"));
         settings.setShippingFlatRate(new BigDecimal("15.00"));
+        settings.setPlan(Plan.ECOMMERCE);
         settings.setUpdatedAt(LocalDateTime.now());
         companySettingsRepository.save(settings);
     }

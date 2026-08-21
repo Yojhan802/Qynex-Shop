@@ -1,6 +1,8 @@
 package com.freestyleperu.aplicacion.configuracion.domain;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -53,6 +55,11 @@ public class CompanySettings {
 
     @Column(name = "shipping_flat_rate", nullable = false, precision = 12, scale = 2)
     private BigDecimal shippingFlatRate;
+
+    /** No editable por el cliente vía API — solo lo cambia el operador de la plataforma directo en la base de datos. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "plan", nullable = false, length = 20)
+    private Plan plan;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;

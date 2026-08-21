@@ -23,7 +23,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 /** Pedidos del propio cliente autenticado — ver también {@code pedido.web.PedidoController} para la vista de staff. */
 @RestController
-@PreAuthorize("hasAuthority('" + Permisos.ROLE_CUSTOMER + "')")
+@PreAuthorize("hasAuthority('" + Permisos.ROLE_CUSTOMER + "') and @planGate.tienePlan('ECOMMERCE')")
 public class TiendaPedidoController {
 
     private final PedidoService pedidoService;

@@ -410,7 +410,8 @@ usuario) · `action` · `entity` · `entity_id` · `old_value` JSON · `new_valu
 ### `company_settings`
 Fila única (`id = 1`): `name` · `ruc` · `address` · `phone` · `email` ·
 `logo_url` · `currency_code` (PEN) · `currency_symbol` (S/) · `igv_rate` ·
-`ticket_footer` · `shipping_flat_rate` (desde V19, §12) · `updated_at` · `updated_by`.
+`ticket_footer` · `shipping_flat_rate` (desde V19, §12) ·
+`plan` (desde V22, §15) · `updated_at` · `updated_by`.
 
 ### `sequences`
 `name` PK · `prefix` · `current_value` · `padding`.
@@ -542,7 +543,44 @@ V19 → envío: company_settings.shipping_flat_rate, orders.department/province/
 V20 → orders.recipient_dni/recipient_first_name/recipient_last_name_paterno/
       recipient_last_name_materno (reemplaza recipient_name)
 V21 → products.material/fit/size_guide_image_url (ficha de tienda online)
+V22 → company_settings.plan (plan de suscripción SaaS, §15)
 ```
 
 (Lista ilustrativa de las primeras fases — el detalle exacto de cada migración
 vive en `src/main/resources/db/migration/`, que es la fuente de verdad.)
+
+---
+
+## 15. Plan de suscripción (SaaS — un despliegue por cliente)
+
+`company_settings.plan` (V22) marca qué nivel de suscripción tiene **esta
+instalación**: `STARTER` < `PROFESIONAL` < `ECOMMERCE` < `IA` (jerarquía por
+orden ordinal). El modelo elegido para el SaaS es **un despliegue independiente
+por cliente** (no multi-tenant): cada instalación tiene su propia base de
+datos, y esta columna es la que le permite "saber" en qué plan está.
+
+**No es editable por el cliente.** `ActualizarCompanySettingsRequest` no
+incluye `plan` — a propósito, para que cambiar de plan (y por tanto lo que se
+factura) sea siempre una acción del operador de la plataforma, directo en la
+base de datos, nunca algo que el propio cliente pueda tocar desde el panel.
+`CompanySettingsResponse.plan` sí lo expone (solo lectura) para que el panel
+pueda, por ejemplo, ocultar un enlace a una sección que el plan actual no
+incluye.
+
+**Aplicación:** `PlanGate` (`@Component("planGate")`) se referencia desde
+`@PreAuthorize` exactamente igual que `hasAuthority('PERMISO')`, p. ej.
+`@PreAuthorize("hasAuthority('PEDIDOS_CONSULTAR') and @planGate.tienePlan('ECOMMERCE')")`.
+Funciona incluso sobre endpoints `permitAll()` (el catálogo público de la
+tienda), porque `@PreAuthorize` es una capa de AOP independiente del filtro de
+autenticación. Módulos gateados:
+
+| Plan mínimo | Módulos |
+|---|---|
+| PROFESIONAL | Promotores (`/api/promoters/**`), Auditoría (`/api/audit/**`) |
+| ECOMMERCE | Catálogo público y pedidos de tienda online (`/api/store/**`), pedidos vistos por staff (`/api/orders/**`) |
+
+`PlanGate.limiteUsuarios()` además limita `UsuarioService.crear()` a 3
+usuarios activos en el plan `STARTER` (los demás planes no tienen límite) —
+lanza `OperacionNoPermitidaException` al superarlo. Si no existe fila en
+`company_settings` (no debería pasar fuera de tests), `PlanGate` asume
+`STARTER` (el plan más restrictivo) como fallback seguro.

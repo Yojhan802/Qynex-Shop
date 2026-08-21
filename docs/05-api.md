@@ -320,6 +320,8 @@ Errores posibles: `409 INSUFFICIENT_STOCK`, `409 BUSINESS_RULE_VIOLATION`
 | PUT | `/api/promoters/{id}` | `PROMOTORES_GESTIONAR` | Editar nombre |
 | PATCH | `/api/promoters/{id}/status` | `PROMOTORES_GESTIONAR` | Activar/desactivar |
 
+Requiere además plan `PROFESIONAL` o superior (RN-23).
+
 Un promotor **no es un usuario del sistema**: sin login, sin contraseña, solo
 un nombre. `promoterId` en `POST /api/sales` es opcional — se deja `null`
 cuando nadie de piso ofreció la prenda. Nunca se imprime en el ticket, solo
@@ -451,6 +453,9 @@ coincidencia parcial). `GET /api/audit/{id}` agrega `oldValue`/`newValue`
 que el listado omite por ser pesados de mostrar en una tabla.
 **Solo lectura**: no existe forma de escribir ni borrar auditoría por API.
 
+Requiere además plan `PROFESIONAL` o superior (RN-23) — `STARTER` recibe 403
+aunque el usuario tenga `AUDITORIA_CONSULTAR`.
+
 ---
 
 ## 16. Configuración — `/api/settings`
@@ -464,6 +469,11 @@ que el listado omite por ser pesados de mostrar en una tabla.
 `shippingFlatRate` (desde Fase 2) es la tarifa de envío que se cobra en todo
 pedido online salvo contraentrega en Huacho — se edita aquí, no hay un
 servicio externo del que leerla (ver docs/03 §12).
+
+`plan` (`STARTER`/`PROFESIONAL`/`ECOMMERCE`/`IA`) viene en la respuesta del
+`GET` pero **no** es un campo de `PUT /api/settings/company` — no se puede
+cambiar desde la API por diseño; solo lo cambia el operador de la plataforma
+directo en la base de datos (ver docs/03 §15, RN-23).
 
 ---
 
@@ -495,7 +505,8 @@ venta al cargar la página.
 ## 18. Pedidos (staff) — `/api/orders`
 
 Vista de staff sobre los pedidos hechos desde la tienda online. Ver §19 para el
-lado del cliente (`/api/store/orders`).
+lado del cliente (`/api/store/orders`). Requiere además plan `ECOMMERCE` o
+superior (RN-23).
 
 | Método | Ruta | Permiso | Descripción |
 |---|---|---|---|
@@ -522,7 +533,9 @@ Todo bajo `/api/store` es intencionalmente distinto del resto de la API: el
 catálogo es público (sin token) y la autenticación de clientes es un sistema
 paralelo al de staff — un JWT de cliente lleva `ROLE_CUSTOMER` como única
 autoridad y nunca sirve para pasar un `hasAuthority('VENTAS_...')` de staff,
-ni viceversa. Ver docs/03-modelo-datos.md §12.
+ni viceversa. Ver docs/03-modelo-datos.md §12. Todo `/api/store/**` requiere
+además plan `ECOMMERCE` o superior (RN-23) — en una instalación con un plan
+menor, incluso el catálogo público responde 403.
 
 ### Catálogo — `/api/store/catalog` (público, sin autenticación)
 
