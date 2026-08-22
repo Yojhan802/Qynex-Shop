@@ -28,6 +28,9 @@
           <p>Ventas, productos y caja. Los filtros de fecha aplican a todo lo de abajo.</p>
         </div>
         <div class="page-actions">
+          <button class="btn btn-ghost btn-sm" type="button" id="btn-rango-hoy">Hoy</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="btn-rango-mes">Este mes</button>
+          <button class="btn btn-ghost btn-sm" type="button" id="btn-rango-anio">Este año</button>
           <input class="input" type="date" id="filter-from" style="width:150px;" />
           <span style="align-self:center; color:var(--color-text-muted);">–</span>
           <input class="input" type="date" id="filter-to" style="width:150px;" />
@@ -45,6 +48,17 @@
       </div>
 
       <div id="panel-ventas">
+        <section class="stat-grid" aria-label="Resumen del período" style="margin-bottom: var(--space-5);">
+          <div class="card stat-card">
+            <span class="stat-label">Ventas en el período</span>
+            <span class="stat-value" id="stat-ventas-cantidad">—</span>
+          </div>
+          <div class="card stat-card">
+            <span class="stat-label">Total vendido</span>
+            <span class="stat-value" id="stat-ventas-total">—</span>
+          </div>
+        </section>
+
         <section class="chart-grid" aria-label="Distribución de ventas">
           <div class="card">
             <div class="card-header"><div><h3>Ventas por categoría</h3></div></div>
@@ -78,6 +92,21 @@
             <table class="data-table">
               <thead><tr><th>Promotor</th><th>Ventas</th><th>Total</th></tr></thead>
               <tbody id="tabla-promotores"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="card" id="card-pagos-digitales" style="margin-top: var(--space-5);" aria-label="Pagos digitales" hidden>
+          <div class="card-header">
+            <div>
+              <h3>Pagos digitales (Yape, Plin, transferencia...)</h3>
+              <p>Independiente de la caja — el efectivo se ve en la pestaña "Caja".</p>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead><tr><th>Método</th><th>Total</th><th>% del período</th></tr></thead>
+              <tbody id="tabla-pagos-digitales"></tbody>
             </table>
           </div>
         </section>

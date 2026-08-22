@@ -36,6 +36,29 @@ function init() {
     cargarPanelActivo();
   });
 
+  document.querySelector('#btn-rango-hoy').addEventListener('click', () => aplicarRangoRapido(hoyIso(), hoyIso()));
+  document.querySelector('#btn-rango-mes').addEventListener('click', () => aplicarRangoRapido(inicioMesIso(), hoyIso()));
+  document.querySelector('#btn-rango-anio').addEventListener('click', () => aplicarRangoRapido(inicioAnioIso(), hoyIso()));
+
+  cargarPanelActivo();
+}
+
+function hoyIso() {
+  return new Date().toISOString().slice(0, 10);
+}
+function inicioMesIso() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+}
+function inicioAnioIso() {
+  return `${new Date().getFullYear()}-01-01`;
+}
+
+function aplicarRangoRapido(from, to) {
+  range.from = from;
+  range.to = to;
+  document.querySelector('#filter-from').value = from;
+  document.querySelector('#filter-to').value = to;
   cargarPanelActivo();
 }
 
@@ -46,14 +69,35 @@ function cargarPanelActivo() {
 
 async function cargarVentas() {
   try {
-    const [porCategoria, porMetodo, porProducto, porVendedor, porPromotor] = await Promise.all([
+    const [resumen, porCategoria, porMetodo, porProducto, porVendedor, porPromotor, pagosDigitales] = await Promise.all([
+      api.get('/reports/sales/summary', { query: range }),
       api.get('/reports/sales/by-category', { query: range }),
       api.get('/reports/sales/by-payment-method', { query: range }),
       api.get('/reports/products/top-selling', { query: { ...range, limit: 10 } }),
       api.get('/reports/sales/by-seller', { query: range }),
       api.get('/reports/sales/by-promoter', { query: range }),
+      api.get('/reports/payments/non-cash', { query: range }),
     ]);
-    ultimoReporteVentas = { porCategoria, porMetodo, porProducto, porVendedor, porPromotor };
+    ultimoReporteVentas = { porCategoria, porMetodo, porProducto, porVendedor, porPromotor, pagosDigitales };
+
+    document.querySelector('#stat-ventas-cantidad').textContent = resumen.count;
+    document.querySelector('#stat-ventas-total').textContent = formatCurrency(resumen.total);
+
+    const cardPagosDigitales = document.querySelector('#card-pagos-digitales');
+    cardPagosDigitales.hidden = pagosDigitales.length === 0;
+    if (pagosDigitales.length > 0) {
+      document.querySelector('#tabla-pagos-digitales').innerHTML = pagosDigitales
+        .map(
+          (m) => `
+        <tr>
+          <td class="table-cell-primary">${m.label}</td>
+          <td class="mono">${formatCurrency(m.total)}</td>
+          <td>${m.percentage != null ? `${m.percentage.toFixed(1)}%` : '—'}</td>
+        </tr>
+      `
+        )
+        .join('');
+    }
 
     renderChartOrEmpty('#chart-categoria', porCategoria, 'label', 'total');
     renderChartOrEmpty('#chart-vendedor', porVendedor, 'label', 'total');
@@ -142,9 +186,13 @@ function exportarCsv() {
 
   if (activeTab === 'ventas') {
     if (!ultimoReporteVentas) return;
-    const { porCategoria, porMetodo, porProducto, porVendedor, porPromotor } = ultimoReporteVentas;
+    const { porCategoria, porMetodo, porProducto, porVendedor, porPromotor, pagosDigitales } = ultimoReporteVentas;
     const filas = [
       [`Reporte de ventas${rango}`],
+      [],
+      ['Pagos digitales (sin efectivo)'],
+      ['Método', 'Total', '% del período'],
+      ...pagosDigitales.map((r) => [r.label, r.total, r.percentage != null ? `${r.percentage.toFixed(1)}%` : '']),
       [],
       ['Ventas por categoría'],
       ['Categoría', 'Total', '% del período'],

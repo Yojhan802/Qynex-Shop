@@ -4,6 +4,7 @@ import com.freestyleperu.aplicacion.reporte.dto.response.CajaSesionResumenRespon
 import com.freestyleperu.aplicacion.reporte.dto.response.DashboardResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.ProductoTopResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.PromotorReporteResponse;
+import com.freestyleperu.aplicacion.reporte.dto.response.ResumenPeriodoResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.SerieDiaResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.SerieEtiquetaResponse;
 import com.freestyleperu.aplicacion.reporte.service.ReporteService;
@@ -64,6 +65,22 @@ public class ReporteController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return reporteService.distribucionPorMetodoPago(from, to);
+    }
+
+    /** Solo Yape/Plin/transferencia/etc. (no efectivo, que ya se ve por sesión de caja) — por día calendario. */
+    @GetMapping("/api/reports/payments/non-cash")
+    public List<SerieEtiquetaResponse> distribucionPagosDigitales(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return reporteService.distribucionPagosDigitales(from, to);
+    }
+
+    /** Cantidad y monto total de ventas en el período — "cuántas ventas se hicieron". */
+    @GetMapping("/api/reports/sales/summary")
+    public ResumenPeriodoResponse resumenVentas(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return reporteService.resumenVentas(from, to);
     }
 
     @GetMapping("/api/reports/products/top-selling")

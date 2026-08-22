@@ -97,6 +97,18 @@ public class ReporteService {
         return distribucion(paymentRepository.distribucionPorMetodo(rango[0], rango[1]));
     }
 
+    /** Solo métodos que no afectan caja (Yape, Plin, transferencia...) — ver PaymentRepository.distribucionPorMetodoNoEfectivo. */
+    public List<SerieEtiquetaResponse> distribucionPagosDigitales(LocalDate from, LocalDate to) {
+        LocalDateTime[] rango = rango(from, to);
+        return distribucion(paymentRepository.distribucionPorMetodoNoEfectivo(rango[0], rango[1]));
+    }
+
+    /** Cantidad y monto total de ventas completadas en el período — para "cuántas ventas se hicieron". */
+    public ResumenPeriodoResponse resumenVentas(LocalDate from, LocalDate to) {
+        LocalDateTime[] rango = rango(from, to);
+        return resumen(rango[0], rango[1]);
+    }
+
     public List<ProductoTopResponse> topProductos(LocalDate from, LocalDate to, int limit) {
         LocalDateTime[] rango = rango(from, to);
         return topProductos(rango[0], rango[1], limit);

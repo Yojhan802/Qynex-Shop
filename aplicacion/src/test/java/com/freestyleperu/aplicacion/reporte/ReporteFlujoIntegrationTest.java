@@ -135,8 +135,23 @@ class ReporteFlujoIntegrationTest {
 
         ventaService.registrarVenta(new CrearVentaRequest(
                         null, null, sesion.id(), null, null,
-                        List.of(new ItemVentaRequest(variante.id(), 3, null)),
+                        List.of(new ItemVentaRequest(variante.id(), 3, null, null, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("150.00"), null))),
+                userId, Set.of());
+
+        PaymentMethod yape = new PaymentMethod();
+        yape.setCode("YAPE-REP");
+        yape.setName("Yape");
+        yape.setType(PaymentMethodType.DIGITAL_WALLET);
+        yape.setAffectsCash(false);
+        yape.setRequiresReference(true);
+        yape.setSortOrder((short) 2);
+        paymentMethodRepository.save(yape);
+
+        ventaService.registrarVenta(new CrearVentaRequest(
+                        null, null, sesion.id(), null, null,
+                        List.of(new ItemVentaRequest(variante.id(), 2, null, null, null)),
+                        List.of(new PagoVentaRequest(yape.getId(), new BigDecimal("100.00"), "OP-REP-1"))),
                 userId, Set.of());
 
         DashboardResponse dashboard = reporteService.dashboard();
@@ -159,5 +174,17 @@ class ReporteFlujoIntegrationTest {
 
         var porVendedor = reporteService.ventasPorVendedor(LocalDate.now(), LocalDate.now());
         assertThat(porVendedor).anyMatch(s -> s.label().equals("Vendedor Reporte"));
+
+        // Pagos digitales de hoy: incluye Yape, nunca el efectivo.
+        var pagosDigitales = reporteService.distribucionPagosDigitales(LocalDate.now(), LocalDate.now());
+        assertThat(pagosDigitales).anyMatch(s -> s.label().equals("Yape"));
+        assertThat(pagosDigitales).noneMatch(s -> s.label().equals("Efectivo"));
+        assertThat(pagosDigitales.stream().filter(s -> s.label().equals("Yape")).findFirst().orElseThrow().total())
+                .isEqualByComparingTo("100.00");
+
+        // Resumen del período: cuenta ambas ventas (efectivo + Yape) de hoy.
+        var resumenHoy = reporteService.resumenVentas(LocalDate.now(), LocalDate.now());
+        assertThat(resumenHoy.count()).isGreaterThanOrEqualTo(2);
+        assertThat(resumenHoy.total()).isGreaterThanOrEqualTo(new BigDecimal("250.00"));
     }
 }
