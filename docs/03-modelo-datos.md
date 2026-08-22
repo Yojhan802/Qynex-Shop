@@ -630,7 +630,7 @@ autenticación. Módulos gateados:
 | Plan mínimo | Módulos |
 |---|---|
 | PROFESIONAL | Promotores (`/api/promoters/**`), Auditoría (`/api/audit/**`), Separaciones (`/api/reservations/**`, §17), Combos y promociones (`/api/combos/**`, `/api/promotions/**`, §18) |
-| ECOMMERCE | Catálogo público y pedidos de tienda online (`/api/store/**`), pedidos vistos por staff (`/api/orders/**`) |
+| ECOMMERCE | Catálogo público y pedidos de tienda online (`/api/store/**`), pedidos vistos por staff (`/api/orders/**`), notificaciones en tiempo real (`/api/notifications/stream`, `/api/store/notifications/stream`, §22) |
 
 `PlanGate.limiteUsuarios()` además limita `UsuarioService.crear()` a 3
 usuarios activos en el plan `STARTER` (los demás planes no tienen límite) —

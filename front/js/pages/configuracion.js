@@ -13,8 +13,8 @@ const PLAN_LABELS = { STARTER: 'Starter', PROFESIONAL: 'Profesional', ECOMMERCE:
 const PLAN_BADGE_CLASS = { STARTER: 'badge-neutral', PROFESIONAL: 'badge-info', ECOMMERCE: 'badge-success', IA: 'badge-warning' };
 const PLAN_DESCRIPTIONS = {
   STARTER: 'Ventas, inventario y caja para empezar — hasta 3 usuarios.',
-  PROFESIONAL: 'Todo Starter, más promotores, auditoría y usuarios ilimitados.',
-  ECOMMERCE: 'Todo Profesional, más tienda online: catálogo, carrito y pedidos.',
+  PROFESIONAL: 'Todo Starter, más promotores, auditoría, separaciones, combos y promociones, y usuarios ilimitados.',
+  ECOMMERCE: 'Todo Profesional, más tienda online: catálogo, carrito, pedidos y notificaciones en tiempo real.',
   IA: 'Todo Ecommerce, más funciones de inteligencia artificial.',
 };
 const PLAN_MODULES = [
@@ -26,7 +26,10 @@ const PLAN_MODULES = [
   { label: 'Usuarios y roles (hasta 3 en Starter, ilimitado desde Profesional)', minPlan: 'STARTER' },
   { label: 'Promotores', minPlan: 'PROFESIONAL' },
   { label: 'Auditoría', minPlan: 'PROFESIONAL' },
+  { label: 'Separaciones (apartados con depósito)', minPlan: 'PROFESIONAL' },
+  { label: 'Combos y promociones', minPlan: 'PROFESIONAL' },
   { label: 'Tienda online (catálogo, carrito, pedidos)', minPlan: 'ECOMMERCE' },
+  { label: 'Notificaciones en tiempo real (pedidos nuevos y su estado)', minPlan: 'ECOMMERCE' },
   { label: 'Inteligencia artificial', minPlan: 'IA' },
 ];
 
