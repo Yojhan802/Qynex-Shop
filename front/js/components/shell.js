@@ -1,10 +1,13 @@
-import { getSession, logout, initials } from '../core/auth.js';
+import { getSession, logout, initials, hasPermission } from '../core/auth.js';
 import { initSidebar } from './sidebar.js';
 import { fetchCurrentSession } from '../core/cash-session.js';
 import { openAbrirCajaModal } from './abrir-caja.js';
 import { fetchCompanySettings, getCachedCompanySettings } from '../core/settings.js';
-import { api, ApiError, API_ORIGIN } from '../core/api.js';
+import { api, ApiError, API_ORIGIN, refreshAccessToken } from '../core/api.js';
 import { debounce } from '../core/debounce.js';
+import { connectLiveStream } from '../core/live-stream.js';
+import { showToast } from './toast.js';
+import { formatCurrency } from '../core/format.js';
 
 const GROUP_LABELS = { products: 'Productos', customers: 'Clientes', sales: 'Ventas', users: 'Usuarios' };
 
@@ -16,6 +19,9 @@ const ICONS = {
   cash: '<rect x="3" y="6" width="18" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M7 6V5a2 2 0 012-2h6a2 2 0 012 2v1"/>',
   customers: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.2c1.5.4 2.6 1.8 2.6 3.4S17.5 11.6 16 12"/><path d="M18.5 14.3c1.9.7 3.2 2.6 3.2 5.7"/>',
   orders: '<rect x="5" y="4" width="14" height="17" rx="1.5"/><path d="M9 3h6v3H9z"/><path d="M8 11h8M8 15h5"/>',
+  reservations: '<path d="M6 3h9l3 3v15H6V3z"/><path d="M15 3v3h3"/><path d="M9 13l2 2 4-4"/>',
+  combos: '<rect x="3" y="7" width="8" height="8" rx="1.5"/><rect x="13" y="9" width="8" height="8" rx="1.5"/><path d="M7 7V5a2 2 0 012-2h2" stroke-linecap="round"/>',
+  promotions: '<path d="M20.6 12.6L12.9 4.9a2 2 0 00-1.4-.6H5a1 1 0 00-1 1v6.5a2 2 0 00.6 1.4l7.7 7.7a2 2 0 002.8 0l5.5-5.5a2 2 0 000-2.8z"/><circle cx="8.5" cy="8.5" r="1.5"/>',
   reports: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   audit: '<path d="M9 3h6l1 3h3a1 1 0 011 1v13a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h3l1-3z"/><path d="M9 12l2 2 4-4"/>',
   users: '<circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M2.5 20c0-3 2.5-5.4 5.5-5.4S13.5 17 13.5 20"/><path d="M15 15.2c2.4.3 4.5 2.2 4.5 4.8"/>',
@@ -37,6 +43,9 @@ const NAV_SECTIONS = [
       { id: 'caja', label: 'Caja', href: 'caja.html', icon: 'cash', enabled: true },
       { id: 'clientes', label: 'Clientes', href: 'clientes.html', icon: 'customers', enabled: true },
       { id: 'pedidos', label: 'Pedidos', href: 'pedidos.html', icon: 'orders', enabled: true },
+      { id: 'separaciones', label: 'Separaciones', href: 'separaciones.html', icon: 'reservations', enabled: true },
+      { id: 'combos', label: 'Combos', href: 'combos.html', icon: 'combos', enabled: true },
+      { id: 'promociones', label: 'Promociones', href: 'promociones.html', icon: 'promotions', enabled: true },
     ],
   },
   {
@@ -122,6 +131,11 @@ export function renderShell(activePage) {
         <button class="cash-status" id="cash-status-badge" type="button" style="border:none; cursor:default;">
           <span class="dot" style="background:var(--neutral-300);"></span> Comprobando caja…
         </button>
+        <button class="notif-bell" id="notif-bell" type="button" aria-label="Pedidos pendientes" hidden>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" stroke-linecap="round" stroke-linejoin="round"/><path d="M13.7 21a2 2 0 01-3.4 0" stroke-linecap="round"/></svg>
+          <span class="notif-count" id="notif-count" hidden>0</span>
+        </button>
+        <div class="notif-panel" id="notif-panel" hidden></div>
         <div class="user-menu">
           <span class="avatar">${initials(session.user.fullName)}</span>
           <div style="line-height:1.2;">
@@ -141,6 +155,7 @@ export function renderShell(activePage) {
   actualizarEstadoCaja();
   actualizarMarca();
   initBusquedaGlobal();
+  initNotificaciones();
 
   const mediaQuery = window.matchMedia('(max-width: 767px)');
   const mobileOpenBtn = document.querySelector('[data-sidebar-open]');
@@ -246,4 +261,72 @@ export async function actualizarEstadoCaja() {
   } catch {
     badge.innerHTML = `<span class="dot" style="background:var(--neutral-300);"></span> Caja no disponible`;
   }
+}
+
+const NOTIF_PANEL_MAX = 5;
+let pedidosPendientesPanel = [];
+
+async function initNotificaciones() {
+  if (!hasPermission('PEDIDOS_CONSULTAR')) return;
+
+  const bell = document.querySelector('#notif-bell');
+  const panel = document.querySelector('#notif-panel');
+  if (!bell || !panel) return;
+
+  try {
+    const page = await api.get('/orders', { query: { status: 'PENDING_PAYMENT', size: NOTIF_PANEL_MAX } });
+    pedidosPendientesPanel = page.content;
+    actualizarContadorNotif(page.totalElements);
+    renderPanelPedidos(panel, pedidosPendientesPanel);
+  } catch {
+    // Sin acceso real (plan sin Ecommerce) o error de red — el widget se queda oculto.
+    return;
+  }
+
+  bell.hidden = false;
+  bell.addEventListener('click', () => {
+    panel.hidden = !panel.hidden;
+  });
+  document.addEventListener('click', (event) => {
+    if (!panel.hidden && !event.target.closest('#notif-bell') && !event.target.closest('#notif-panel')) {
+      panel.hidden = true;
+    }
+  });
+
+  connectLiveStream(`${API_ORIGIN}/api/notifications/stream`, {
+    getToken: () => getSession()?.accessToken,
+    refreshToken: refreshAccessToken,
+    onEvent: {
+      'pedido-nuevo': (pedido) => {
+        pedidosPendientesPanel = [pedido, ...pedidosPendientesPanel].slice(0, NOTIF_PANEL_MAX);
+        const countEl = document.querySelector('#notif-count');
+        actualizarContadorNotif((Number(countEl?.textContent) || 0) + 1);
+        renderPanelPedidos(panel, pedidosPendientesPanel);
+        showToast({ type: 'success', title: 'Nuevo pedido', message: `${pedido.orderNumber} — ${formatCurrency(pedido.total)}` });
+        window.dispatchEvent(new CustomEvent('fsp:pedido-nuevo', { detail: pedido }));
+      },
+    },
+  });
+}
+
+function actualizarContadorNotif(valor) {
+  const countEl = document.querySelector('#notif-count');
+  if (!countEl) return;
+  countEl.textContent = String(valor);
+  countEl.hidden = valor === 0;
+}
+
+function renderPanelPedidos(panel, pedidos) {
+  panel.innerHTML = pedidos.length
+    ? pedidos
+        .map(
+          (p) => `
+      <a class="notif-item" href="pedidos.html">
+        <span class="notif-item-title">${p.orderNumber}</span>
+        <span class="notif-item-subtitle">${p.customerName ?? ''} · ${formatCurrency(p.total)}</span>
+      </a>
+    `
+        )
+        .join('') + `<div class="notif-footer"><a href="pedidos.html">Ver todos los pedidos</a></div>`
+    : `<div class="notif-empty">Sin pedidos pendientes</div>`;
 }

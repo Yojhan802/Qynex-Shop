@@ -1,9 +1,11 @@
-import { storeApi, ApiError, API_ORIGIN } from './core/store-api.js';
+import { storeApi, ApiError, API_ORIGIN, refreshAccessToken } from './core/store-api.js';
 import { requireCustomerSession } from './core/customer-auth.js';
+import { getCustomerSession } from './core/customer-session.js';
 import { renderStoreShell } from './components/store-shell.js';
 import { formatCurrency, formatDateTime } from '../../../js/core/format.js';
 import { openModal } from '../../../js/components/modal.js';
 import { showToast } from '../../../js/components/toast.js';
+import { connectLiveStream } from '../../../js/core/live-stream.js';
 
 const STATUS_LABELS = { PENDING_PAYMENT: 'Pendiente de pago', CONFIRMED: 'Confirmado', CANCELLED: 'Anulado' };
 const STATUS_CLASSES = { PENDING_PAYMENT: 'badge-warning', CONFIRMED: 'badge-success', CANCELLED: 'badge-danger' };
@@ -104,6 +106,30 @@ function renderSeccionComprobante(container, pedido) {
   });
 }
 
+function actualizarBadgeEnLista(pedido) {
+  const badge = document.querySelector(`[data-id="${pedido.id}"] .badge`);
+  if (!badge) return;
+  badge.className = `badge ${STATUS_CLASSES[pedido.status] || 'badge-neutral'}`;
+  badge.textContent = STATUS_LABELS[pedido.status] || pedido.status;
+}
+
+function conectarNotificaciones() {
+  connectLiveStream(`${API_ORIGIN}/api/store/notifications/stream`, {
+    getToken: () => getCustomerSession()?.accessToken,
+    refreshToken: refreshAccessToken,
+    onEvent: {
+      'pedido-actualizado': (pedido) => {
+        actualizarBadgeEnLista(pedido);
+        showToast({
+          type: pedido.status === 'CONFIRMED' ? 'success' : 'warning',
+          title: pedido.status === 'CONFIRMED' ? '¡Tu pedido fue confirmado!' : 'Tu pedido cambió de estado',
+          message: pedido.orderNumber,
+        });
+      },
+    },
+  });
+}
+
 async function init() {
   const session = requireCustomerSession('login.html');
   if (!session) return;
@@ -121,6 +147,8 @@ async function init() {
   } catch (error) {
     contenedor.innerHTML = `<div class="empty-state"><span>${error instanceof ApiError ? error.message : 'No se pudieron cargar tus pedidos'}</span></div>`;
   }
+
+  conectarNotificaciones();
 }
 
 init();

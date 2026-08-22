@@ -5,6 +5,7 @@ import { renderPagination } from '../components/pagination.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { confirmAction } from '../components/confirm.js';
 import { showToast } from '../components/toast.js';
+import { imprimirTicket } from '../components/ticket.js';
 import { formatCurrency, formatDateTime } from '../core/format.js';
 
 const STATUS_LABELS = { PENDING_PAYMENT: 'Pendiente de pago', CONFIRMED: 'Confirmado', CANCELLED: 'Anulado' };
@@ -22,6 +23,9 @@ function init() {
     state.page = 0;
     cargarPedidos();
   });
+  // El bell del topbar (shell.js) dispara este evento al recibir un pedido nuevo por SSE —
+  // así alguien viendo esta pantalla no tiene que refrescar manualmente para verlo.
+  window.addEventListener('fsp:pedido-nuevo', () => cargarPedidos());
   cargarPedidos();
 }
 
@@ -131,6 +135,9 @@ function abrirModalDetalle(pedido) {
   `;
 
   const footerButtons = [];
+  if (pedido.saleId) {
+    footerButtons.push('<button class="btn btn-secondary" type="button" data-imprimir>Imprimir ticket</button>');
+  }
   if (pedido.status === 'PENDING_PAYMENT') {
     footerButtons.push('<button class="btn btn-primary" type="button" data-confirmar>Confirmar pago</button>');
   }
@@ -145,8 +152,18 @@ function abrirModalDetalle(pedido) {
     maxWidth: '640px',
   });
 
+  modal.footer?.querySelector('[data-imprimir]')?.addEventListener('click', () => imprimirTicketDelPedido(pedido.saleId));
   modal.footer?.querySelector('[data-confirmar]')?.addEventListener('click', () => confirmarPago(pedido.id));
   modal.footer?.querySelector('[data-cancelar]')?.addEventListener('click', () => cancelarPedido(pedido.id));
+}
+
+async function imprimirTicketDelPedido(saleId) {
+  try {
+    const venta = await api.get(`/sales/${saleId}`);
+    imprimirTicket(venta);
+  } catch (error) {
+    showToast({ type: 'danger', title: 'Error', message: error instanceof ApiError ? error.message : 'No se pudo cargar el ticket' });
+  }
 }
 
 async function confirmarPago(id) {
@@ -159,10 +176,13 @@ async function confirmarPago(id) {
   if (!confirmado) return;
 
   try {
-    await api.post(`/orders/${id}/confirm`, {});
+    const pedido = await api.post(`/orders/${id}/confirm`, {});
     closeModal();
-    showToast({ type: 'success', title: 'Pago confirmado' });
+    showToast({ type: 'success', title: 'Pago confirmado', message: 'Se generó la venta — abriendo el ticket…' });
     cargarPedidos();
+    if (pedido.saleId) {
+      imprimirTicketDelPedido(pedido.saleId);
+    }
   } catch (error) {
     showToast({ type: 'danger', title: 'Error', message: error instanceof ApiError ? error.message : 'No se pudo confirmar el pago' });
   }

@@ -18,7 +18,7 @@ export class ApiError extends Error {
 
 let refreshPromise = null;
 
-async function refreshAccessToken() {
+export async function refreshAccessToken() {
   const session = getSession();
   if (!session?.refreshToken) return false;
 
@@ -73,6 +73,11 @@ export async function apiRequest(path, { method = 'GET', body, auth = true, quer
     clearSession();
     window.location.href = 'login.html';
     throw new ApiError('Sesión expirada', 401, null);
+  }
+
+  if (response.status === 402 && !window.location.pathname.endsWith('suspendido.html')) {
+    window.location.href = 'suspendido.html';
+    throw new ApiError('Servicio suspendido', 402, null);
   }
 
   if (response.status === 204) return null;

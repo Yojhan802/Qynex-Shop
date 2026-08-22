@@ -100,7 +100,11 @@ MySQL 8 · InnoDB · `utf8mb4_0900_ai_ci` · zona horaria `America/Lima`
 
 ### `roles`
 `id` · `code` **UNIQUE** (`ADMINISTRADOR`, `SUPERVISOR`, `VENDEDOR`, `ALMACENERO`) ·
-`name` · `description` · `is_system` BOOLEAN — los roles de sistema no se pueden borrar.
+`name` · `description` · `is_system` BOOLEAN — los roles de sistema no se pueden borrar ·
+`hierarchy_level` SMALLINT (desde V24, 0-100) — techo de asignación: al crear
+un usuario, solo se le pueden dar roles con `hierarchy_level` ≤ el más alto
+entre los roles de quien lo crea (ver RN-25). Semilla: Administrador=100,
+Supervisor=50, Vendedor/Almacenero=10; un rol nuevo nace en 0.
 
 ### `permissions`
 `id` · `code` **UNIQUE** (`VENTAS_ANULAR`) · `module` (`VENTAS`) · `description`.
@@ -274,9 +278,10 @@ búsqueda por correo sea inequívoca.
 | customer_id | BIGINT | FK NULL |
 | user_id | BIGINT | FK NOT NULL — vendedor (quien opera la caja, el que figura en el ticket) |
 | promoter_id | BIGINT | FK NULL — promotor de piso que ofreció la prenda, si hubo uno (opcional, solo para comisión/reportes; **nunca aparece en el ticket**) |
-| cash_session_id | BIGINT | FK NOT NULL |
+| cash_session_id | BIGINT | FK NULL (desde V34) — nulo cuando la venta viene de confirmar un pedido online, que nunca pasa por caja física |
 | subtotal | DECIMAL(12,2) | NOT NULL |
 | discount_amount | DECIMAL(12,2) | NOT NULL DEFAULT 0 |
+| shipping_amount | DECIMAL(12,2) | NOT NULL DEFAULT 0 (desde V34) — costo de envío cuando la venta viene de un pedido online; 0 en ventas de POS/separaciones |
 | total | DECIMAL(12,2) | NOT NULL, `CHECK (total >= 0)` |
 | status | VARCHAR(25) | NOT NULL · COMPLETED/CANCELLED/RETURNED/PARTIALLY_RETURNED |
 | notes | VARCHAR(255) | NULL |
@@ -286,8 +291,15 @@ búsqueda por correo sea inequívoca.
 | cancellation_reason | VARCHAR(255) | NULL |
 | authorized_by | BIGINT | FK NULL — quién autorizó la anulación |
 
-`cash_session_id` es obligatorio: **no se puede vender sin caja abierta**, y así
-el arqueo siempre cuadra.
+`cash_session_id` es obligatorio para una venta de POS o de separación: **no
+se puede vender sin caja abierta**, y así el arqueo siempre cuadra. La única
+excepción (V34) son las ventas generadas al confirmar el pago de un pedido
+online (`PedidoService.confirmarPago`, ver §12) — ese pago nunca pasa por
+caja física, así que su `Sale` se crea con `cash_session_id = NULL`. Dos
+sitios que asumían una caja siempre presente (`VentaService.anular()` y
+`DevolucionService.registrar()`, ambos solo cuando el método de pago
+`affects_cash = true`) tienen una guardia explícita que rechaza la
+operación con un mensaje claro en vez de fallar con un error interno.
 
 Índices: `idx_sales_created(created_at)`, `idx_sales_user(user_id)`,
 `idx_sales_customer(customer_id)`, `idx_sales_status(status)`.
@@ -411,6 +423,7 @@ usuario) · `action` · `entity` · `entity_id` · `old_value` JSON · `new_valu
 Fila única (`id = 1`): `name` · `ruc` · `address` · `phone` · `email` ·
 `logo_url` · `currency_code` (PEN) · `currency_symbol` (S/) · `igv_rate` ·
 `ticket_footer` · `shipping_flat_rate` (desde V19, §12) ·
+`reservation_deposit_amount` / `reservation_expiration_days` (desde V28, §17) ·
 `plan` (desde V22, §15) · `updated_at` · `updated_by`.
 
 ### `sequences`
@@ -457,12 +470,19 @@ poder confundirse con la sesión de un `Usuario`.
 | confirmed_by | BIGINT | FK → users, NULL |
 | cancelled_at | DATETIME(6) | NULL |
 | cancellation_reason | VARCHAR(255) | NULL |
+| sale_id | BIGINT | FK NULL → `sales` (desde V34) — la venta real generada al confirmar el pago |
 
-**Por qué `orders` no es `sales`:** `sales.user_id` y `sales.cash_session_id`
-son `NOT NULL` (toda venta exige un cajero y una caja abierta); un pedido web
-no tiene ninguno de los dos al crearse. Forzar esos campos con un usuario o
-una caja ficticios habría sido peor que tener dos tablas con un flujo de
-estados distinto.
+**`orders` sigue sin ser `sales`** (son dos tablas con un flujo de estados
+distinto — un pedido puede quedar `PENDING_PAYMENT` días antes de que alguien
+confirme el pago, una venta no tiene ese estado intermedio), pero desde V34
+**confirmar el pago sí genera una `Sale` real** (`PedidoService.confirmarPago`),
+para que el pedido aparezca en el historial/reportes de Ventas y pueda
+imprimirse el mismo ticket que usa el POS — ver §8 para el detalle de cómo
+esa `Sale` se construye sin sesión de caja. `sale_id` queda en `NULL`
+mientras el pedido está `PENDING_PAYMENT`; si un pedido ya `CONFIRMED` se
+cancela después, la `Sale` enlazada se marca `CANCELLED` directamente (sin
+pasar por `VentaService.anular()`, que volvería a reversar stock que el
+pedido ya reversó por su cuenta).
 
 **Por qué el stock no se descuenta al crear el pedido:** el pago es manual
 (el cliente elige Yape/Plin/transferencia y el staff lo confirma a mano), así
@@ -508,6 +528,17 @@ estático — no se valida contra una tabla en el backend (son strings simples,
 igual que `address`), la consistencia la da que el frontend arma el pedido
 desde selects en cascada, no texto libre.
 
+### Métodos de pago del checkout online (V34)
+
+`GET /api/store/catalog/payment-methods` (y `PedidoService.crear()` del lado
+servidor, como segunda barrera) excluyen cualquier método con
+`affects_cash = true` — pagar en efectivo un checkout sin cajero presente no
+tiene sentido físico, y además es justo el escenario que dejaría una `Sale`
+sin sesión de caja con un pago marcado como "afecta caja" (ver guardias de
+§8). `CONTRAENTREGA` sigue disponible porque, pese a su nombre, se sembró
+con `affects_cash = false` — el dinero de la contraentrega nunca pasa por
+`cash_sessions`.
+
 ---
 
 ## 13. Redundancias evaluadas y descartadas
@@ -544,6 +575,28 @@ V20 → orders.recipient_dni/recipient_first_name/recipient_last_name_paterno/
       recipient_last_name_materno (reemplaza recipient_name)
 V21 → products.material/fit/size_guide_image_url (ficha de tienda online)
 V22 → company_settings.plan (plan de suscripción SaaS, §15)
+V23 → company_settings.subscription_status/next_payment_due (§16)
+V24 → roles.hierarchy_level (techo de asignación, RN-25)
+V25 → permiso CONFIGURACION_IDENTIDAD_EDITAR (identidad de empresa separada de lo operativo, RN-26)
+V26 → ALMACENERO pierde PRODUCTOS_CREAR/EDITAR/ELIMINAR (no le correspondían)
+V27 → SUPERVISOR gana USUARIOS_CONSULTAR/CREAR/EDITAR/BLOQUEAR (seguro gracias al techo de RN-25)
+V28 → separaciones: reservations, company_settings.reservation_deposit_amount/
+      reservation_expiration_days, reference_type RESERVATION, movement types
+      RESERVA/RESERVA_LIBERADA, permisos RESERVAS_* (§17)
+V29 → separaciones: reservations.customer_id pasa a NULL + guest_name/guest_phone
+      (comprador ocasional sin registrarlo como cliente, §17)
+V30 → combos y promociones: combos, combo_items, promotions,
+      sale_details.combo_id/promotion_id, permisos COMBOS_*/PROMOCIONES_* (§18)
+V31 → combo_items.selector_type: líneas de combo por categoría (+ marca
+      opcional), no solo por producto específico (§18)
+V32 → promotions.visible_online: promociones que también aplican y se
+      muestran en la tienda online (ej. Black Friday), no solo en el POS (§18)
+V33 → separaciones pasan de fila plana a cabecera + líneas
+      (reservation_details), con combo opcional por línea y combo_group para
+      distinguir aplicaciones repetidas del mismo combo (§17)
+V34 → sales.cash_session_id pasa a NULL + sales.shipping_amount +
+      orders.sale_id: un pedido online confirmado genera una Sale real, sin
+      caja, para que aparezca en Ventas y tenga ticket (§8, §12)
 ```
 
 (Lista ilustrativa de las primeras fases — el detalle exacto de cada migración
@@ -576,7 +629,7 @@ autenticación. Módulos gateados:
 
 | Plan mínimo | Módulos |
 |---|---|
-| PROFESIONAL | Promotores (`/api/promoters/**`), Auditoría (`/api/audit/**`) |
+| PROFESIONAL | Promotores (`/api/promoters/**`), Auditoría (`/api/audit/**`), Separaciones (`/api/reservations/**`, §17), Combos y promociones (`/api/combos/**`, `/api/promotions/**`, §18) |
 | ECOMMERCE | Catálogo público y pedidos de tienda online (`/api/store/**`), pedidos vistos por staff (`/api/orders/**`) |
 
 `PlanGate.limiteUsuarios()` además limita `UsuarioService.crear()` a 3
@@ -584,3 +637,303 @@ usuarios activos en el plan `STARTER` (los demás planes no tienen límite) —
 lanza `OperacionNoPermitidaException` al superarlo. Si no existe fila en
 `company_settings` (no debería pasar fuera de tests), `PlanGate` asume
 `STARTER` (el plan más restrictivo) como fallback seguro.
+
+---
+
+## 16. Estado de pago de la suscripción
+
+`company_settings` gana (V23) `subscription_status` (`ACTIVA`/`SUSPENDIDA`) y
+`next_payment_due` (fecha) — independiente del `plan` (§15): una instalación
+puede tener cualquier plan y aun así estar `SUSPENDIDA` por falta de pago.
+Tampoco son editables por el cliente vía API, mismo criterio que `plan`.
+
+**Suspensión automática:** `SuscripcionScheduler` corre una vez al día
+(`@Scheduled(cron = "0 0 3 * * *")`) y marca `SUSPENDIDA` si hoy pasa
+`next_payment_due` + 5 días de margen de gracia. Si `next_payment_due` es
+`NULL` (instalación sin ciclo de cobro configurado, ej. este mismo repo en
+desarrollo), nunca se suspende sola.
+
+**Aplicación — todo o nada:** a diferencia de `PlanGate` (que gatea módulo
+por módulo vía `@PreAuthorize`), `SubscriptionStatusFilter` es un filtro de
+Spring Security que corre **antes que cualquier otra cosa** (incluso antes de
+parsear el JWT) y bloquea con `402 Payment Required` absolutamente todo —
+panel de staff y tienda pública por igual — en cuanto `subscriptionStatus =
+SUSPENDIDA`, sin importar plan ni permisos. Rutas exentas (deben seguir
+funcionando siempre): `/actuator/health`, `/api/system/info`,
+`/api/system/subscription`, `/api/auth/login`, `/api/auth/refresh` — así el
+staff puede iniciar sesión y ver *por qué* está bloqueado, el panel de
+monitoreo externo puede seguir viendo el estado real de la instalación, y —
+crucial — se puede reactivar sin que la propia suspensión bloquee el único
+camino para revertirla.
+
+**Reactivación — dos caminos, misma llave que decide quién manda:**
+1. **Directo en la base de datos** (igual que el `plan`, §15) — siempre
+   disponible, sin dependencias.
+2. **`PUT /api/system/subscription`** (ver docs/05-api.md) — autenticado con
+   una llave secreta propia de la instalación (`OPS_API_KEY`,
+   `OpsApiKeyAuthenticationFilter`), no con login de usuario. Pensado para que
+   el panel de monitoreo externo (`panel-monitoreo`, repo aparte) pueda marcar
+   pagos/suspensiones con un clic, sin que el operador tenga que entrar a la
+   base de datos cada vez. Deliberadamente **no** existe un endpoint
+   equivalente para cambiar `plan` — esa decisión es más rara y de mayor
+   consecuencia (qué módulos ve el cliente), así que se mantiene solo por
+   base de datos.
+
+---
+
+## 17. Separaciones (layaway, plan PROFESIONAL)
+
+**Motivación:** varias tiendas transmiten en vivo por TikTok y cobran una
+seña (típicamente S/20 por Yape) para apartar una o varias prendas mostradas
+en el live; también hay separaciones en tienda física. Ver
+docs/04-reglas-negocio.md para la regla de negocio completa (RN-27).
+
+**Cabecera + líneas (V33):** una separación aparta **varios productos de una
+vez** con una sola seña para todo el grupo — antes de V33, una separación
+era una fila plana (un producto, una cantidad); ahora `reservations` es la
+cabecera (comprador, seña, estado, vencimiento) y `reservation_details`
+guarda cada producto apartado, igual patrón que `sales`/`sale_details`.
+
+### `reservations` (cabecera)
+| Columna | Tipo | Restricciones |
+|---|---|---|
+| id | BIGINT UNSIGNED | PK |
+| reservation_number | VARCHAR(20) | **UNIQUE**, NOT NULL · `RES-00000001` (`SequenceService`) |
+| customer_id | BIGINT | FK NULL (desde V29) — nulo si es un comprador ocasional, ver `guest_name` |
+| guest_name | VARCHAR(150) | NULL (desde V29) — nombre del comprador ocasional cuando `customer_id` es nulo |
+| guest_phone | VARCHAR(20) | NULL (desde V29) — opcional, para ubicar su comprobante en WhatsApp |
+| deposit_amount | DECIMAL(12,2) | NOT NULL — seña efectivamente cobrada, **una sola para todo el grupo de líneas** |
+| deposit_payment_method_id | BIGINT | FK NOT NULL → `payment_methods`, debe tener `affects_cash = false` |
+| deposit_reference | VARCHAR(50) | NULL |
+| promoter_id | BIGINT | FK NULL → `promoters` — quién generó la venta en el live, solo para comisión |
+| status | VARCHAR(20) | NOT NULL DEFAULT `RESERVADO` · RESERVADO/COMPLETADO/CANCELADO/VENCIDO |
+| expires_at | DATETIME(6) | NOT NULL · `created_at + company_settings.reservation_expiration_days` |
+| notes | VARCHAR(255) | NULL |
+| created_by | BIGINT | FK NOT NULL → `users` |
+| created_at | DATETIME(6) | NOT NULL |
+| sale_id | BIGINT | FK NULL → `sales` — se completa al pagar el saldo pendiente |
+| completed_at / completed_by | DATETIME(6) / BIGINT | NULL |
+| cancelled_at / cancelled_by | DATETIME(6) / BIGINT | NULL |
+| cancellation_reason | VARCHAR(255) | NULL |
+
+### `reservation_details` (líneas, V33)
+| Columna | Tipo | Restricciones |
+|---|---|---|
+| id | BIGINT UNSIGNED | PK |
+| reservation_id | BIGINT UNSIGNED | FK NOT NULL → `reservations` |
+| variant_id | BIGINT UNSIGNED | FK NOT NULL → `product_variants` |
+| quantity | INT | NOT NULL, `CHECK (quantity > 0)` |
+| unit_price | DECIMAL(12,2) | NOT NULL — precio (o promo) vigente al crear la separación |
+| discount_amount | DECIMAL(12,2) | NOT NULL DEFAULT 0 — descuento de esta línea si viene de un combo |
+| subtotal | DECIMAL(12,2) | NOT NULL — `unit_price × quantity − discount_amount` |
+| combo_id | BIGINT UNSIGNED | FK NULL → `combos` — no nulo cuando la línea viene de aplicar un combo |
+| combo_group | INT | NULL — distingue **aplicaciones repetidas del mismo combo** (ver abajo) |
+
+**Combo elegido explícitamente al crear (botón "+ Agregar combo"):** al
+armar el carrito de la nueva separación, el cajero puede agregar productos
+sueltos (buscador + cantidad) o, con el botón "+ Agregar combo", elegir un
+combo activo y llenar cada "slot" con una variante concreta — mismo patrón
+ya usado en el POS (`abrirSelectorCombo` → `abrirFormularioComboItems`,
+docs/03 §18). `ReservaService.crear()` reutiliza el motor de
+`ComboService.consumirCandidatos` (mismo algoritmo greedy PRODUCT-antes-que-
+CATEGORY, mismo chequeo estricto de consumo exacto que `VentaService`) para
+calcular el descuento de cada línea del combo y repartirlo
+proporcionalmente — igual técnica que ya usaba `completarVarias` (última
+línea absorbe el redondeo). El combo queda **fijado desde la creación**: no
+se vuelve a recalcular al completar el pago.
+
+**`combo_group` — múltiplos del mismo combo:** el caso "8 polos = 2 combos
+de 4×100 = S/200" requiere aplicar el **mismo** combo dos veces dentro de
+una sola separación. El frontend le asigna a cada aplicación un contador
+incremental (0, 1, 2…) que viaja en el request (`ReservaItemRequest.comboGroup`)
+junto al `comboId`; el backend agrupa las líneas por el par
+`(comboId, comboGroup)` — no solo por `comboId` — para no mezclar dos
+aplicaciones en un solo grupo que ya no calzaría con la definición del
+combo (que solo pide 4, no 8). Verificado en vivo: dos aplicaciones de un
+combo "4 polos x 100" en una misma separación dan `total = 200.00` exacto.
+
+**Comprador ocasional (V29):** los compradores de un live no siempre están
+registrados como `Customer` — solo lo están los que ya compran por la tienda
+online. Forzar un registro de cliente completo (nombre, DNI, teléfono) por
+cada separación de un live habría sido fricción pura para el vendedor, así
+que `customer_id` es nullable y `CHECK (customer_id IS NOT NULL OR guest_name
+IS NOT NULL)` exige exactamente uno de los dos caminos. El formulario del
+panel sigue permitiendo buscar y vincular un cliente ya registrado si el
+vendedor lo prefiere — ambos caminos conviven.
+
+**El stock se retira de inmediato al crear la separación** — a diferencia de
+un pedido online (`orders`, §12), donde el stock recién se descuenta al
+confirmar el pago. Aquí la prenda queda físicamente apartada desde el
+momento de la seña, así que el stock debe reflejar eso de inmediato para que
+el resto del sistema (POS, tienda online, otro pedido) no la vuelva a
+ofrecer. Se implementa reutilizando el mecanismo de Kardex existente
+(`InventarioService.registrarPorReserva` / `registrarPorLiberacionReserva`)
+en vez de una columna paralela `reserved_stock`: como `product_variants.stock`
+ya es la única fuente de verdad que todo el sistema consulta, cada
+verificación de disponibilidad existente respeta las separaciones activas
+sin ningún cambio adicional en otro módulo.
+
+`inventory_movements` gana los tipos `RESERVA` (retira stock, `-quantity`,
+al crear) y `RESERVA_LIBERADA` (devuelve stock, `+quantity`, al cancelar o
+vencer), y `reference_type` gana `RESERVATION`.
+
+**Completar reutiliza el modelo de `Sale`/`SaleDetail`/`Payment`**, no una
+estructura de reportes paralela: al pagar el saldo pendiente,
+`ReservaService.completar()` crea una `Sale` normal (con `promoter_id`
+heredado de la separación) y su `SaleDetail`/`Payment` correspondientes —
+así la venta completada entra automáticamente en los mismos reportes de
+comisión por promotor que ya existían, sin construir un segundo camino de
+reportes. El `Payment` de la seña se registra con
+`created_at = reservations.created_at` (la fecha real en que se cobró) y
+**nunca pasa por caja** (`CajaService.registrarPorVenta` no se llama para
+ese pago); solo el/los pago(s) del saldo final pasan por caja, y solo si su
+método de pago tiene `affects_cash = true`. El detalle de la venta **no**
+vuelve a descontar stock — ya salió al crear la separación.
+
+**La seña nunca puede ser en efectivo** — `ReservaService.crear()` rechaza
+cualquier `deposit_payment_method_id` con `affects_cash = true`
+(`ReglaDeNegocioException`), porque una seña de un live remoto por
+definición no puede cobrarse en efectivo de caja; forzaría un ingreso de
+caja sin una sesión de caja real detrás.
+
+**Vencimiento:** `ReservaScheduler` corre cada hora (`@Scheduled(cron = "0 0
+* * * *")`, más seguido que `SuscripcionScheduler` porque una separación
+vencida bloquea stock real, no solo información) y llama a
+`ReservaService.vencerSeparacionesPendientes()`, que libera el stock de toda
+separación `RESERVADO` con `expires_at` pasado y la marca `VENCIDO`. **La
+seña ya pagada se pierde — no hay reversión ni reembolso automático**
+(decisión de negocio explícita, RN-27). El movimiento de liberación de stock
+y el registro de auditoría quedan a nombre de quien creó la separación (no
+existe un concepto de "usuario sistema" en este modelo).
+
+`company_settings` gana (V28) `reservation_deposit_amount` (seña por
+defecto, editable en Configuración, el cajero puede ajustarla por
+separación) y `reservation_expiration_days` (plazo de vencimiento,
+igualmente configurable — deliberadamente no hardcodeado).
+
+**Cobro conjunto con detección automática de combo (entre separaciones
+distintas):** además del combo elegido explícitamente al crear, sigue
+existiendo un segundo camino, pensado para cuando el cajero *no* usó el
+botón "+ Agregar combo" al momento de apartar (ej. varias separaciones
+sueltas hechas en distintos momentos del mismo live). `ReservaService.completarVarias()`
+permite seleccionar varias separaciones `RESERVADO` del mismo comprador
+(mismo `customer_id`, o mismo `guest_name` sin distinguir mayúsculas) y
+cobrarlas de una sola vez. Al hacerlo, junta **todas las líneas** de las
+separaciones seleccionadas y las separa en dos grupos:
+- **Líneas ya con combo fijado** (`combo_id` no nulo, puestas ahí desde la
+  creación) — se cobran tal cual quedaron, **no se vuelven a evaluar**.
+- **Líneas sueltas** (`combo_id` nulo) — se arma un candidato por línea
+  (variante, producto, categoría, marca, cantidad) y se reutiliza el mismo
+  motor de emparejamiento de combos que la venta normal (§18): si el
+  conjunto completo de líneas sueltas calza exacto con un combo activo, se
+  aplica automáticamente sobre esas líneas; si no, cada una se cobra a su
+  precio normal.
+
+Esto permite que una separación con líneas mixtas (algunas ya en combo,
+otras sueltas) participe correctamente: lo ya fijado no se toca, lo suelto
+sigue siendo candidato a un combo detectado entre varias separaciones.
+Genera **una sola `Sale`** para todas las separaciones incluidas, con el
+descuento total repartido proporcionalmente entre las líneas que corresponda.
+`ReservaService.previsualizarCompletarVarias()` expone el mismo cálculo en
+modo solo-lectura para que el cajero vea el monto correcto antes de
+confirmar el cobro.
+
+**Búsqueda por comprador:** el listado de separaciones acepta un filtro
+`buyerName` que busca por coincidencia parcial tanto en el cliente
+registrado (`customer.full_name`) como en el comprador ocasional
+(`guest_name`) — pensado para que, en un recojo presencial, el cajero ubique
+rápido todas las separaciones pendientes de esa persona sin importar si
+está registrada como cliente o no.
+
+---
+
+## 18. Combos y promociones (plan PROFESIONAL)
+
+**Motivación:** además de las separaciones de un live, la tienda maneja
+combos ("casaca + pantalón a un precio fijo") y promociones (% o monto fijo,
+por tiempo limitado) tanto en tienda física como en vivo. Ver
+docs/04-reglas-negocio.md RN-28.
+
+### `combos` · `combo_items`
+| Columna | Tipo | Restricciones |
+|---|---|---|
+| `combos.code` | VARCHAR(30) | **UNIQUE**, NOT NULL |
+| `combos.name` | VARCHAR(150) | NOT NULL |
+| `combos.price` | DECIMAL(12,2) | NOT NULL, `CHECK (price > 0)` — precio total fijo del combo |
+| `combos.status` | VARCHAR(20) | NOT NULL DEFAULT `ACTIVE` |
+| `combo_items.combo_id` | BIGINT | FK NOT NULL |
+| `combo_items.selector_type` | VARCHAR(20) | NOT NULL DEFAULT `PRODUCT` · `PRODUCT` / `CATEGORY` (desde V31) |
+| `combo_items.product_id` | BIGINT | FK NULL — lleno cuando `selector_type = PRODUCT` |
+| `combo_items.category_id` | BIGINT | FK NULL — lleno cuando `selector_type = CATEGORY` |
+| `combo_items.brand_id` | BIGINT | FK NULL — opcional, acota una línea `CATEGORY` a una marca |
+| `combo_items.quantity` | INT | NOT NULL, `CHECK (quantity > 0)` |
+
+`CHECK` de negocio: exactamente uno de `product_id`/`category_id` según
+`selector_type`. Una línea de combo puede ser (V31):
+- **`PRODUCT`** — un producto específico ("esta casaca exacta").
+- **`CATEGORY`** — cualquier producto de una categoría, opcionalmente acotado
+  a una marca ("4 polos de esta marca", "una prenda de esta categoría").
+
+Un combo puede mezclar líneas de ambos tipos (ej. "esta casaca específica +
+cualquier accesorio de esta categoría"). El cajero elige color/talla — y,
+en una línea `CATEGORY`, también el producto concreto — recién al vender el
+combo en el POS.
+
+**Precio del combo vs. suma de productos:** `ComboService` valida al
+crear/editar que `price` sea menor a la suma de los precios vigentes de sus
+productos, pero **solo cuando todas las líneas son `PRODUCT`** — con una
+línea `CATEGORY` no hay forma de saber de antemano qué productos concretos
+se van a elegir, así que ese chequeo se aplaza al momento de la venta
+(`VentaService`, con los productos ya elegidos) y `ComboResponse.normalTotal`/`savings`
+quedan en `null` para esos combos.
+
+### `promotions`
+| Columna | Tipo | Restricciones |
+|---|---|---|
+| code / name | VARCHAR | **UNIQUE** / NOT NULL |
+| discount_type | VARCHAR(20) | NOT NULL · `PERCENTAGE` / `FIXED_AMOUNT`, `CHECK` |
+| discount_value | DECIMAL(12,2) | NOT NULL, `CHECK (> 0)`, y `CHECK (discount_type <> 'PERCENTAGE' OR discount_value <= 100)` |
+| scope_type | VARCHAR(20) | NOT NULL DEFAULT `ALL` · `ALL` / `CATEGORY` / `PRODUCT`, `CHECK` |
+| scope_category_id / scope_product_id | BIGINT | FK NULL — solo uno aplica, según `scope_type` |
+| starts_at / ends_at | DATETIME(6) | NULL — nulo de un lado = sin límite por ese lado |
+| status | VARCHAR(20) | NOT NULL DEFAULT `ACTIVE` |
+| visible_online | TINYINT(1) | NOT NULL DEFAULT `0` (desde V32) — también aplica en la tienda online |
+
+**Promociones visibles en la tienda online (V32):** por defecto una
+promoción solo la aplica el cajero manualmente en el POS. Marcarla
+`visible_online = true` la hace también aplicar en `/api/store/catalog/**`
+(pensado para ofertas de todo el catálogo tipo Black Friday, sin tocar cada
+producto uno por uno): `TiendaCatalogoService` calcula el mejor precio
+vigente entre las promociones `visible_online` aplicables y lo devuelve en
+el campo público ya existente `promoPrice` (reutilizado — cero campos
+nuevos en las respuestas del catálogo público, el frontend de la tienda ya
+sabía mostrar un `promoPrice != null`). `PedidoService.crear()` recalcula
+ese mismo precio **server-side** al confirmar el pedido, nunca confía en el
+precio mostrado por el frontend.
+
+### Venta con combo o promoción — reutiliza `Sale`/`SaleDetail`, no una estructura paralela
+
+`sale_details` gana (V30) `combo_id` y `promotion_id`, ambos FK NULL — solo
+trazabilidad para reportes ("combos vendidos", "ventas por promoción"), el
+mismo criterio D-05 ya usado para separaciones y pedidos.
+
+- **Combo:** `VentaService` agrupa las líneas de la venta que comparten un
+  mismo `comboId` y las reparte entre las líneas del combo con un algoritmo
+  greedy: primero satisface las líneas `PRODUCT` (más restrictivas, para que
+  un producto específico no se lo "robe" una línea `CATEGORY` que también lo
+  incluiría), y con lo que sobra intenta cubrir cada línea `CATEGORY` por
+  categoría (y marca, si la línea la exige). Si algo del combo queda sin
+  cubrir, o sobran productos que no encajan en ninguna línea, la venta se
+  rechaza. Ya con las líneas resueltas, **calcula el descuento de cada línea
+  en el backend** (nunca confía en un `discountAmount` del cliente para esas
+  líneas): el descuento total (`Σ precio normal − precio fijo del combo`) se
+  reparte proporcionalmente al precio normal de cada línea, con la última
+  línea absorbiendo el redondeo para que la suma cuadre exacto con el precio
+  fijo.
+- **Promoción:** el cajero la elige por línea de venta (`ItemVentaRequest.promotionId`)
+  entre las promociones vigentes que apliquen a esa variante
+  (`GET /api/promotions/applicable?variantId=`). El backend siempre
+  revalida vigencia y alcance server-side antes de aplicar el descuento —
+  nunca confía en que el frontend ya filtró bien.
+- Un `ItemVentaRequest` solo puede traer **uno** de `discountAmount` (manual),
+  `comboId` o `promotionId` — nunca dos a la vez.

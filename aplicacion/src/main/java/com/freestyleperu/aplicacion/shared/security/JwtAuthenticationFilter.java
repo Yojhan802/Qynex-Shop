@@ -20,6 +20,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String HEADER = "Authorization";
     private static final String PREFIX = "Bearer ";
 
+    /**
+     * EventSource/WebSocket del navegador no pueden mandar headers propios en la conexión inicial —
+     * estas dos rutas de streaming SSE aceptan el mismo access token por query param como única excepción.
+     */
+    private static final List<String> QUERY_PARAM_TOKEN_URIS =
+            List.of("/api/notifications/stream", "/api/store/notifications/stream");
+
     private final JwtService jwtService;
 
     public JwtAuthenticationFilter(JwtService jwtService) {
@@ -30,8 +37,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String header = request.getHeader(HEADER);
+        String token = null;
         if (header != null && header.startsWith(PREFIX)) {
-            String token = header.substring(PREFIX.length());
+            token = header.substring(PREFIX.length());
+        } else if (QUERY_PARAM_TOKEN_URIS.contains(request.getRequestURI())) {
+            token = request.getParameter("token");
+        }
+        if (token != null) {
             AuthenticatedUser authenticatedUser = jwtService.parse(token);
             if (authenticatedUser != null && SecurityContextHolder.getContext().getAuthentication() == null) {
                 List<GrantedAuthority> authorities = authenticatedUser.authorities().stream()

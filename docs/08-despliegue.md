@@ -1,5 +1,13 @@
 # 08 — Despliegue
 
+**Dos caminos documentados:** este archivo describe primero el despliegue
+con `docker-compose.yml` (útil para desarrollo o un VPS con más recursos).
+La instalación real recomendada para un VPS chico compartido (ej. OVZ VPS
+2000: 2 vCPU / 2 GB RAM) es la **§8 "Despliegue nativo"** más abajo — JDK +
+MySQL + nginx instalados directo, sin Docker, porque en un VPS con poca RAM
+la capa de contenedores compite por memoria que le hace falta a MySQL y a
+la JVM.
+
 ## 1. Arquitectura de despliegue
 
 ```
@@ -60,6 +68,12 @@ Ninguna de estas tiene un valor real por defecto: si falta alguna, el
 contenedor correspondiente falla al arrancar en vez de arrancar con un
 secreto débil o vacío.
 
+`OPS_API_KEY` es distinta: **opcional**, vacía por defecto. Solo hace falta
+si vas a controlar el estado de pago de este cliente desde `panel-monitoreo`
+(`PUT /api/system/subscription`, docs/05-api.md). Sin configurarla, ese
+endpoint sigue existiendo pero queda inalcanzable para cualquiera — no rompe
+el arranque, simplemente esa función queda apagada.
+
 Al primer arranque, Flyway crea el esquema completo y siembra:
 
 ```
@@ -119,3 +133,47 @@ docker compose up --build -d
 Flyway solo aplica las migraciones nuevas (compara contra
 `flyway_schema_history`), así que un `up --build` normal alcanza — no hace
 falta bajar los contenedores ni tocar el volumen de datos.
+
+## 8. Despliegue nativo (VPS sin Docker)
+
+Camino recomendado para un VPS chico (ej. OVZ VPS 2000: 2 vCPU / 2 GB RAM,
+~$10.88/mes) donde JDK, MySQL y nginx corren directo en el sistema
+operativo, sin la capa extra de contenedores. Los archivos de referencia
+viven en `deploy/`:
+
+| Archivo | Para qué |
+|---|---|
+| `deploy/freestyleperu-backend.service` | Unidad systemd — arranca el `.jar`, lo reinicia solo si se cae (`Restart=on-failure`), y trae la JVM ya dimensionada para 2 GB de RAM compartidos con MySQL |
+| `deploy/nginx-freestyleperu.conf` | Config de sitio nginx — estático + proxy a `127.0.0.1:8080`, con gzip y límite de tasa sobre `/api/`; incluye `location`s aparte para los streams SSE de notificaciones (`/api/notifications/`, `/api/store/notifications/`) con `proxy_buffering off` — sin eso las notificaciones en tiempo real (docs/05-api.md §22) funcionan en local y nunca llegan "en vivo" en producción |
+
+**Pasos, en orden:**
+
+1. Instalar JDK 17, MySQL 8 y nginx directo con el gestor de paquetes de la
+   distro (ej. `apt install openjdk-17-jre-headless mysql-server nginx`).
+2. Crear la base de datos y el usuario de la app en MySQL (mismas
+   credenciales que `.env`).
+3. `./mvnw package -DskipTests` en `aplicacion/` y copiar
+   `target/*.jar` a `/opt/freestyleperu/app.jar` en el servidor (o hacer el
+   build directo ahí). Copiar también `front/` a `/opt/freestyleperu/front`.
+4. Crear `/opt/freestyleperu/.env` con las mismas variables de
+   `aplicacion/.env.example`, agregando `SPRING_PROFILES_ACTIVE=prod` (activa
+   el perfil con el HikariCP/Tomcat ya dimensionados para este VPS — ver
+   `application.yml`).
+5. Instalar y arrancar `deploy/freestyleperu-backend.service` (ver los
+   comentarios del archivo para los comandos exactos).
+6. Instalar `deploy/nginx-freestyleperu.conf` como sitio de nginx (ver sus
+   propios comentarios — incluye una línea que va aparte en el
+   `nginx.conf` global, no en el archivo de sitio).
+7. HTTPS: igual que en el camino Docker (§4) — Caddy, Traefik, o certbot
+   delante de nginx.
+
+**Antes de un pico de tráfico grande (Black Friday):** lo de mayor impacto
+y costo cero es poner **Cloudflare (plan gratuito)** delante del dominio.
+Cachea los archivos estáticos y hasta respuestas de API cacheables, absorbe
+ráfagas de tráfico antes de que lleguen al VPS, y da una capa básica de
+protección contra abuso — nada de esto cuesta y no depende de cuánta
+RAM/CPU tenga el VPS. Ninguna configuración de software reemplaza más
+CPU/RAM si el tráfico real termina siendo grande — conviene además hacer
+una prueba de carga externa (`k6` o `ab`) contra el VPS ya configurado, para
+saber de antemano cuántos usuarios concurrentes aguanta antes de necesitar
+subir de plan.

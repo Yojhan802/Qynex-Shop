@@ -16,7 +16,7 @@ export class ApiError extends Error {
 
 let refreshPromise = null;
 
-async function refreshAccessToken() {
+export async function refreshAccessToken() {
   const session = getCustomerSession();
   if (!session?.refreshToken) return false;
 
@@ -70,6 +70,13 @@ export async function storeApiRequest(path, { method = 'GET', body, auth = false
     }
     clearCustomerSession();
     throw new ApiError('Tu sesión expiró, vuelve a iniciar sesión.', 401, null);
+  }
+
+  if (response.status === 402 && !window.location.pathname.endsWith('no-disponible.html')) {
+    // tienda/ (primer nivel) vs tienda/cuenta/ (donde no-disponible.html es hermano, no hijo).
+    const esNivelCuenta = window.location.pathname.includes('/cuenta/');
+    window.location.href = esNivelCuenta ? '../no-disponible.html' : 'no-disponible.html';
+    throw new ApiError('Tienda no disponible', 402, null);
   }
 
   if (response.status === 204) return null;
