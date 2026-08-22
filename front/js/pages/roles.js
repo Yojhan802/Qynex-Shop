@@ -69,6 +69,9 @@ function renderDetalleRol() {
         <h2 style="margin:0;">${rol.name}</h2>
         <p class="mono" style="color: var(--color-text-muted); margin: var(--space-1) 0 0;">${rol.code}</p>
         ${rol.description ? `<p style="color: var(--color-text-secondary); margin: var(--space-2) 0 0;">${rol.description}</p>` : ''}
+        <p class="table-cell-muted" style="margin: var(--space-2) 0 0;" title="Al crear usuarios, este rol solo puede asignar roles con techo de asignación igual o menor">
+          Techo de asignación: <strong>${rol.hierarchyLevel}</strong>
+        </p>
       </div>
       <button class="btn btn-secondary btn-sm" type="button" id="btn-editar-rol">Editar datos</button>
     </div>
@@ -140,6 +143,11 @@ function abrirFormularioNuevoRol() {
             <label class="field-label" for="rf-description">Descripción</label>
             <textarea class="input" id="rf-description" maxlength="255" rows="2"></textarea>
           </div>
+          <div class="field field-span-2">
+            <label class="field-label" for="rf-hierarchy">Techo de asignación (0-100)</label>
+            <input class="input" type="number" id="rf-hierarchy" min="0" max="100" value="0" />
+            <span class="field-hint">Al crear usuarios, este rol solo podrá asignar roles con techo igual o menor. Administrador = 100, Supervisor = 50, Vendedor/Almacenero = 10.</span>
+          </div>
         </div>
       </form>
     `,
@@ -161,6 +169,7 @@ function abrirFormularioNuevoRol() {
         code: modal.body.querySelector('#rf-code').value.trim(),
         name: modal.body.querySelector('#rf-name').value.trim(),
         description: modal.body.querySelector('#rf-description').value.trim() || null,
+        hierarchyLevel: Number(modal.body.querySelector('#rf-hierarchy').value),
       });
       closeModal();
       roles = [...roles, creado];
@@ -195,6 +204,11 @@ function abrirFormularioEditarRol(rol) {
             <label class="field-label" for="rf-edit-description">Descripción</label>
             <textarea class="input" id="rf-edit-description" maxlength="255" rows="2">${rol.description ?? ''}</textarea>
           </div>
+          <div class="field field-span-2">
+            <label class="field-label" for="rf-edit-hierarchy">Techo de asignación (0-100)</label>
+            <input class="input" type="number" id="rf-edit-hierarchy" min="0" max="100" value="${rol.hierarchyLevel}" />
+            <span class="field-hint">Al crear usuarios, este rol solo podrá asignar roles con techo igual o menor.</span>
+          </div>
         </div>
       </form>
     `,
@@ -212,6 +226,7 @@ function abrirFormularioEditarRol(rol) {
       const actualizado = await api.put(`/roles/${rol.id}`, {
         name: modal.body.querySelector('#rf-edit-name').value.trim(),
         description: modal.body.querySelector('#rf-edit-description').value.trim() || null,
+        hierarchyLevel: Number(modal.body.querySelector('#rf-edit-hierarchy').value),
       });
       closeModal();
       roles = roles.map((r) => (r.id === actualizado.id ? actualizado : r));

@@ -55,6 +55,7 @@ public class RolService {
         rol.setName(request.name());
         rol.setDescription(request.description());
         rol.setSystem(false);
+        rol.setHierarchyLevel(request.hierarchyLevel() == null ? (short) 0 : request.hierarchyLevel().shortValue());
         Rol guardado = rolRepository.save(rol);
         auditService.log("ROL_CREADO", "ROL", guardado.getId(), null, request, AuditResult.SUCCESS);
         return rolMapper.toResponse(guardado);
@@ -65,6 +66,9 @@ public class RolService {
         Rol rol = buscarOFallar(id);
         rol.setName(request.name());
         rol.setDescription(request.description());
+        if (request.hierarchyLevel() != null) {
+            rol.setHierarchyLevel(request.hierarchyLevel().shortValue());
+        }
         auditService.log("ROL_ACTUALIZADO", "ROL", rol.getId(), null, request, AuditResult.SUCCESS);
         return rolMapper.toResponse(rol);
     }

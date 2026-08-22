@@ -23,6 +23,7 @@ public class RolMapper {
                 rol.getName(),
                 rol.getDescription(),
                 rol.isSystem(),
+                rol.getHierarchyLevel(),
                 rol.getPermisos().stream()
                         .sorted(Comparator.comparing(Permiso::getCode))
                         .map(permisoMapper::toResponse)
@@ -30,6 +31,6 @@ public class RolMapper {
     }
 
     public RolResumenResponse toResumen(Rol rol) {
-        return new RolResumenResponse(rol.getId(), rol.getCode(), rol.getName());
+        return new RolResumenResponse(rol.getId(), rol.getCode(), rol.getName(), rol.getHierarchyLevel());
     }
 }

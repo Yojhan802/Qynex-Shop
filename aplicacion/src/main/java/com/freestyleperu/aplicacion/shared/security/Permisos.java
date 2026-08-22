@@ -55,12 +55,26 @@ public final class Permisos {
     public static final String CONFIGURACION_VER = "CONFIGURACION_VER";
     public static final String CONFIGURACION_EDITAR = "CONFIGURACION_EDITAR";
     public static final String CONFIGURACION_PAGOS = "CONFIGURACION_PAGOS";
+    /** Razón social, RUC, dirección, contacto y logo — reservado para el operador de la plataforma, nunca para el cliente. Ver RN-26. */
+    public static final String CONFIGURACION_IDENTIDAD_EDITAR = "CONFIGURACION_IDENTIDAD_EDITAR";
 
     public static final String PROMOTORES_CONSULTAR = "PROMOTORES_CONSULTAR";
     public static final String PROMOTORES_GESTIONAR = "PROMOTORES_GESTIONAR";
 
     public static final String PEDIDOS_CONSULTAR = "PEDIDOS_CONSULTAR";
     public static final String PEDIDOS_GESTIONAR = "PEDIDOS_GESTIONAR";
+
+    public static final String RESERVAS_CONSULTAR = "RESERVAS_CONSULTAR";
+    public static final String RESERVAS_CREAR = "RESERVAS_CREAR";
+    public static final String RESERVAS_GESTIONAR = "RESERVAS_GESTIONAR";
+
+    public static final String COMBOS_CONSULTAR = "COMBOS_CONSULTAR";
+    public static final String COMBOS_GESTIONAR = "COMBOS_GESTIONAR";
+
+    public static final String PROMOCIONES_CONSULTAR = "PROMOCIONES_CONSULTAR";
+    public static final String PROMOCIONES_GESTIONAR = "PROMOCIONES_GESTIONAR";
+    /** Aplicar una promoción ya definida a una línea de venta — más acotado que VENTAS_DESCUENTO (RN-28). */
+    public static final String PROMOCIONES_APLICAR = "PROMOCIONES_APLICAR";
 
     /** Autoridad que llevan los JWT de clientes de la tienda (no es un permiso de la tabla `permissions`). */
     public static final String ROLE_CUSTOMER = "ROLE_CUSTOMER";

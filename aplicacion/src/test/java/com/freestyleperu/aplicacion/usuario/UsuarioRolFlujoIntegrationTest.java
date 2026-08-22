@@ -5,12 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.freestyleperu.aplicacion.configuracion.domain.CompanySettings;
 import com.freestyleperu.aplicacion.configuracion.domain.Plan;
+import com.freestyleperu.aplicacion.configuracion.domain.SubscriptionStatus;
 import com.freestyleperu.aplicacion.configuracion.repository.CompanySettingsRepository;
 import com.freestyleperu.aplicacion.shared.exception.OperacionNoPermitidaException;
 import com.freestyleperu.aplicacion.shared.exception.RecursoDuplicadoException;
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
 import com.freestyleperu.aplicacion.usuario.domain.Permiso;
 import com.freestyleperu.aplicacion.usuario.domain.Rol;
+import com.freestyleperu.aplicacion.usuario.domain.Usuario;
 import com.freestyleperu.aplicacion.usuario.dto.request.ActualizarRolRequest;
 import com.freestyleperu.aplicacion.usuario.dto.request.ActualizarUsuarioRequest;
 import com.freestyleperu.aplicacion.usuario.dto.request.AsignarPermisosRequest;
@@ -60,38 +62,60 @@ class UsuarioRolFlujoIntegrationTest {
         settings.setCurrencySymbol("S/");
         settings.setIgvRate(new java.math.BigDecimal("0.18"));
         settings.setShippingFlatRate(new java.math.BigDecimal("15.00"));
+        settings.setReservationDepositAmount(new java.math.BigDecimal("20.00"));
+        settings.setReservationExpirationDays(3);
         settings.setPlan(Plan.PROFESIONAL);
+        settings.setSubscriptionStatus(SubscriptionStatus.ACTIVA);
         settings.setUpdatedAt(java.time.LocalDateTime.now());
         companySettingsRepository.save(settings);
+    }
+
+    /** Actor con techo de asignación 100 (como ADMINISTRADOR) para que las pruebas de creación de usuarios no choquen con RN-25. */
+    private Long nuevoActorConTechoAlto() {
+        Rol rolActor = new Rol();
+        rolActor.setCode("TEST_ROL_ACTOR_" + System.nanoTime() % 1_000_000);
+        rolActor.setName("Rol de prueba actor");
+        rolActor.setSystem(false);
+        rolActor.setHierarchyLevel((short) 100);
+        rolRepository.save(rolActor);
+
+        Usuario actor = new Usuario();
+        actor.setUsername("actor.test." + System.nanoTime() % 1_000_000);
+        actor.setPasswordHash(passwordEncoder.encode("ClaveValida123"));
+        actor.setFullName("Actor de Prueba");
+        actor.setStatus(UsuarioEstado.ACTIVE);
+        actor.setRoles(new java.util.HashSet<>(List.of(rolActor)));
+        return usuarioRepository.save(actor).getId();
     }
 
     @Test
     void gestionaCicloDeVidaDeUsuariosYPermisosDeRolesConSusReglasDeNegocio() {
         aseguraPlanSinLimiteDeUsuarios();
+        Long actorId = nuevoActorConTechoAlto();
         Permiso permiso = permisoRepository.save(Permiso.builder()
                 .code("TEST_PERMISO_USUARIO").module("TEST").description("Permiso de prueba").build());
 
-        RolResponse rol = rolService.crear(new CrearRolRequest("VENDEDOR_TEST", "Vendedor de prueba", null));
+        RolResponse rol = rolService.crear(new CrearRolRequest("VENDEDOR_TEST", "Vendedor de prueba", null, null));
 
         // No se puede repetir el código de un rol.
-        assertThatThrownBy(() -> rolService.crear(new CrearRolRequest("VENDEDOR_TEST", "Otro nombre", null)))
+        assertThatThrownBy(() -> rolService.crear(new CrearRolRequest("VENDEDOR_TEST", "Otro nombre", null, null)))
                 .isInstanceOf(RecursoDuplicadoException.class);
 
         UsuarioResponse usuario = usuarioService.crear(new CrearUsuarioRequest(
                 "usuario.flujo.test", "usuario.flujo@test.com", "ClaveInicial123", "Usuario Flujo Test",
-                null, null, List.of(rol.id())));
+                null, null, List.of(rol.id())), actorId);
         assertThat(usuario.status().name()).isEqualTo("ACTIVE");
         assertThat(usuario.mustChangePassword()).isTrue();
         assertThat(usuario.roles()).extracting("id").containsExactly(rol.id());
 
         // No se puede repetir el username.
         assertThatThrownBy(() -> usuarioService.crear(new CrearUsuarioRequest(
-                "usuario.flujo.test", "otro@test.com", "ClaveInicial123", "Otro Usuario", null, null, List.of(rol.id()))))
+                "usuario.flujo.test", "otro@test.com", "ClaveInicial123", "Otro Usuario", null, null, List.of(rol.id())), actorId))
                 .isInstanceOf(RecursoDuplicadoException.class);
 
         // No se puede asignar un rol inexistente.
         assertThatThrownBy(() -> usuarioService.crear(new CrearUsuarioRequest(
-                "usuario.rol.invalido", null, "ClaveInicial123", "Usuario Rol Invalido", null, null, List.of(999999L))))
+                "usuario.rol.invalido", null, "ClaveInicial123", "Usuario Rol Invalido", null, null, List.of(999999L)), actorId))
                 .isInstanceOf(RecursoNoEncontradoException.class);
 
         // Actualizar datos y roles.
@@ -120,7 +144,7 @@ class UsuarioRolFlujoIntegrationTest {
         assertThat(rolConPermiso.permisos()).extracting("id").containsExactly(permiso.getId());
 
         // Editar nombre/descripción de un rol normal funciona.
-        RolResponse rolRenombrado = rolService.actualizar(rol.id(), new ActualizarRolRequest("Vendedor Renombrado", "Nueva descripción"));
+        RolResponse rolRenombrado = rolService.actualizar(rol.id(), new ActualizarRolRequest("Vendedor Renombrado", "Nueva descripción", null));
         assertThat(rolRenombrado.name()).isEqualTo("Vendedor Renombrado");
 
         // El rol de sistema ADMINISTRADOR no puede perder sus permisos.
@@ -136,5 +160,46 @@ class UsuarioRolFlujoIntegrationTest {
 
         assertThat(rolService.listar()).extracting("code").contains("VENDEDOR_TEST", "ADMINISTRADOR");
         assertThat(usuarioService.listar(null, null, PageRequest.of(0, 10)).getTotalElements()).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test
+    void noSePuedeAsignarUnRolPorEncimaDelPropioNivelPeroSiUnoIgualOMenor() {
+        aseguraPlanSinLimiteDeUsuarios();
+
+        Rol jefeTienda = rolRepository.save(nuevoRol("JEFE_TIENDA_RN25", (short) 40));
+        Rol cajero = rolRepository.save(nuevoRol("CAJERO_RN25", (short) 10));
+        Rol adminNivelAlto = rolRepository.save(nuevoRol("ADMIN_RN25", (short) 100));
+
+        Usuario actor = new Usuario();
+        actor.setUsername("jefe.tienda.rn25");
+        actor.setPasswordHash(passwordEncoder.encode("ClaveValida123"));
+        actor.setFullName("Jefe de Tienda RN25");
+        actor.setStatus(UsuarioEstado.ACTIVE);
+        actor.setRoles(new java.util.HashSet<>(List.of(jefeTienda)));
+        Long actorId = usuarioRepository.save(actor).getId();
+
+        // No puede crear un usuario con un rol por encima de su propio techo (40 < 100).
+        assertThatThrownBy(() -> usuarioService.crear(new CrearUsuarioRequest(
+                "intento.admin.rn25", null, "ClaveValida123", "Intento Admin", null, null, List.of(adminNivelAlto.getId())), actorId))
+                .isInstanceOf(OperacionNoPermitidaException.class);
+
+        // Sí puede crear un usuario con un rol por debajo del suyo (cajero, nivel 10).
+        UsuarioResponse cajeroCreado = usuarioService.crear(new CrearUsuarioRequest(
+                "nuevo.cajero.rn25", null, "ClaveValida123", "Nuevo Cajero", null, null, List.of(cajero.getId())), actorId);
+        assertThat(cajeroCreado.username()).isEqualTo("nuevo.cajero.rn25");
+
+        // Y puede crear un par a su mismo nivel (otro Jefe de Tienda, nivel 40 == 40).
+        UsuarioResponse parCreado = usuarioService.crear(new CrearUsuarioRequest(
+                "otro.jefe.rn25", null, "ClaveValida123", "Otro Jefe", null, null, List.of(jefeTienda.getId())), actorId);
+        assertThat(parCreado.username()).isEqualTo("otro.jefe.rn25");
+    }
+
+    private Rol nuevoRol(String code, short hierarchyLevel) {
+        Rol rol = new Rol();
+        rol.setCode(code);
+        rol.setName(code);
+        rol.setSystem(false);
+        rol.setHierarchyLevel(hierarchyLevel);
+        return rol;
     }
 }

@@ -1,10 +1,17 @@
 import { api, ApiError } from '../core/api.js';
+import { getSession } from '../core/session.js';
 import { openModal, closeModal } from './modal.js';
 import { showToast } from './toast.js';
 
 export async function openUsuarioForm({ usuario = null, onSaved }) {
   const esEdicion = Boolean(usuario);
   const roles = await api.get('/roles');
+
+  // RN-25: solo se pueden asignar roles con techo <= el más alto entre los roles propios.
+  const misRoles = new Set(getSession()?.user?.roles ?? []);
+  const techoAsignacion = roles
+      .filter((r) => misRoles.has(r.code))
+      .reduce((max, r) => Math.max(max, r.hierarchyLevel), 0);
 
   const rolesSeleccionados = new Set((usuario?.roles ?? []).map((r) => r.id));
 
@@ -49,13 +56,14 @@ export async function openUsuarioForm({ usuario = null, onSaved }) {
             <span class="field-label">Roles</span>
             <div style="display:flex; flex-wrap:wrap; gap: var(--space-3); padding: var(--space-2) 0;">
               ${roles
-                .map(
-                  (r) => `
-                <label class="checkbox-field">
-                  <input type="checkbox" name="uf-role" value="${r.id}" ${rolesSeleccionados.has(r.id) ? 'checked' : ''} /> ${r.name}
+                .map((r) => {
+                  const bloqueado = r.hierarchyLevel > techoAsignacion && !rolesSeleccionados.has(r.id);
+                  return `
+                <label class="checkbox-field" ${bloqueado ? 'style="opacity:0.5;" title="Supera tu nivel de autorización"' : ''}>
+                  <input type="checkbox" name="uf-role" value="${r.id}" ${rolesSeleccionados.has(r.id) ? 'checked' : ''} ${bloqueado ? 'disabled' : ''} /> ${r.name}
                 </label>
-              `
-                )
+              `;
+                })
                 .join('')}
             </div>
           </div>

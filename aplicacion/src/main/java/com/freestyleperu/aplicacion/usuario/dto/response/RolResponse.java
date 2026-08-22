@@ -8,5 +8,6 @@ public record RolResponse(
         String name,
         String description,
         boolean isSystem,
+        int hierarchyLevel,
         List<PermisoResponse> permisos) {
 }

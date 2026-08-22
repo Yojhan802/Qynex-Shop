@@ -2,6 +2,8 @@ package com.freestyleperu.aplicacion.configuracion.service;
 
 import com.freestyleperu.aplicacion.configuracion.domain.CompanySettings;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarCompanySettingsRequest;
+import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarIdentidadEmpresaRequest;
+import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarSuscripcionRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.response.CompanySettingsResponse;
 import com.freestyleperu.aplicacion.configuracion.dto.response.SystemInfoResponse;
 import com.freestyleperu.aplicacion.configuracion.repository.CompanySettingsRepository;
@@ -48,22 +50,35 @@ public class ConfiguracionService {
         return toResponse(buscarOFallar());
     }
 
+    /** Solo datos operativos — ver RN-26. La identidad de empresa se actualiza con {@link #actualizarIdentidad}. */
     @Transactional
     public CompanySettingsResponse actualizar(ActualizarCompanySettingsRequest request, Long userId) {
+        CompanySettings settings = buscarOFallar();
+        settings.setCurrencyCode(request.currencyCode());
+        settings.setCurrencySymbol(request.currencySymbol());
+        settings.setIgvRate(request.igvRate());
+        settings.setTicketFooter(request.ticketFooter());
+        settings.setShippingFlatRate(request.shippingFlatRate());
+        settings.setReservationDepositAmount(request.reservationDepositAmount());
+        settings.setReservationExpirationDays(request.reservationExpirationDays());
+        settings.setUpdatedAt(LocalDateTime.now());
+        settings.setUpdatedBy(userId);
+        auditService.log("CONFIGURACION_ACTUALIZADA", "COMPANY_SETTINGS", SETTINGS_ID, null, request, AuditResult.SUCCESS);
+        return toResponse(settings);
+    }
+
+    /** Razón social, RUC, dirección y contacto — reservado al operador de la plataforma (RN-26, CONFIGURACION_IDENTIDAD_EDITAR). */
+    @Transactional
+    public CompanySettingsResponse actualizarIdentidad(ActualizarIdentidadEmpresaRequest request, Long userId) {
         CompanySettings settings = buscarOFallar();
         settings.setName(request.name());
         settings.setRuc(request.ruc());
         settings.setAddress(request.address());
         settings.setPhone(request.phone());
         settings.setEmail(request.email());
-        settings.setCurrencyCode(request.currencyCode());
-        settings.setCurrencySymbol(request.currencySymbol());
-        settings.setIgvRate(request.igvRate());
-        settings.setTicketFooter(request.ticketFooter());
-        settings.setShippingFlatRate(request.shippingFlatRate());
         settings.setUpdatedAt(LocalDateTime.now());
         settings.setUpdatedBy(userId);
-        auditService.log("CONFIGURACION_ACTUALIZADA", "COMPANY_SETTINGS", SETTINGS_ID, null, request, AuditResult.SUCCESS);
+        auditService.log("CONFIGURACION_IDENTIDAD_ACTUALIZADA", "COMPANY_SETTINGS", SETTINGS_ID, null, request, AuditResult.SUCCESS);
         return toResponse(settings);
     }
 
@@ -83,12 +98,37 @@ public class ConfiguracionService {
         return buscarOFallar().getShippingFlatRate();
     }
 
+    /** Usado internamente por {@code ReservaService} — monto de seña por defecto (el cajero puede ajustarlo). */
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public BigDecimal obtenerMontoSenaPorDefecto() {
+        return buscarOFallar().getReservationDepositAmount();
+    }
+
+    /** Usado internamente por {@code ReservaService} — días para completar el pago antes de que la separación venza. */
+    @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
+    public int obtenerDiasVencimientoReserva() {
+        return buscarOFallar().getReservationExpirationDays();
+    }
+
     /** Ficha pública mínima para un panel externo de monitoreo — ver SystemInfoResponse. */
     public SystemInfoResponse obtenerInfoSistema() {
         CompanySettings settings = buscarOFallar();
         BuildProperties buildProperties = buildPropertiesProvider.getIfAvailable();
         String version = buildProperties != null ? buildProperties.getVersion() : "dev";
-        return new SystemInfoResponse(settings.getName(), settings.getPlan(), version);
+        return new SystemInfoResponse(
+                settings.getName(), settings.getPlan(), version, settings.getSubscriptionStatus(), settings.getNextPaymentDue());
+    }
+
+    /** Usado solo por OpsApiKeyAuthenticationFilter (panel externo de monitoreo) — nunca por el cliente. */
+    @Transactional
+    public SystemInfoResponse actualizarSuscripcion(ActualizarSuscripcionRequest request) {
+        CompanySettings settings = buscarOFallar();
+        settings.setSubscriptionStatus(request.subscriptionStatus());
+        if (request.nextPaymentDue() != null) {
+            settings.setNextPaymentDue(request.nextPaymentDue());
+        }
+        auditService.log("SUSCRIPCION_ACTUALIZADA_OPS", "COMPANY_SETTINGS", SETTINGS_ID, null, request, AuditResult.SUCCESS);
+        return obtenerInfoSistema();
     }
 
     private CompanySettings buscarOFallar() {
@@ -103,6 +143,8 @@ public class ConfiguracionService {
         return new CompanySettingsResponse(
                 settings.getName(), settings.getRuc(), settings.getAddress(), settings.getPhone(), settings.getEmail(),
                 settings.getLogoUrl(), settings.getCurrencyCode(), settings.getCurrencySymbol(), settings.getIgvRate(),
-                settings.getTicketFooter(), settings.getShippingFlatRate(), settings.getPlan(), settings.getUpdatedAt(), updatedByUsername);
+                settings.getTicketFooter(), settings.getShippingFlatRate(), settings.getReservationDepositAmount(),
+                settings.getReservationExpirationDays(), settings.getPlan(), settings.getSubscriptionStatus(),
+                settings.getNextPaymentDue(), settings.getUpdatedAt(), updatedByUsername);
     }
 }

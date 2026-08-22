@@ -39,6 +39,10 @@ public class Rol {
     @Column(name = "is_system", nullable = false)
     private boolean system;
 
+    /** Techo de asignación: un usuario con este rol solo puede asignar, al crear otro usuario, roles con hierarchyLevel <= el máximo entre los suyos. Ver RN-25. */
+    @Column(name = "hierarchy_level", nullable = false)
+    private short hierarchyLevel;
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "role_permissions",

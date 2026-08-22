@@ -1,4 +1,4 @@
-import { requireSession } from '../core/auth.js';
+import { requireSession, hasPermission } from '../core/auth.js';
 import { api, ApiError, API_ORIGIN } from '../core/api.js';
 import { renderShell } from '../components/shell.js';
 import { openModal, closeModal } from '../components/modal.js';
@@ -83,20 +83,66 @@ function renderPlanCard(settings) {
           <span class="badge ${PLAN_BADGE_CLASS[plan] ?? 'badge-neutral'}">${PLAN_LABELS[plan] ?? plan}</span>
         </div>
       </div>
+      ${renderEstadoSuscripcion(settings)}
     </div>
     <p style="margin-bottom: var(--space-4);">${PLAN_DESCRIPTIONS[plan] ?? ''}</p>
     <ul style="list-style:none; padding:0; margin:0; display:grid; gap: var(--space-2);">${items}</ul>
     <p class="table-cell-muted" style="margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-border);">
-      El plan lo gestiona el proveedor del sistema — contáctalo para ampliarlo.
+      El plan y la suscripción los gestiona el proveedor del sistema — contáctalo para ampliar el plan o regularizar el pago.
     </p>
+  `;
+}
+
+function renderEstadoSuscripcion(settings) {
+  const { subscriptionStatus, nextPaymentDue } = settings;
+  if (subscriptionStatus === 'SUSPENDIDA') {
+    return `
+      <div style="text-align:right;">
+        <p class="table-cell-muted" style="margin-bottom: var(--space-1);">Suscripción</p>
+        <span class="badge badge-danger">Suspendida</span>
+      </div>
+    `;
+  }
+  if (!nextPaymentDue) return '';
+
+  const dias = Math.ceil((new Date(nextPaymentDue) - new Date()) / (1000 * 60 * 60 * 24));
+  const fecha = new Date(nextPaymentDue + 'T00:00:00').toLocaleDateString('es-PE', { day: 'numeric', month: 'long', year: 'numeric' });
+  const proximoAVencer = dias <= 7;
+  return `
+    <div style="text-align:right;">
+      <p class="table-cell-muted" style="margin-bottom: var(--space-1);">Próximo pago</p>
+      <span class="badge ${proximoAVencer ? 'badge-warning' : 'badge-neutral'}">${fecha}</span>
+    </div>
   `;
 }
 
 function renderFormularioEmpresa(settings) {
   const content = document.querySelector('#empresa-content');
+  const puedeIdentidad = hasPermission('CONFIGURACION_IDENTIDAD_EDITAR');
+  const puedeOperativo = hasPermission('CONFIGURACION_EDITAR');
+
+  const secciones = [];
+  if (puedeIdentidad) secciones.push('<div class="table-card" style="padding: var(--space-5);" id="identidad-card"></div>');
+  if (puedeOperativo) secciones.push('<div class="table-card" style="padding: var(--space-5);" id="operativo-card"></div>');
+  if (secciones.length === 0) {
+    secciones.push(`
+      <div class="table-card" style="padding: var(--space-5);">
+        <p class="table-cell-muted">No tienes permisos para editar más configuración de la empresa.</p>
+      </div>
+    `);
+  }
+  content.innerHTML = secciones.join('');
+
+  if (puedeIdentidad) renderIdentidadForm(settings);
+  if (puedeOperativo) renderOperativoForm(settings);
+}
+
+function renderIdentidadForm(settings) {
+  const card = document.querySelector('#identidad-card');
   const logoSrc = settings.logoUrl ? `${API_ORIGIN}${settings.logoUrl}` : null;
 
-  content.innerHTML = `
+  card.innerHTML = `
+    <h3 style="margin: 0 0 var(--space-4);">Identidad de la empresa</h3>
     <div style="display:flex; align-items:center; gap: var(--space-4); margin-bottom: var(--space-5); padding-bottom: var(--space-5); border-bottom: 1px solid var(--color-border);">
       <div style="width:72px; height:72px; border-radius: var(--radius-md); background: var(--color-surface-muted); display:flex; align-items:center; justify-content:center; overflow:hidden; flex-shrink:0;">
         ${
@@ -112,8 +158,8 @@ function renderFormularioEmpresa(settings) {
       </div>
     </div>
 
-    <form id="empresa-form" novalidate>
-      <div class="alert alert-danger" id="empresa-form-error" role="alert" hidden>
+    <form id="identidad-form" novalidate>
+      <div class="alert alert-danger" id="identidad-form-error" role="alert" hidden>
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="8"/><path d="M10 6v5M10 14h.01" stroke-linecap="round"/></svg>
         <span class="alert-message"></span>
       </div>
@@ -138,6 +184,66 @@ function renderFormularioEmpresa(settings) {
           <label class="field-label" for="ef-email">Email</label>
           <input class="input" type="email" id="ef-email" maxlength="120" value="${settings.email ?? ''}" />
         </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; padding-top: var(--space-4); border-top: 1px solid var(--color-border);">
+        <p class="table-cell-muted">
+          ${settings.updatedByUsername ? `Última edición por ${settings.updatedByUsername} · ${formatDateTime(settings.updatedAt)}` : ''}
+        </p>
+        <button class="btn btn-primary" type="submit">Guardar cambios</button>
+      </div>
+    </form>
+  `;
+
+  document.querySelector('#logo-input').addEventListener('change', (event) => {
+    const file = event.target.files?.[0];
+    if (file) subirLogo(file);
+  });
+
+  document.querySelector('#identidad-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const errorAlert = document.querySelector('#identidad-form-error');
+    errorAlert.hidden = true;
+    try {
+      const actualizado = await api.put('/settings/company/identity', {
+        name: document.querySelector('#ef-name').value.trim(),
+        ruc: document.querySelector('#ef-ruc').value.trim() || null,
+        address: document.querySelector('#ef-address').value.trim() || null,
+        phone: document.querySelector('#ef-phone').value.trim() || null,
+        email: document.querySelector('#ef-email').value.trim() || null,
+      });
+      showToast({ type: 'success', title: 'Configuración guardada' });
+      renderIdentidadForm(actualizado);
+    } catch (error) {
+      errorAlert.querySelector('.alert-message').textContent = error instanceof ApiError ? error.message : 'No se pudo guardar la configuración';
+      errorAlert.hidden = false;
+    }
+  });
+}
+
+async function subirLogo(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const actualizado = await api.post('/settings/company/logo', formData);
+    showToast({ type: 'success', title: 'Logo actualizado' });
+    renderIdentidadForm(actualizado);
+  } catch (error) {
+    showToast({ type: 'danger', title: 'Error', message: error instanceof ApiError ? error.message : 'No se pudo subir el logo' });
+  }
+}
+
+function renderOperativoForm(settings) {
+  const card = document.querySelector('#operativo-card');
+
+  card.innerHTML = `
+    <h3 style="margin: 0 0 var(--space-4);">Datos operativos</h3>
+    <form id="operativo-form" novalidate>
+      <div class="alert alert-danger" id="operativo-form-error" role="alert" hidden>
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="8"/><path d="M10 6v5M10 14h.01" stroke-linecap="round"/></svg>
+        <span class="alert-message"></span>
+      </div>
+      <div class="form-grid">
         <div class="field">
           <label class="field-label" for="ef-currency-code">Moneda (código)</label>
           <input class="input mono" id="ef-currency-code" required maxlength="3" value="${settings.currencyCode}" style="text-transform:uppercase;" />
@@ -159,6 +265,16 @@ function renderFormularioEmpresa(settings) {
           <label class="field-label" for="ef-footer">Pie de ticket</label>
           <textarea class="input" id="ef-footer" maxlength="255" rows="2">${settings.ticketFooter ?? ''}</textarea>
         </div>
+        <div class="field">
+          <label class="field-label" for="ef-reservation-deposit">Seña por defecto de separaciones (S/)</label>
+          <input class="input" type="number" id="ef-reservation-deposit" required min="0" step="0.01" value="${settings.reservationDepositAmount ?? '20.00'}" />
+          <span class="field-hint">El cajero puede ajustarla al crear cada separación.</span>
+        </div>
+        <div class="field">
+          <label class="field-label" for="ef-reservation-days">Vencimiento de separaciones (días)</label>
+          <input class="input" type="number" id="ef-reservation-days" required min="1" step="1" value="${settings.reservationExpirationDays ?? 3}" />
+          <span class="field-hint">Pasado este plazo se libera el stock y la seña se pierde.</span>
+        </div>
       </div>
 
       <div style="display:flex; justify-content:space-between; align-items:center; padding-top: var(--space-4); border-top: 1px solid var(--color-border);">
@@ -170,47 +286,27 @@ function renderFormularioEmpresa(settings) {
     </form>
   `;
 
-  document.querySelector('#logo-input').addEventListener('change', (event) => {
-    const file = event.target.files?.[0];
-    if (file) subirLogo(file);
-  });
-
-  document.querySelector('#empresa-form').addEventListener('submit', async (event) => {
+  document.querySelector('#operativo-form').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const errorAlert = document.querySelector('#empresa-form-error');
+    const errorAlert = document.querySelector('#operativo-form-error');
     errorAlert.hidden = true;
     try {
       const actualizado = await api.put('/settings/company', {
-        name: document.querySelector('#ef-name').value.trim(),
-        ruc: document.querySelector('#ef-ruc').value.trim() || null,
-        address: document.querySelector('#ef-address').value.trim() || null,
-        phone: document.querySelector('#ef-phone').value.trim() || null,
-        email: document.querySelector('#ef-email').value.trim() || null,
         currencyCode: document.querySelector('#ef-currency-code').value.trim().toUpperCase(),
         currencySymbol: document.querySelector('#ef-currency-symbol').value.trim(),
         igvRate: Number(document.querySelector('#ef-igv').value) / 100,
         ticketFooter: document.querySelector('#ef-footer').value.trim() || null,
         shippingFlatRate: Number(document.querySelector('#ef-shipping').value),
+        reservationDepositAmount: Number(document.querySelector('#ef-reservation-deposit').value),
+        reservationExpirationDays: Number(document.querySelector('#ef-reservation-days').value),
       });
       showToast({ type: 'success', title: 'Configuración guardada' });
-      renderFormularioEmpresa(actualizado);
+      renderOperativoForm(actualizado);
     } catch (error) {
       errorAlert.querySelector('.alert-message').textContent = error instanceof ApiError ? error.message : 'No se pudo guardar la configuración';
       errorAlert.hidden = false;
     }
   });
-}
-
-async function subirLogo(file) {
-  const formData = new FormData();
-  formData.append('file', file);
-  try {
-    const actualizado = await api.post('/settings/company/logo', formData);
-    showToast({ type: 'success', title: 'Logo actualizado' });
-    renderFormularioEmpresa(actualizado);
-  } catch (error) {
-    showToast({ type: 'danger', title: 'Error', message: error instanceof ApiError ? error.message : 'No se pudo subir el logo' });
-  }
 }
 
 async function cargarMetodosPago() {

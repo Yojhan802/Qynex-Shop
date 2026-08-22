@@ -31,6 +31,10 @@ export function requireSession() {
   return session;
 }
 
+export function hasPermission(code) {
+  return (getSession()?.user?.permissions ?? []).includes(code);
+}
+
 export function initials(fullName) {
   return fullName
     .split(' ')

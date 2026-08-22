@@ -1,6 +1,8 @@
 package com.freestyleperu.aplicacion.configuracion.web;
 
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarCompanySettingsRequest;
+import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarIdentidadEmpresaRequest;
+import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarSuscripcionRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.response.CompanySettingsResponse;
 import com.freestyleperu.aplicacion.configuracion.dto.response.SystemInfoResponse;
 import com.freestyleperu.aplicacion.configuracion.service.ConfiguracionService;
@@ -40,8 +42,17 @@ public class ConfiguracionController {
         return configuracionService.actualizar(request, currentUser.id());
     }
 
+    /** Razón social, RUC, dirección y contacto — reservado al operador de la plataforma (RN-26). */
+    @PutMapping("/api/settings/company/identity")
+    @PreAuthorize("hasAuthority('" + Permisos.CONFIGURACION_IDENTIDAD_EDITAR + "')")
+    public CompanySettingsResponse actualizarIdentidad(
+            @Valid @RequestBody ActualizarIdentidadEmpresaRequest request,
+            @AuthenticationPrincipal AuthenticatedUser currentUser) {
+        return configuracionService.actualizarIdentidad(request, currentUser.id());
+    }
+
     @PostMapping("/api/settings/company/logo")
-    @PreAuthorize("hasAuthority('" + Permisos.CONFIGURACION_EDITAR + "')")
+    @PreAuthorize("hasAuthority('" + Permisos.CONFIGURACION_IDENTIDAD_EDITAR + "')")
     public CompanySettingsResponse actualizarLogo(
             @RequestParam("file") MultipartFile file,
             @AuthenticationPrincipal AuthenticatedUser currentUser) {
@@ -55,5 +66,17 @@ public class ConfiguracionController {
     @GetMapping("/api/system/info")
     public SystemInfoResponse infoSistema() {
         return configuracionService.obtenerInfoSistema();
+    }
+
+    /**
+     * No usa login de usuario — protegido por OpsApiKeyAuthenticationFilter
+     * (llave secreta propia de esta instalación, ver docs/03 §16). Pensado
+     * para que el panel externo de monitoreo pueda marcar pagos/suspensiones
+     * sin que nadie necesite entrar a la base de datos a mano.
+     */
+    @PutMapping("/api/system/subscription")
+    @PreAuthorize("hasAuthority('OPS_API')")
+    public SystemInfoResponse actualizarSuscripcion(@Valid @RequestBody ActualizarSuscripcionRequest request) {
+        return configuracionService.actualizarSuscripcion(request);
     }
 }

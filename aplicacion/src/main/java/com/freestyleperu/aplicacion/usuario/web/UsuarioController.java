@@ -1,6 +1,7 @@
 package com.freestyleperu.aplicacion.usuario.web;
 
 import com.freestyleperu.aplicacion.shared.dto.PageResponse;
+import com.freestyleperu.aplicacion.shared.security.AuthenticatedUser;
 import com.freestyleperu.aplicacion.shared.security.Permisos;
 import com.freestyleperu.aplicacion.usuario.domain.UsuarioEstado;
 import com.freestyleperu.aplicacion.usuario.dto.request.ActualizarUsuarioRequest;
@@ -14,6 +15,7 @@ import java.net.URI;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -49,8 +51,9 @@ public class UsuarioController {
 
     @PostMapping("/api/users")
     @PreAuthorize("hasAuthority('" + Permisos.USUARIOS_CREAR + "')")
-    public ResponseEntity<UsuarioResponse> crear(@Valid @RequestBody CrearUsuarioRequest request) {
-        UsuarioResponse creado = usuarioService.crear(request);
+    public ResponseEntity<UsuarioResponse> crear(
+            @Valid @RequestBody CrearUsuarioRequest request, @AuthenticationPrincipal AuthenticatedUser currentUser) {
+        UsuarioResponse creado = usuarioService.crear(request, currentUser.id());
         return ResponseEntity.created(URI.create("/api/users/" + creado.id())).body(creado);
     }
 

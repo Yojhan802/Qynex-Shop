@@ -1,6 +1,7 @@
 package com.freestyleperu.aplicacion.configuracion;
 
 import com.freestyleperu.aplicacion.configuracion.domain.Plan;
+import com.freestyleperu.aplicacion.configuracion.domain.SubscriptionStatus;
 import com.freestyleperu.aplicacion.configuracion.repository.CompanySettingsRepository;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,5 +36,12 @@ public class PlanGate {
     /** El plan Starter limita usuarios activos; los demás planes no tienen límite. */
     public int limiteUsuarios() {
         return planActual() == Plan.STARTER ? 3 : SIN_LIMITE;
+    }
+
+    /** Consultado desde SubscriptionStatusFilter — SUSPENDIDA bloquea todo el sistema. */
+    public boolean suscripcionActiva() {
+        return companySettingsRepository.findById(SETTINGS_ID)
+                .map(s -> s.getSubscriptionStatus() != SubscriptionStatus.SUSPENDIDA)
+                .orElse(true);
     }
 }

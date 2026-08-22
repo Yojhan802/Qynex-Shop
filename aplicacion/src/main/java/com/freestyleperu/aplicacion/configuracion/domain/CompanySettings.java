@@ -7,6 +7,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -56,10 +57,26 @@ public class CompanySettings {
     @Column(name = "shipping_flat_rate", nullable = false, precision = 12, scale = 2)
     private BigDecimal shippingFlatRate;
 
+    /** Monto de seña por defecto para separaciones — el cajero puede ajustarlo caso por caso. */
+    @Column(name = "reservation_deposit_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal reservationDepositAmount;
+
+    /** Días para completar el pago de una separación antes de que venza y la prenda vuelva a stock. */
+    @Column(name = "reservation_expiration_days", nullable = false)
+    private int reservationExpirationDays;
+
     /** No editable por el cliente vía API — solo lo cambia el operador de la plataforma directo en la base de datos. */
     @Enumerated(EnumType.STRING)
     @Column(name = "plan", nullable = false, length = 20)
     private Plan plan;
+
+    /** No editable por el cliente vía API — la marca SuscripcionScheduler o el operador directo en la base de datos. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "subscription_status", nullable = false, length = 20)
+    private SubscriptionStatus subscriptionStatus;
+
+    @Column(name = "next_payment_due")
+    private LocalDate nextPaymentDue;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;

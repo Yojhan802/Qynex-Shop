@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Servicio suspendido · Freestyle Perú</title>
+  <link rel="icon" type="image/png" href="assets/brand/logo-mark-dark.png" />
+  <link rel="stylesheet" href="css/fonts.css" />
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/reset.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/pages.css" />
+  <link rel="stylesheet" href="css/responsive.css" />
+</head>
+<body>
+  <div class="login-screen">
+    <aside class="login-brand-panel" aria-hidden="true">
+      <div class="brand-mark">
+        <img src="assets/brand/logo-mark-light.png" alt="" />
+        <span>Freestyle Perú</span>
+      </div>
+      <div class="brand-copy">
+        <h2>Servicio suspendido.</h2>
+        <p>El acceso a este sistema está pausado por falta de pago de la suscripción.</p>
+      </div>
+      <p class="brand-footer">© 2026 Freestyle Perú — Sistema Integral de Gestión</p>
+    </aside>
+
+    <main class="login-form-panel">
+      <div class="login-form-card">
+        <div class="login-logo-mobile">
+          <img src="assets/brand/logo-mark-dark.png" alt="Freestyle Perú" />
+        </div>
+
+        <h1>Servicio suspendido</h1>
+        <p>Tu suscripción está vencida y el sistema quedó temporalmente pausado. Contacta a soporte para regularizar el pago y reactivarlo.</p>
+
+        <button class="btn btn-secondary btn-block" type="button" id="reintentar">Reintentar</button>
+        <p class="table-cell-muted" id="sigue-suspendido" style="margin-top: var(--space-3); text-align:center;" hidden>
+          Todavía sigue suspendido — si ya pagaste, puede tardar unos minutos en reflejarse.
+        </p>
+      </div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { API_ORIGIN } from './js/core/api.js';
+
+    const btn = document.getElementById('reintentar');
+    const mensaje = document.getElementById('sigue-suspendido');
+
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = 'Comprobando…';
+      mensaje.hidden = true;
+      try {
+        const res = await fetch(`${API_ORIGIN}/api/system/info`);
+        const data = await res.json();
+        if (data.subscriptionStatus === 'ACTIVA') {
+          window.location.href = 'dashboard.html';
+          return;
+        }
+      } catch {
+        // sin conexión — se muestra el mismo mensaje de abajo
+      }
+      btn.disabled = false;
+      btn.textContent = 'Reintentar';
+      mensaje.hidden = false;
+    });
+  </script>
+</body>
+</html>

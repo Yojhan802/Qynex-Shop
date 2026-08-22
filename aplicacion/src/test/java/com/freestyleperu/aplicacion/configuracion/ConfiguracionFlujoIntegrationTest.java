@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.freestyleperu.aplicacion.configuracion.domain.CompanySettings;
 import com.freestyleperu.aplicacion.configuracion.domain.Plan;
+import com.freestyleperu.aplicacion.configuracion.domain.SubscriptionStatus;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarCompanySettingsRequest;
+import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarIdentidadEmpresaRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.response.CompanySettingsResponse;
 import com.freestyleperu.aplicacion.configuracion.repository.CompanySettingsRepository;
 import com.freestyleperu.aplicacion.configuracion.service.ConfiguracionService;
@@ -46,14 +48,19 @@ class ConfiguracionFlujoIntegrationTest {
         assertThat(actual.updatedByUsername()).isNull();
 
         CompanySettingsResponse actualizado = configuracionService.actualizar(new ActualizarCompanySettingsRequest(
-                "Freestyle Perú SAC", "20123456789", "Av. Test 123", "999888777", "contacto@test.com",
-                "PEN", "S/", new BigDecimal("0.18"), "Gracias por su compra", new BigDecimal("18.00")), userId);
+                "PEN", "S/", new BigDecimal("0.18"), "Gracias por su compra", new BigDecimal("18.00"),
+                new BigDecimal("25.00"), 5), userId);
 
-        assertThat(actualizado.name()).isEqualTo("Freestyle Perú SAC");
-        assertThat(actualizado.ruc()).isEqualTo("20123456789");
         assertThat(actualizado.igvRate()).isEqualByComparingTo("0.18");
         assertThat(actualizado.shippingFlatRate()).isEqualByComparingTo("18.00");
+        assertThat(actualizado.reservationDepositAmount()).isEqualByComparingTo("25.00");
+        assertThat(actualizado.reservationExpirationDays()).isEqualTo(5);
         assertThat(actualizado.updatedByUsername()).isEqualTo("config.test");
+
+        CompanySettingsResponse conIdentidad = configuracionService.actualizarIdentidad(new ActualizarIdentidadEmpresaRequest(
+                "Freestyle Perú SAC", "20123456789", "Av. Test 123", "999888777", "contacto@test.com"), userId);
+        assertThat(conIdentidad.name()).isEqualTo("Freestyle Perú SAC");
+        assertThat(conIdentidad.ruc()).isEqualTo("20123456789");
 
         // El logo debe ser de un tipo de imagen soportado.
         MockMultipartFile archivoInvalido = new MockMultipartFile("file", "documento.pdf", "application/pdf", "contenido".getBytes());
@@ -79,7 +86,10 @@ class ConfiguracionFlujoIntegrationTest {
         settings.setCurrencySymbol("S/");
         settings.setIgvRate(new BigDecimal("0.18"));
         settings.setShippingFlatRate(new BigDecimal("15.00"));
+        settings.setReservationDepositAmount(new BigDecimal("20.00"));
+        settings.setReservationExpirationDays(3);
         settings.setPlan(Plan.ECOMMERCE);
+        settings.setSubscriptionStatus(SubscriptionStatus.ACTIVA);
         settings.setUpdatedAt(LocalDateTime.now());
         companySettingsRepository.save(settings);
     }

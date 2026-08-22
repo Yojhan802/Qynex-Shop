@@ -64,7 +64,7 @@ public class UsuarioService {
     }
 
     @Transactional
-    public UsuarioResponse crear(CrearUsuarioRequest request) {
+    public UsuarioResponse crear(CrearUsuarioRequest request, Long currentUserId) {
         if (usuarioRepository.count() >= planGate.limiteUsuarios()) {
             throw new OperacionNoPermitidaException(
                     "Tu plan permite hasta " + planGate.limiteUsuarios() + " usuarios — contacta a soporte para ampliar tu plan");
@@ -79,6 +79,9 @@ public class UsuarioService {
             throw new RecursoDuplicadoException("El DNI " + request.dni() + " ya está registrado");
         }
 
+        List<Rol> rolesSolicitados = resolverRoles(request.roleIds());
+        validarTechoDeAsignacion(currentUserId, rolesSolicitados);
+
         Usuario usuario = new Usuario();
         usuario.setUsername(request.username());
         usuario.setEmail(request.email());
@@ -88,7 +91,7 @@ public class UsuarioService {
         usuario.setPhone(request.phone());
         usuario.setStatus(UsuarioEstado.ACTIVE);
         usuario.setMustChangePassword(true);
-        usuario.setRoles(new HashSet<>(resolverRoles(request.roleIds())));
+        usuario.setRoles(new HashSet<>(rolesSolicitados));
 
         Usuario guardado = usuarioRepository.save(usuario);
         auditService.log("USUARIO_CREADO", "USUARIO", guardado.getId(), null,
@@ -148,6 +151,18 @@ public class UsuarioService {
             throw new RecursoNoEncontradoException("Uno o más roles no existen");
         }
         return roles;
+    }
+
+    /** RN-25: solo se pueden asignar roles cuyo hierarchyLevel no supere el más alto entre los roles propios de quien crea. */
+    private void validarTechoDeAsignacion(Long currentUserId, List<Rol> rolesSolicitados) {
+        Usuario actor = buscarOFallar(currentUserId);
+        int techo = actor.getRoles().stream().mapToInt(Rol::getHierarchyLevel).max().orElse(0);
+        for (Rol rol : rolesSolicitados) {
+            if (rol.getHierarchyLevel() > techo) {
+                throw new OperacionNoPermitidaException(
+                        "No puedes asignar el rol '" + rol.getName() + "' — supera tu nivel de autorización");
+            }
+        }
     }
 
     private String generarPasswordTemporal() {

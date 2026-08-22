@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tienda no disponible · Freestyle Perú</title>
+  <link rel="icon" type="image/png" href="../assets/brand/logo-mark-dark.png" />
+  <link rel="stylesheet" href="../css/fonts.css" />
+  <link rel="stylesheet" href="../css/tokens.css" />
+  <link rel="stylesheet" href="../css/reset.css" />
+  <link rel="stylesheet" href="../css/base.css" />
+  <link rel="stylesheet" href="css/storefront.css" />
+</head>
+<body class="store-body">
+  <main class="store-main" style="min-height: 80vh; display:flex; align-items:center; justify-content:center; text-align:center;">
+    <div style="max-width: 420px; padding: var(--space-6);">
+      <h1 style="margin-bottom: var(--space-3);">Tienda temporalmente no disponible</h1>
+      <p class="table-cell-muted">Estamos resolviendo un tema con la tienda. Vuelve a intentarlo en un momento.</p>
+      <button class="btn btn-secondary" type="button" id="reintentar" style="margin-top: var(--space-4);">Reintentar</button>
+    </div>
+  </main>
+
+  <script type="module">
+    import { API_ORIGIN } from './js/store/core/store-api.js';
+
+    document.getElementById('reintentar').addEventListener('click', async (event) => {
+      const btn = event.currentTarget;
+      btn.disabled = true;
+      btn.textContent = 'Comprobando…';
+      try {
+        const res = await fetch(`${API_ORIGIN}/api/system/info`);
+        const data = await res.json();
+        if (data.subscriptionStatus === 'ACTIVA') {
+          window.location.href = 'index.html';
+          return;
+        }
+      } catch {
+        // sin conexión — se reactivan los controles abajo
+      }
+      btn.disabled = false;
+      btn.textContent = 'Reintentar';
+    });
+  </script>
+</body>
+</html>

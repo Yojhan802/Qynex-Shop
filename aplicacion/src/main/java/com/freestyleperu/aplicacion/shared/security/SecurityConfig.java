@@ -49,6 +49,8 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(
             HttpSecurity http,
             JwtAuthenticationFilter jwtAuthenticationFilter,
+            SubscriptionStatusFilter subscriptionStatusFilter,
+            OpsApiKeyAuthenticationFilter opsApiKeyAuthenticationFilter,
             RestAuthenticationEntryPoint authenticationEntryPoint,
             RestAccessDeniedHandler accessDeniedHandler,
             CorsConfigurationSource corsConfigurationSource) throws Exception {
@@ -65,9 +67,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/store/catalog/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/system/info").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/system/subscription").permitAll()
                         .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                         .anyRequest().authenticated())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(opsApiKeyAuthenticationFilter, JwtAuthenticationFilter.class)
+                .addFilterBefore(subscriptionStatusFilter, JwtAuthenticationFilter.class);
         return http.build();
     }
 }
