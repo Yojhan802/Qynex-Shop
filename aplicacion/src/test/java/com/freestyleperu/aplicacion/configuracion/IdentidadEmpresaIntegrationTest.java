@@ -19,6 +19,7 @@ import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -26,6 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.TestRestTemplate;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureTestRestTemplate;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -119,6 +121,22 @@ class IdentidadEmpresaIntegrationTest {
         ResponseEntity<String> respLogo = restTemplate.exchange(
                 "/api/settings/company/logo", HttpMethod.POST, new HttpEntity<>(body, headersMultipart), String.class);
         assertThat(respLogo.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void elEndpointDeMarcaEsPublicoYSoloExponeNombreYLogo() {
+        asegurarConfiguracionEmpresa();
+
+        ResponseEntity<Map<String, Object>> respuesta = restTemplate.exchange(
+                "/api/system/branding", HttpMethod.GET, HttpEntity.EMPTY,
+                new ParameterizedTypeReference<Map<String, Object>>() { });
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<String, Object> body = respuesta.getBody();
+        // logoUrl viaja solo si no es null (default-property-inclusion: non_null) —
+        // lo importante es que NO se filtre nada de CompanySettingsResponse (ruc, phone, email...).
+        assertThat(body.keySet()).isSubsetOf(Set.of("name", "logoUrl"));
+        assertThat(body.get("name")).isNotNull();
     }
 
     private void asegurarConfiguracionEmpresa() {

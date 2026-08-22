@@ -91,7 +91,7 @@ export function renderShell(activePage) {
   // se resuelve la petición async de abajo.
   const marcaCacheada = getCachedCompanySettings();
   const logoInicial = marcaCacheada?.logoUrl ? `${API_ORIGIN}${marcaCacheada.logoUrl}` : 'assets/brand/logo-mark-light.png';
-  const nombreInicial = marcaCacheada?.name?.trim() || 'Freestyle Perú';
+  const nombreInicial = marcaCacheada?.name?.trim() || 'Qynex';
 
   sidebarRoot.innerHTML = `
     <aside class="sidebar">

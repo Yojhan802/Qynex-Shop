@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Servicio suspendido · Freestyle Perú</title>
+  <title id="page-title">Servicio suspendido · Qynex</title>
   <link rel="icon" type="image/png" href="assets/brand/logo-mark-dark.png" />
   <link rel="stylesheet" href="css/fonts.css" />
   <link rel="stylesheet" href="css/tokens.css" />
@@ -17,20 +17,20 @@
   <div class="login-screen">
     <aside class="login-brand-panel" aria-hidden="true">
       <div class="brand-mark">
-        <img src="assets/brand/logo-mark-light.png" alt="" />
-        <span>Freestyle Perú</span>
+        <img id="brand-logo-desktop" src="assets/brand/logo-mark-light.png" alt="" />
+        <span id="brand-name-desktop">Qynex</span>
       </div>
       <div class="brand-copy">
         <h2>Servicio suspendido.</h2>
         <p>El acceso a este sistema está pausado por falta de pago de la suscripción.</p>
       </div>
-      <p class="brand-footer">© 2026 Freestyle Perú — Sistema Integral de Gestión</p>
+      <p class="brand-footer" id="brand-footer">© 2026 Qynex — Sistema Integral de Gestión</p>
     </aside>
 
     <main class="login-form-panel">
       <div class="login-form-card">
         <div class="login-logo-mobile">
-          <img src="assets/brand/logo-mark-dark.png" alt="Freestyle Perú" />
+          <img id="brand-logo-mobile" src="assets/brand/logo-mark-dark.png" alt="Qynex" />
         </div>
 
         <h1>Servicio suspendido</h1>
@@ -46,6 +46,22 @@
 
   <script type="module">
     import { API_ORIGIN } from './js/core/api.js';
+    import { fetchPublicBranding, getCachedPublicBranding, resolveLogoUrl } from './js/core/public-branding.js';
+
+    function aplicarMarca(branding) {
+      document.getElementById('page-title').textContent = `Servicio suspendido · ${branding.name}`;
+      document.getElementById('brand-name-desktop').textContent = branding.name;
+      document.getElementById('brand-footer').textContent = `© ${new Date().getFullYear()} ${branding.name} — Sistema Integral de Gestión`;
+
+      const logoUrl = resolveLogoUrl(branding);
+      if (logoUrl) {
+        document.getElementById('brand-logo-desktop').src = logoUrl;
+        document.getElementById('brand-logo-mobile').src = logoUrl;
+      }
+      document.getElementById('brand-logo-mobile').alt = branding.name;
+    }
+    aplicarMarca(getCachedPublicBranding());
+    fetchPublicBranding().then(aplicarMarca);
 
     const btn = document.getElementById('reintentar');
     const mensaje = document.getElementById('sigue-suspendido');

@@ -67,7 +67,7 @@ function construirHtml(venta, settings) {
 <body>
   <div class="center">
     ${settings?.logoUrl ? `<img class="logo" src="${API_ORIGIN}${settings.logoUrl}" alt="" />` : ''}
-    <h1>${settings?.name ?? 'Freestyle Perú'}</h1>
+    <h1>${settings?.name ?? 'Qynex'}</h1>
     ${settings?.ruc ? `<div class="muted">RUC ${settings.ruc}</div>` : ''}
     ${settings?.address ? `<div class="muted">${settings.address}</div>` : ''}
     ${settings?.phone ? `<div class="muted">${settings.phone}</div>` : ''}

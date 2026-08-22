@@ -1,5 +1,6 @@
 import { getCustomerSession, logoutCliente } from '../core/customer-auth.js';
 import { cartCount } from '../core/cart.js';
+import { fetchPublicBranding, getCachedPublicBranding, resolveLogoUrl } from '../../../../js/core/public-branding.js';
 
 /**
  * Header/footer comunes de la tienda pública. `basePath` es la ruta relativa
@@ -14,8 +15,8 @@ export function renderStoreShell({ basePath = '', active = '' } = {}) {
   if (header) {
     header.innerHTML = `
       <a class="store-brand" href="${basePath}index.html">
-        <img src="${basePath}../assets/brand/logo-mark-dark.png" alt="Freestyle Perú" />
-        <span>Freestyle Perú</span>
+        <img id="store-brand-logo" src="${basePath}../assets/brand/logo-mark-dark.png" alt="" />
+        <span id="store-brand-name">Qynex</span>
       </a>
       <nav class="store-nav" aria-label="Navegación de la tienda">
         <a href="${basePath}index.html" ${active === 'catalogo' ? "aria-current='page'" : ''}>Catálogo</a>
@@ -39,8 +40,24 @@ export function renderStoreShell({ basePath = '', active = '' } = {}) {
   }
 
   if (footer) {
-    footer.innerHTML = `<p>© ${new Date().getFullYear()} Freestyle Perú. Todos los derechos reservados.</p>`;
+    footer.innerHTML = `<p id="store-footer-text">© ${new Date().getFullYear()} Qynex. Todos los derechos reservados.</p>`;
   }
+
+  aplicarMarcaTienda(getCachedPublicBranding());
+  fetchPublicBranding().then(aplicarMarcaTienda);
+}
+
+function aplicarMarcaTienda(branding) {
+  const nombreEl = document.querySelector('#store-brand-name');
+  if (nombreEl) nombreEl.textContent = branding.name;
+
+  const logoEl = document.querySelector('#store-brand-logo');
+  const logoUrl = resolveLogoUrl(branding);
+  if (logoEl && logoUrl) logoEl.src = logoUrl;
+  if (logoEl) logoEl.alt = branding.name;
+
+  const footerEl = document.querySelector('#store-footer-text');
+  if (footerEl) footerEl.textContent = `© ${new Date().getFullYear()} ${branding.name}. Todos los derechos reservados.`;
 }
 
 export function actualizarContadorCarrito() {

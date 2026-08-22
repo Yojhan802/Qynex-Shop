@@ -1,4 +1,21 @@
 import { login, getSession } from '../core/auth.js';
+import { fetchPublicBranding, getCachedPublicBranding, resolveLogoUrl } from '../core/public-branding.js';
+
+aplicarMarca(getCachedPublicBranding());
+fetchPublicBranding().then(aplicarMarca);
+
+function aplicarMarca(branding) {
+  document.querySelector('#page-title').textContent = `Iniciar sesión · ${branding.name}`;
+  document.querySelector('#brand-name-desktop').textContent = branding.name;
+  document.querySelector('#brand-footer').textContent = `© ${new Date().getFullYear()} ${branding.name} — Sistema Integral de Gestión`;
+
+  const logoUrl = resolveLogoUrl(branding);
+  if (logoUrl) {
+    document.querySelector('#brand-logo-desktop').src = logoUrl;
+    document.querySelector('#brand-logo-mobile').src = logoUrl;
+  }
+  document.querySelector('#brand-logo-mobile').alt = branding.name;
+}
 
 const form = document.querySelector('#login-form');
 const errorAlert = document.querySelector('#login-error');

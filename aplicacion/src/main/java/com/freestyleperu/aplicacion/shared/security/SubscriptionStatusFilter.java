@@ -23,7 +23,8 @@ import tools.jackson.databind.ObjectMapper;
 public class SubscriptionStatusFilter extends OncePerRequestFilter {
 
     private static final Set<String> RUTAS_EXENTAS = Set.of(
-            "/actuator/health", "/api/system/info", "/api/system/subscription", "/api/auth/login", "/api/auth/refresh");
+            "/actuator/health", "/api/system/info", "/api/system/branding", "/api/system/subscription",
+            "/api/auth/login", "/api/auth/refresh");
 
     private final PlanGate planGate;
     private final ObjectMapper objectMapper;

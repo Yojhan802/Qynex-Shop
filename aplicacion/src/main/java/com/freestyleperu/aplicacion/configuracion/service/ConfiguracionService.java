@@ -4,6 +4,7 @@ import com.freestyleperu.aplicacion.configuracion.domain.CompanySettings;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarCompanySettingsRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarIdentidadEmpresaRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarSuscripcionRequest;
+import com.freestyleperu.aplicacion.configuracion.dto.response.BrandingResponse;
 import com.freestyleperu.aplicacion.configuracion.dto.response.CompanySettingsResponse;
 import com.freestyleperu.aplicacion.configuracion.dto.response.SystemInfoResponse;
 import com.freestyleperu.aplicacion.configuracion.repository.CompanySettingsRepository;
@@ -108,6 +109,16 @@ public class ConfiguracionService {
     @Transactional(propagation = Propagation.MANDATORY, readOnly = true)
     public int obtenerDiasVencimientoReserva() {
         return buscarOFallar().getReservationExpirationDays();
+    }
+
+    /**
+     * Identidad visual pública (nombre + logo) — para pintar el logo correcto
+     * en login, "servicio suspendido" y la tienda pública, antes de que haya
+     * sesión. Ver {@link BrandingResponse}.
+     */
+    public BrandingResponse obtenerBranding() {
+        CompanySettings settings = buscarOFallar();
+        return new BrandingResponse(settings.getName(), settings.getLogoUrl());
     }
 
     /** Ficha pública mínima para un panel externo de monitoreo — ver SystemInfoResponse. */

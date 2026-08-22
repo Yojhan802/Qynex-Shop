@@ -183,9 +183,11 @@ class PlanGateIntegrationTest {
         assertThat(restTemplate.getForEntity("/api/store/catalog/categories", String.class).getStatusCode().value())
                 .isEqualTo(402);
         assertThat(get("/api/orders", token).getStatusCode().value()).isEqualTo(402);
-        // Las rutas exentas siguen respondiendo con normalidad.
+        // Las rutas exentas siguen respondiendo con normalidad — incluida la marca pública,
+        // porque la propia pantalla de "servicio suspendido" necesita pintar el logo correcto.
         assertThat(restTemplate.getForEntity("/actuator/health", String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(restTemplate.getForEntity("/api/system/info", String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(restTemplate.getForEntity("/api/system/branding", String.class).getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(restTemplate.postForEntity("/api/auth/login", new LoginRequest("plangate.suspendido", "ClaveValida123"), LoginResponse.class)
                 .getStatusCode()).isEqualTo(HttpStatus.OK);
 

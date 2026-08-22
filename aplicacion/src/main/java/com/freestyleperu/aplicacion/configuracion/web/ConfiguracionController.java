@@ -3,6 +3,7 @@ package com.freestyleperu.aplicacion.configuracion.web;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarCompanySettingsRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarIdentidadEmpresaRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarSuscripcionRequest;
+import com.freestyleperu.aplicacion.configuracion.dto.response.BrandingResponse;
 import com.freestyleperu.aplicacion.configuracion.dto.response.CompanySettingsResponse;
 import com.freestyleperu.aplicacion.configuracion.dto.response.SystemInfoResponse;
 import com.freestyleperu.aplicacion.configuracion.service.ConfiguracionService;
@@ -66,6 +67,15 @@ public class ConfiguracionController {
     @GetMapping("/api/system/info")
     public SystemInfoResponse infoSistema() {
         return configuracionService.obtenerInfoSistema();
+    }
+
+    /**
+     * Nombre + logo, sin autenticación — para pintar el login, "servicio
+     * suspendido" y la tienda pública antes de que haya sesión.
+     */
+    @GetMapping("/api/system/branding")
+    public BrandingResponse branding() {
+        return configuracionService.obtenerBranding();
     }
 
     /**
