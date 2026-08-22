@@ -4,5 +4,6 @@ public enum ReferenceType {
     SALE,
     RETURN,
     ADJUSTMENT,
-    ORDER
+    ORDER,
+    RESERVATION
 }

@@ -6,5 +6,7 @@ public enum MovementType {
     VENTA,
     DEVOLUCION,
     AJUSTE,
-    MERMA
+    MERMA,
+    RESERVA,
+    RESERVA_LIBERADA
 }

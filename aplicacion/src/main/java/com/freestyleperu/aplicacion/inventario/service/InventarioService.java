@@ -120,6 +120,22 @@ public class InventarioService {
         return registrar(variantId, null, MovementType.DEVOLUCION, quantity, ReferenceType.ORDER, orderId, null, staffUserId);
     }
 
+    /**
+     * Invocado por {@code ReservaService} al crear una separación — a
+     * diferencia de un pedido online, la separación retira stock de
+     * inmediato (la prenda queda físicamente apartada).
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public MovimientoResponse registrarPorReserva(Long variantId, int quantity, Long reservationId, Long userId) {
+        return registrar(variantId, null, MovementType.RESERVA, -quantity, ReferenceType.RESERVATION, reservationId, null, userId);
+    }
+
+    /** Invocado por {@code ReservaService} al cancelar o vencer una separación (reingresa stock). */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public MovimientoResponse registrarPorLiberacionReserva(Long variantId, int quantity, Long reservationId, Long userId) {
+        return registrar(variantId, null, MovementType.RESERVA_LIBERADA, quantity, ReferenceType.RESERVATION, reservationId, null, userId);
+    }
+
     private MovimientoResponse registrar(Long variantId, Long warehouseId, MovementType type, int delta,
             ReferenceType referenceType, Long referenceId, String reason, Long userId) {
         Warehouse warehouse = resolverAlmacen(warehouseId);
