@@ -79,6 +79,23 @@ class PlanGateIntegrationTest {
     }
 
     @Test
+    void registroDeClientesDeLaTiendaRequierePlanEcommerce() {
+        Map<String, String> body = Map.of(
+                "email", "plangate.cliente@test.com",
+                "password", "clave1234",
+                "fullName", "Cliente PlanGate",
+                "phone", "999000111");
+
+        establecerPlan(Plan.STARTER);
+        assertThat(restTemplate.postForEntity("/api/store/auth/register", body, String.class).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+
+        establecerPlan(Plan.ECOMMERCE);
+        assertThat(restTemplate.postForEntity("/api/store/auth/register", body, String.class).getStatusCode())
+                .isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
     void pedidosDeStaffRequierenPlanEcommercePorEncimaDelPermiso() {
         crearUsuario("plangate.pedidos", "ClaveValida123", Set.of(Permisos.PEDIDOS_CONSULTAR));
         String token = obtenerAccessToken("plangate.pedidos", "ClaveValida123");
