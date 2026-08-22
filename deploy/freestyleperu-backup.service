@@ -1,0 +1,23 @@
+# Unidad systemd que corre el backup una vez — la dispara
+# freestyleperu-backup.timer, no se activa (`enable`) por sí sola.
+#
+# Instalación:
+#   sudo cp deploy/backup-mysql.sh /opt/freestyleperu/backup-mysql.sh
+#   sudo chmod +x /opt/freestyleperu/backup-mysql.sh
+#   sudo cp deploy/freestyleperu-backup.service deploy/freestyleperu-backup.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now freestyleperu-backup.timer
+#
+# Probar a mano (sin esperar al horario del timer):
+#   sudo systemctl start freestyleperu-backup.service
+#   journalctl -u freestyleperu-backup.service -n 50
+
+[Unit]
+Description=Backup diario de MySQL para FreestylePeru
+After=mysql.service
+Requires=mysql.service
+
+[Service]
+Type=oneshot
+User=freestyle
+ExecStart=/opt/freestyleperu/backup-mysql.sh

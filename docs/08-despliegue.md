@@ -145,6 +145,7 @@ viven en `deploy/`:
 |---|---|
 | `deploy/freestyleperu-backend.service` | Unidad systemd — arranca el `.jar`, lo reinicia solo si se cae (`Restart=on-failure`), y trae la JVM ya dimensionada para 2 GB de RAM compartidos con MySQL |
 | `deploy/nginx-freestyleperu.conf` | Config de sitio nginx — estático + proxy a `127.0.0.1:8080`, con gzip y límite de tasa sobre `/api/`; incluye `location`s aparte para los streams SSE de notificaciones (`/api/notifications/`, `/api/store/notifications/`) con `proxy_buffering off` — sin eso las notificaciones en tiempo real (docs/05-api.md §22) funcionan en local y nunca llegan "en vivo" en producción |
+| `deploy/backup-mysql.sh` + `deploy/freestyleperu-backup.{service,timer}` | Backup diario de MySQL (ver "Backups de MySQL" más abajo) |
 
 **Pasos, en orden:**
 
@@ -166,6 +167,61 @@ viven en `deploy/`:
    `nginx.conf` global, no en el archivo de sitio).
 7. HTTPS: igual que en el camino Docker (§4) — Caddy, Traefik, o certbot
    delante de nginx.
+8. Backups de MySQL — ver la sección siguiente. No es opcional una vez que
+   hay clientes reales pagando: sin esto, un `DROP TABLE` por accidente o un
+   VPS que se corrompe borra el negocio entero, no solo el servidor.
+
+### Backups de MySQL
+
+`deploy/backup-mysql.sh` hace un `mysqldump --single-transaction` (dump
+consistente sin bloquear las tablas — el sistema sigue vendiendo mientras
+corre), lo comprime, opcionalmente lo encripta, y opcionalmente lo sube fuera
+del VPS. Lo dispara `freestyleperu-backup.timer` (systemd) todas las noches a
+las 3am — no hace falta cron.
+
+**Por qué también fuera del VPS:** un backup que vive en el mismo disco que
+la base de datos no protege contra el escenario más importante — que el VPS
+entero se pierda (falla de hardware del proveedor, cuenta comprometida,
+borrado accidental). `BACKUP_RCLONE_REMOTE` sube cada backup a
+almacenamiento externo vía [rclone](https://rclone.org/) (funciona con
+Backblaze B2, S3, y decenas de proveedores más con la misma herramienta —
+B2 es el más barato para este tamaño de base de datos, centavos al mes).
+
+**Instalación:**
+
+1. Instalar rclone (`curl https://rclone.org/install.sh | sudo bash`) y
+   configurar el remote de forma interactiva: `rclone config` — elige tu
+   proveedor (ej. Backblaze B2), sigue el asistente, y anota el nombre que le
+   diste al remote (ej. `b2`).
+2. En `/opt/freestyleperu/.env`, agregar:
+   ```
+   BACKUP_RCLONE_REMOTE=b2:mi-bucket/freestyleperu
+   BACKUP_ENCRYPTION_KEY=<generado con: openssl rand -base64 32>
+   BACKUP_RETENTION_DAYS=7
+   ```
+   El dump de MySQL trae datos de clientes (email, teléfono, dirección,
+   referencias de pago) — si el backup va a salir del VPS, encriptarlo no es
+   opcional en la práctica. Guarda `BACKUP_ENCRYPTION_KEY` en un gestor de
+   contraseñas: sin ella, los backups encriptados son irrecuperables.
+3. `sudo cp deploy/backup-mysql.sh /opt/freestyleperu/backup-mysql.sh && sudo chmod +x /opt/freestyleperu/backup-mysql.sh`
+4. `sudo cp deploy/freestyleperu-backup.service deploy/freestyleperu-backup.timer /etc/systemd/system/`
+5. `sudo systemctl daemon-reload && sudo systemctl enable --now freestyleperu-backup.timer`
+6. Probar que funciona de verdad, sin esperar al horario: `sudo systemctl start freestyleperu-backup.service`, después `journalctl -u freestyleperu-backup.service -n 50` para confirmar que terminó con "Backup completado" y no con un error de `mysqldump` o de `rclone`.
+
+**Restaurar un backup** (probar esto también, no solo asumir que funciona):
+```bash
+# Si está encriptado (BACKUP_ENCRYPTION_KEY configurada):
+openssl enc -d -aes-256-cbc -pbkdf2 \
+    -in freestyleperu-20260215-030000.sql.gz.enc \
+    -out freestyleperu-20260215-030000.sql.gz \
+    -pass "pass:$BACKUP_ENCRYPTION_KEY"
+
+gunzip -k freestyleperu-20260215-030000.sql.gz
+mysql -u freestyleperu -p freestyleperu < freestyleperu-20260215-030000.sql
+```
+Un backup nunca probado a restaurar es, en la práctica, un backup que no
+existe — conviene hacer este ejercicio al menos una vez contra una base de
+datos de prueba, no la primera vez que de verdad se necesita.
 
 **Antes de un pico de tráfico grande (Black Friday):** lo de mayor impacto
 y costo cero es poner **Cloudflare (plan gratuito)** delante del dominio.

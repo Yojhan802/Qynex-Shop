@@ -1,0 +1,17 @@
+# Dispara freestyleperu-backup.service todas las noches — ver ese archivo
+# para los pasos de instalación completos.
+
+[Unit]
+Description=Dispara el backup diario de MySQL (freestyleperu-backup.service)
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+# Jitter de hasta 10 min — evita que, si el proveedor del VPS agenda tareas
+# propias también a las 3am en todos sus hosts, todo el mundo pegue a la vez.
+RandomizedDelaySec=600
+# Si el VPS estaba apagado a las 3am (reinicio, mantenimiento), corre el
+# backup pendiente apenas vuelve a estar arriba, en vez de saltárselo.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
