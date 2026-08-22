@@ -1,6 +1,8 @@
 package com.freestyleperu.aplicacion.venta.domain;
 
+import com.freestyleperu.aplicacion.combo.domain.Combo;
 import com.freestyleperu.aplicacion.producto.domain.ProductVariant;
+import com.freestyleperu.aplicacion.promocion.domain.Promocion;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -37,6 +39,16 @@ public class SaleDetail {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "variant_id", nullable = false)
     private ProductVariant variant;
+
+    /** No nulo cuando esta línea viene de vender un combo (docs/03 §18) — solo trazabilidad, no cambia el cálculo. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "combo_id")
+    private Combo combo;
+
+    /** No nulo cuando el descuento de esta línea vino de aplicar una promoción, no de un descuento manual. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "promotion_id")
+    private Promocion promotion;
 
     @Column(name = "quantity", nullable = false)
     private int quantity;

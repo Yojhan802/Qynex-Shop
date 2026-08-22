@@ -36,13 +36,22 @@ import com.freestyleperu.aplicacion.usuario.domain.Usuario;
 import com.freestyleperu.aplicacion.usuario.domain.UsuarioEstado;
 import com.freestyleperu.aplicacion.usuario.repository.RolRepository;
 import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
+import com.freestyleperu.aplicacion.venta.domain.Payment;
+import com.freestyleperu.aplicacion.venta.domain.PaymentStatus;
+import com.freestyleperu.aplicacion.venta.domain.Sale;
+import com.freestyleperu.aplicacion.venta.domain.SaleDetail;
+import com.freestyleperu.aplicacion.venta.domain.SaleStatus;
 import com.freestyleperu.aplicacion.venta.dto.request.AnularVentaRequest;
 import com.freestyleperu.aplicacion.venta.dto.request.CrearVentaRequest;
 import com.freestyleperu.aplicacion.venta.dto.request.ItemVentaRequest;
 import com.freestyleperu.aplicacion.venta.dto.request.PagoVentaRequest;
 import com.freestyleperu.aplicacion.venta.dto.response.VentaResponse;
+import com.freestyleperu.aplicacion.venta.repository.PaymentRepository;
+import com.freestyleperu.aplicacion.venta.repository.SaleDetailRepository;
+import com.freestyleperu.aplicacion.venta.repository.SaleRepository;
 import com.freestyleperu.aplicacion.venta.service.VentaService;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -71,6 +80,9 @@ class VentaFlujoIntegrationTest {
     @Autowired private CajaService cajaService;
     @Autowired private VentaService ventaService;
     @Autowired private ProductVariantRepository variantRepository;
+    @Autowired private SaleRepository saleRepository;
+    @Autowired private SaleDetailRepository saleDetailRepository;
+    @Autowired private PaymentRepository paymentRepository;
 
     private static final Set<String> AUTORIDADES_SIN_DESCUENTO = Set.of();
 
@@ -85,7 +97,7 @@ class VentaFlujoIntegrationTest {
 
         CrearVentaRequest request = new CrearVentaRequest(
                 null, null, sesion.id(), null, null,
-                List.of(new ItemVentaRequest(variante.id(), 2, null)),
+                List.of(new ItemVentaRequest(variante.id(), 2, null, null, null)),
                 List.of(
                         new PagoVentaRequest(efectivo.getId(), new BigDecimal("100.00"), null),
                         new PagoVentaRequest(yape.getId(), new BigDecimal("140.00"), "OP-123")));
@@ -107,7 +119,7 @@ class VentaFlujoIntegrationTest {
         // No se puede vender más de lo disponible (999 * 120.00 = 119880.00, pago exacto para llegar al chequeo de stock).
         assertThatThrownBy(() -> ventaService.registrarVenta(
                 new CrearVentaRequest(null, null, sesion.id(), null, null,
-                        List.of(new ItemVentaRequest(variante.id(), 999, null)),
+                        List.of(new ItemVentaRequest(variante.id(), 999, null, null, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("119880.00"), null))),
                 userId, AUTORIDADES_SIN_DESCUENTO))
                 .isInstanceOf(StockInsuficienteException.class);
@@ -115,7 +127,7 @@ class VentaFlujoIntegrationTest {
         // El descuento sin permiso se rechaza.
         assertThatThrownBy(() -> ventaService.registrarVenta(
                 new CrearVentaRequest(null, null, sesion.id(), new BigDecimal("10.00"), null,
-                        List.of(new ItemVentaRequest(variante.id(), 1, null)),
+                        List.of(new ItemVentaRequest(variante.id(), 1, null, null, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("110.00"), null))),
                 userId, AUTORIDADES_SIN_DESCUENTO))
                 .isInstanceOf(OperacionNoPermitidaException.class);
@@ -123,7 +135,7 @@ class VentaFlujoIntegrationTest {
         // Pagos que no cuadran con el total se rechazan.
         assertThatThrownBy(() -> ventaService.registrarVenta(
                 new CrearVentaRequest(null, null, sesion.id(), null, null,
-                        List.of(new ItemVentaRequest(variante.id(), 1, null)),
+                        List.of(new ItemVentaRequest(variante.id(), 1, null, null, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("50.00"), null))),
                 userId, AUTORIDADES_SIN_DESCUENTO))
                 .isInstanceOf(ReglaDeNegocioException.class);
@@ -144,7 +156,7 @@ class VentaFlujoIntegrationTest {
         // Un pago que supera el total también se rechaza (no solo el que queda corto).
         assertThatThrownBy(() -> ventaService.registrarVenta(
                 new CrearVentaRequest(null, null, sesion.id(), null, null,
-                        List.of(new ItemVentaRequest(variante.id(), 1, null)),
+                        List.of(new ItemVentaRequest(variante.id(), 1, null, null, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("200.00"), null))),
                 userId, AUTORIDADES_SIN_DESCUENTO))
                 .isInstanceOf(ReglaDeNegocioException.class);
@@ -153,7 +165,7 @@ class VentaFlujoIntegrationTest {
         cajaService.cerrarCaja(sesion.id(), new CerrarCajaRequest(new BigDecimal("300.00"), "Cierre de turno"), userId);
         assertThatThrownBy(() -> ventaService.registrarVenta(
                 new CrearVentaRequest(null, null, sesion.id(), null, null,
-                        List.of(new ItemVentaRequest(variante.id(), 1, null)),
+                        List.of(new ItemVentaRequest(variante.id(), 1, null, null, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("120.00"), null))),
                 userId, AUTORIDADES_SIN_DESCUENTO))
                 .isInstanceOf(ReglaDeNegocioException.class);
@@ -169,10 +181,56 @@ class VentaFlujoIntegrationTest {
 
         assertThatThrownBy(() -> ventaService.registrarVenta(
                 new CrearVentaRequest(null, null, sesion.id(), null, null,
-                        List.of(new ItemVentaRequest(sinStock.id(), 1, null)),
+                        List.of(new ItemVentaRequest(sinStock.id(), 1, null, null, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("60.00"), null))),
                 userId, AUTORIDADES_SIN_DESCUENTO))
                 .isInstanceOf(StockInsuficienteException.class);
+    }
+
+    @Test
+    void anularUnaVentaSinCajaConPagoQueAfectaCajaRechazaConErrorClaroNoNPE() {
+        Long userId = nuevoUsuario("vendedor.sincajapedido").getId();
+        VarianteResponse variante = crearVarianteConStock("Zapatilla Running", "Blanco", "40", new BigDecimal("200.00"), 5);
+        PaymentMethod efectivo = metodoPago("EFECTIVO");
+        Usuario vendedor = usuarioRepository.findById(userId).orElseThrow();
+
+        // Simula una venta generada por un pedido online confirmado (sin sesión de caja).
+        Sale venta = new Sale();
+        venta.setSaleNumber("V001-TESTSINCAJA");
+        venta.setUser(vendedor);
+        venta.setSubtotal(new BigDecimal("200.00"));
+        venta.setDiscountAmount(BigDecimal.ZERO);
+        venta.setTotal(new BigDecimal("200.00"));
+        venta.setStatus(SaleStatus.COMPLETED);
+        venta.setCreatedAt(LocalDateTime.now());
+        Sale ventaGuardada = saleRepository.save(venta);
+
+        SaleDetail detalle = new SaleDetail();
+        detalle.setSale(ventaGuardada);
+        detalle.setVariant(variantRepository.findById(variante.id()).orElseThrow());
+        detalle.setQuantity(1);
+        detalle.setUnitPrice(new BigDecimal("200.00"));
+        detalle.setDiscountAmount(BigDecimal.ZERO);
+        detalle.setSubtotal(new BigDecimal("200.00"));
+        detalle.setProductName("Zapatilla Running");
+        detalle.setVariantSku(variante.sku());
+        detalle.setColorName("Blanco");
+        detalle.setSizeName("40");
+        saleDetailRepository.save(detalle);
+
+        Payment pago = new Payment();
+        pago.setSale(ventaGuardada);
+        pago.setPaymentMethod(efectivo);
+        pago.setAmount(new BigDecimal("200.00"));
+        pago.setStatus(PaymentStatus.COMPLETED);
+        pago.setCreatedAt(LocalDateTime.now());
+        paymentRepository.save(pago);
+
+        assertThat(ventaGuardada.getCashSession()).isNull();
+
+        // Anular con un pago que afecta caja debe rechazarse con un mensaje claro, no un NullPointerException.
+        assertThatThrownBy(() -> ventaService.anular(ventaGuardada.getId(), new AnularVentaRequest("prueba"), userId))
+                .isInstanceOf(ReglaDeNegocioException.class);
     }
 
     private SesionCajaResponse abrirCaja(Long userId) {

@@ -6,10 +6,15 @@ import com.freestyleperu.aplicacion.caja.repository.CashSessionRepository;
 import com.freestyleperu.aplicacion.caja.service.CajaService;
 import com.freestyleperu.aplicacion.cliente.domain.Customer;
 import com.freestyleperu.aplicacion.cliente.repository.CustomerRepository;
+import com.freestyleperu.aplicacion.combo.domain.Combo;
+import com.freestyleperu.aplicacion.combo.service.ComboService;
 import com.freestyleperu.aplicacion.inventario.service.InventarioService;
 import com.freestyleperu.aplicacion.pago.domain.PaymentMethod;
 import com.freestyleperu.aplicacion.pago.service.PagoService;
+import com.freestyleperu.aplicacion.producto.domain.Product;
 import com.freestyleperu.aplicacion.producto.domain.ProductVariant;
+import com.freestyleperu.aplicacion.promocion.domain.Promocion;
+import com.freestyleperu.aplicacion.promocion.service.PromocionService;
 import com.freestyleperu.aplicacion.promotor.domain.Promoter;
 import com.freestyleperu.aplicacion.promotor.service.PromoterService;
 import com.freestyleperu.aplicacion.producto.repository.ProductVariantRepository;
@@ -40,10 +45,12 @@ import com.freestyleperu.aplicacion.venta.repository.PaymentRepository;
 import com.freestyleperu.aplicacion.venta.repository.SaleDetailRepository;
 import com.freestyleperu.aplicacion.venta.repository.SaleRepository;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -72,6 +79,8 @@ public class VentaService {
     private final CajaService cajaService;
     private final PagoService pagoService;
     private final PromoterService promoterService;
+    private final ComboService comboService;
+    private final PromocionService promocionService;
     private final SequenceService sequenceService;
     private final AuditService auditService;
 
@@ -79,8 +88,8 @@ public class VentaService {
             PaymentRepository paymentRepository, ProductVariantRepository variantRepository,
             CustomerRepository customerRepository, CashSessionRepository cashSessionRepository,
             UsuarioRepository usuarioRepository, InventarioService inventarioService, CajaService cajaService,
-            PagoService pagoService, PromoterService promoterService, SequenceService sequenceService,
-            AuditService auditService) {
+            PagoService pagoService, PromoterService promoterService, ComboService comboService,
+            PromocionService promocionService, SequenceService sequenceService, AuditService auditService) {
         this.saleRepository = saleRepository;
         this.saleDetailRepository = saleDetailRepository;
         this.paymentRepository = paymentRepository;
@@ -90,6 +99,8 @@ public class VentaService {
         this.usuarioRepository = usuarioRepository;
         this.inventarioService = inventarioService;
         this.cajaService = cajaService;
+        this.comboService = comboService;
+        this.promocionService = promocionService;
         this.pagoService = pagoService;
         this.promoterService = promoterService;
         this.sequenceService = sequenceService;
@@ -125,10 +136,18 @@ public class VentaService {
                 .sorted(Comparator.comparing(ItemVentaRequest::variantId))
                 .toList();
 
-        boolean hayDescuento = tieneImporte(request.discountAmount())
-                || itemsOrdenados.stream().anyMatch(item -> tieneImporte(item.discountAmount()));
-        if (hayDescuento && !authorities.contains(Permisos.VENTAS_DESCUENTO)) {
+        validarModificadoresMutuamenteExcluyentes(itemsOrdenados);
+
+        boolean hayDescuentoManual = tieneImporte(request.discountAmount())
+                || itemsOrdenados.stream()
+                        .anyMatch(item -> item.comboId() == null && item.promotionId() == null && tieneImporte(item.discountAmount()));
+        if (hayDescuentoManual && !authorities.contains(Permisos.VENTAS_DESCUENTO)) {
             throw new OperacionNoPermitidaException("No tienes permisos para aplicar descuentos");
+        }
+
+        boolean hayPromocion = itemsOrdenados.stream().anyMatch(item -> item.promotionId() != null);
+        if (hayPromocion && !authorities.contains(Permisos.PROMOCIONES_APLICAR)) {
+            throw new OperacionNoPermitidaException("No tienes permisos para aplicar promociones");
         }
 
         Map<Long, ProductVariant> variantesPorId = cargarVariantes(itemsOrdenados);
@@ -174,12 +193,21 @@ public class VentaService {
             detail.setUnitPrice(dc.unitPrice());
             detail.setDiscountAmount(dc.descuento());
             detail.setSubtotal(dc.subtotal());
+            detail.setCombo(dc.combo());
+            detail.setPromotion(dc.promotion());
             detail.setProductName(dc.variant().getProduct().getName());
             detail.setVariantSku(dc.variant().getSku());
             detail.setColorName(dc.variant().getColor().getName());
             detail.setSizeName(dc.variant().getSize().getName());
             detallesGuardados.add(saleDetailRepository.save(detail));
+        }
 
+        // Descuenta el stock en un orden global por variant_id, no en el orden de las
+        // líneas: así toda transacción que toque varias variantes a la vez (venta,
+        // separación, pedido, devolución) adquiere sus bloqueos de fila en el mismo
+        // orden, y dos ventas concurrentes con las mismas variantes nunca hacen deadlock
+        // entre sí (ver docs/04-reglas-negocio.md, concurrencia).
+        for (DetalleCalculado dc : detalles.stream().sorted(Comparator.comparing(d -> d.variant().getId())).toList()) {
             inventarioService.registrarPorVenta(dc.variant().getId(), dc.quantity(), guardada.getId(), userId);
         }
 
@@ -217,13 +245,20 @@ public class VentaService {
         }
 
         List<SaleDetail> detalles = saleDetailRepository.findAllBySaleId(saleId);
-        for (SaleDetail detail : detalles) {
+        // Mismo criterio de orden global por variant_id que registrarVenta() — evita deadlocks
+        // entre anulaciones/ventas concurrentes que comparten variantes.
+        for (SaleDetail detail : detalles.stream().sorted(Comparator.comparing(d -> d.getVariant().getId())).toList()) {
             inventarioService.registrarPorDevolucion(detail.getVariant().getId(), detail.getQuantity(), saleId, userId);
         }
 
         List<Payment> pagos = paymentRepository.findAllBySaleId(saleId);
         for (Payment payment : pagos) {
             if (payment.getPaymentMethod().isAffectsCash()) {
+                if (sale.getCashSession() == null) {
+                    throw new ReglaDeNegocioException(
+                            "Esta venta no pasó por caja (proviene de un pedido online) — no se puede anular "
+                                    + "un pago que afecta caja sobre ella");
+                }
                 cajaService.registrarReversion(sale.getCashSession().getId(), payment.getAmount(), saleId, userId);
             }
         }
@@ -250,23 +285,138 @@ public class VentaService {
         return resultado;
     }
 
+    private void validarModificadoresMutuamenteExcluyentes(List<ItemVentaRequest> items) {
+        for (ItemVentaRequest item : items) {
+            int modificadores = 0;
+            if (tieneImporte(item.discountAmount())) {
+                modificadores++;
+            }
+            if (item.comboId() != null) {
+                modificadores++;
+            }
+            if (item.promotionId() != null) {
+                modificadores++;
+            }
+            if (modificadores > 1) {
+                throw new ReglaDeNegocioException(
+                        "Una línea de venta no puede combinar descuento manual, combo y promoción a la vez");
+            }
+        }
+    }
+
     private List<DetalleCalculado> calcularDetalles(List<ItemVentaRequest> items, Map<Long, ProductVariant> variantesPorId) {
         List<DetalleCalculado> resultado = new ArrayList<>();
+
+        Map<Long, List<ItemVentaRequest>> itemsPorCombo = new LinkedHashMap<>();
         for (ItemVentaRequest item : items) {
-            ProductVariant variant = variantesPorId.get(item.variantId());
-            BigDecimal unitPrice = variant.getProduct().getPromoPrice() != null
-                    ? variant.getProduct().getPromoPrice()
-                    : variant.getProduct().getPrice();
-            BigDecimal cantidad = BigDecimal.valueOf(item.quantity());
-            BigDecimal bruto = unitPrice.multiply(cantidad);
-            BigDecimal descuento = valorOCero(item.discountAmount());
-            BigDecimal subtotal = bruto.subtract(descuento);
-            if (subtotal.signum() < 0) {
-                throw new ReglaDeNegocioException("El descuento de " + variant.getProduct().getName() + " supera su importe");
+            if (item.comboId() != null) {
+                itemsPorCombo.computeIfAbsent(item.comboId(), k -> new ArrayList<>()).add(item);
             }
-            resultado.add(new DetalleCalculado(variant, item.quantity(), unitPrice, descuento, bruto, subtotal));
+        }
+        for (Map.Entry<Long, List<ItemVentaRequest>> entry : itemsPorCombo.entrySet()) {
+            resultado.addAll(calcularDetallesCombo(entry.getKey(), entry.getValue(), variantesPorId));
+        }
+
+        for (ItemVentaRequest item : items) {
+            if (item.comboId() != null) {
+                continue;
+            }
+            resultado.add(calcularDetalleIndividual(item, variantesPorId));
         }
         return resultado;
+    }
+
+    private DetalleCalculado calcularDetalleIndividual(ItemVentaRequest item, Map<Long, ProductVariant> variantesPorId) {
+        ProductVariant variant = variantesPorId.get(item.variantId());
+        BigDecimal unitPrice = precioVigente(variant);
+        BigDecimal bruto = unitPrice.multiply(BigDecimal.valueOf(item.quantity()));
+
+        BigDecimal descuento;
+        Promocion promocion = null;
+        if (item.promotionId() != null) {
+            promocion = promocionService.obtenerAplicableOFallar(item.promotionId(), variant);
+            descuento = promocionService.calcularDescuento(promocion, bruto);
+        } else {
+            descuento = valorOCero(item.discountAmount());
+        }
+
+        BigDecimal subtotal = bruto.subtract(descuento);
+        if (subtotal.signum() < 0) {
+            throw new ReglaDeNegocioException("El descuento de " + variant.getProduct().getName() + " supera su importe");
+        }
+        return new DetalleCalculado(variant, item.quantity(), unitPrice, descuento, bruto, subtotal, null, promocion);
+    }
+
+    /**
+     * Un combo se vende como varias líneas normales (una por variante elegida),
+     * pero el descuento de cada línea lo calcula el backend, no el cliente: se
+     * reparte proporcionalmente al precio normal de cada línea para que la suma
+     * final cuadre exactamente con el precio fijo del combo (la última línea
+     * absorbe el redondeo, técnica ya usada en otras reparticiones del sistema).
+     */
+    private List<DetalleCalculado> calcularDetallesCombo(Long comboId, List<ItemVentaRequest> items, Map<Long, ProductVariant> variantesPorId) {
+        Combo combo = comboService.obtenerActivoOFallar(comboId);
+
+        record LineaCombo(ItemVentaRequest item, ProductVariant variant, BigDecimal unitPrice, BigDecimal bruto) {
+        }
+        List<LineaCombo> lineas = new ArrayList<>();
+        BigDecimal totalNormal = BigDecimal.ZERO;
+        for (ItemVentaRequest item : items) {
+            ProductVariant variant = variantesPorId.get(item.variantId());
+            BigDecimal unitPrice = precioVigente(variant);
+            BigDecimal bruto = unitPrice.multiply(BigDecimal.valueOf(item.quantity()));
+            lineas.add(new LineaCombo(item, variant, unitPrice, bruto));
+            totalNormal = totalNormal.add(bruto);
+        }
+
+        // Reparte cada línea vendida entre las líneas del combo (mismo algoritmo
+        // que usa la detección automática del POS, ver ComboService): primero las
+        // de producto específico (más restrictivas), luego las de categoría. Acá,
+        // a diferencia de la detección automática, no se tolera que sobre nada:
+        // toda línea marcada con este comboId debe quedar explicada por el combo.
+        List<ComboService.CandidatoCombo> candidatos = new ArrayList<>();
+        for (int i = 0; i < lineas.size(); i++) {
+            ProductVariant variant = lineas.get(i).variant();
+            Product product = variant.getProduct();
+            candidatos.add(new ComboService.CandidatoCombo(
+                    i, variant.getId(), product.getId(), product.getCategory().getId(),
+                    product.getBrand() != null ? product.getBrand().getId() : null, lineas.get(i).item().quantity()));
+        }
+        int[] consumido = comboService.consumirCandidatos(combo, candidatos)
+                .orElseThrow(() -> new ReglaDeNegocioException("Faltan productos para completar el combo " + combo.getName()));
+        for (int i = 0; i < consumido.length; i++) {
+            if (consumido[i] != candidatos.get(i).cantidad()) {
+                throw new ReglaDeNegocioException(
+                        "Los productos elegidos no coinciden con la definición del combo " + combo.getName());
+            }
+        }
+
+        BigDecimal descuentoTotal = totalNormal.subtract(combo.getPrice());
+        if (descuentoTotal.signum() < 0) {
+            throw new ReglaDeNegocioException(
+                    "El precio del combo " + combo.getName() + " ya no es válido frente al precio actual de sus productos");
+        }
+
+        List<DetalleCalculado> resultado = new ArrayList<>();
+        BigDecimal descuentoAsignado = BigDecimal.ZERO;
+        for (int i = 0; i < lineas.size(); i++) {
+            LineaCombo linea = lineas.get(i);
+            BigDecimal descuentoLinea;
+            if (i == lineas.size() - 1) {
+                descuentoLinea = descuentoTotal.subtract(descuentoAsignado);
+            } else {
+                descuentoLinea = descuentoTotal.multiply(linea.bruto()).divide(totalNormal, 2, RoundingMode.HALF_UP);
+                descuentoAsignado = descuentoAsignado.add(descuentoLinea);
+            }
+            BigDecimal subtotal = linea.bruto().subtract(descuentoLinea);
+            resultado.add(new DetalleCalculado(
+                    linea.variant(), linea.item().quantity(), linea.unitPrice(), descuentoLinea, linea.bruto(), subtotal, combo, null));
+        }
+        return resultado;
+    }
+
+    private BigDecimal precioVigente(ProductVariant variant) {
+        return variant.getProduct().getPromoPrice() != null ? variant.getProduct().getPromoPrice() : variant.getProduct().getPrice();
     }
 
     private boolean tieneImporte(BigDecimal valor) {
@@ -296,7 +446,9 @@ public class VentaService {
         List<VentaItemResponse> items = detalles.stream()
                 .map(d -> new VentaItemResponse(
                         d.getVariant().getId(), d.getProductName(), d.getVariantSku(), d.getColorName(), d.getSizeName(),
-                        d.getQuantity(), d.getUnitPrice(), d.getDiscountAmount(), d.getSubtotal()))
+                        d.getQuantity(), d.getUnitPrice(), d.getDiscountAmount(), d.getSubtotal(),
+                        d.getCombo() != null ? d.getCombo().getId() : null,
+                        d.getPromotion() != null ? d.getPromotion().getId() : null))
                 .toList();
         List<PagoResponse> pagosResponse = pagos.stream()
                 .map(p -> new PagoResponse(p.getPaymentMethod().getId(), p.getPaymentMethod().getName(), p.getAmount(), p.getReference()))
@@ -312,6 +464,7 @@ public class VentaService {
                 sale.getUser().getFullName(),
                 sale.getSubtotal(),
                 sale.getDiscountAmount(),
+                sale.getShippingAmount(),
                 sale.getTotal(),
                 sale.getStatus(),
                 sale.getNotes(),
@@ -324,6 +477,7 @@ public class VentaService {
     }
 
     private record DetalleCalculado(
-            ProductVariant variant, int quantity, BigDecimal unitPrice, BigDecimal descuento, BigDecimal bruto, BigDecimal subtotal) {
+            ProductVariant variant, int quantity, BigDecimal unitPrice, BigDecimal descuento, BigDecimal bruto, BigDecimal subtotal,
+            Combo combo, Promocion promotion) {
     }
 }

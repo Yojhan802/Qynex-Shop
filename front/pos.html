@@ -40,13 +40,16 @@
 
       <div id="pos-screen" class="pos-screen-grid" hidden>
         <section>
-          <div class="input-group" style="margin-bottom: var(--space-4);">
-            <span class="input-group-icon">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-            </span>
-            <input class="input" id="pos-scan-input" type="text" autocomplete="off"
-                   placeholder="Escanea un código de barras o busca por nombre / SKU…"
-                   style="padding-left:44px; height:56px; font-size: var(--font-size-lg);" />
+          <div style="display:flex; gap:var(--space-3); margin-bottom: var(--space-4); align-items:stretch;">
+            <div class="input-group" style="flex:1;">
+              <span class="input-group-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+              </span>
+              <input class="input" id="pos-scan-input" type="text" autocomplete="off"
+                     placeholder="Escanea un código de barras o busca por nombre / SKU…"
+                     style="padding-left:44px; height:56px; font-size: var(--font-size-lg);" />
+            </div>
+            <button class="btn btn-secondary" type="button" id="btn-agregar-combo" style="height:56px;" hidden>+ Combo</button>
           </div>
           <div id="pos-results" class="table-card" style="min-height: 200px;">
             <div class="empty-state">

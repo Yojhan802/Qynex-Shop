@@ -11,5 +11,7 @@ public record VentaItemResponse(
         int quantity,
         BigDecimal unitPrice,
         BigDecimal discountAmount,
-        BigDecimal subtotal) {
+        BigDecimal subtotal,
+        Long comboId,
+        Long promotionId) {
 }

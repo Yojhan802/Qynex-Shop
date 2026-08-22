@@ -4,6 +4,7 @@ import { renderShell, actualizarEstadoCaja } from '../components/shell.js';
 import { fetchCurrentSession } from '../core/cash-session.js';
 import { openAbrirCajaModal } from '../components/abrir-caja.js';
 import { createCustomerPicker } from '../components/customer-picker.js';
+import { createVariantPicker } from '../components/variant-picker.js';
 import { openPagoModal } from '../components/pago-modal.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
@@ -110,6 +111,12 @@ function iniciarPantalla() {
   });
   document.querySelector('#btn-cobrar').addEventListener('click', cobrar);
 
+  if (permissions.has('COMBOS_CONSULTAR')) {
+    const btnCombo = document.querySelector('#btn-agregar-combo');
+    btnCombo.hidden = false;
+    btnCombo.addEventListener('click', abrirSelectorCombo);
+  }
+
   renderCart();
 }
 
@@ -166,7 +173,7 @@ function agregarAlCarrito(variante) {
     showToast({ type: 'warning', title: 'Variante inactiva', message: 'Esta variante no está disponible para la venta.' });
     return;
   }
-  const existente = cart.find((item) => item.variantId === variante.variantId);
+  const existente = cart.find((item) => item.variantId === variante.variantId && !item.comboId);
   const enCarrito = existente?.quantity ?? 0;
   if (enCarrito + 1 > variante.stock) {
     showToast({ type: 'warning', title: 'Stock insuficiente', message: `Solo hay ${variante.stock} unidades disponibles.` });
@@ -184,17 +191,23 @@ function agregarAlCarrito(variante) {
       unitPrice: variante.effectivePrice,
       stock: variante.stock,
       quantity: 1,
+      comboId: null,
+      comboName: null,
+      comboPrice: null,
+      promotionId: null,
+      promotionName: null,
+      promotionDiscount: 0,
     });
   }
   renderCart();
 }
 
 function cambiarCantidad(variantId, delta) {
-  const item = cart.find((i) => i.variantId === variantId);
+  const item = cart.find((i) => i.variantId === variantId && !i.comboId);
   if (!item) return;
   const nueva = item.quantity + delta;
   if (nueva <= 0) {
-    cart = cart.filter((i) => i.variantId !== variantId);
+    cart = cart.filter((i) => i !== item);
   } else if (nueva > item.stock) {
     showToast({ type: 'warning', title: 'Stock insuficiente', message: `Solo hay ${item.stock} unidades disponibles.` });
     return;
@@ -205,55 +218,309 @@ function cambiarCantidad(variantId, delta) {
 }
 
 function quitarDelCarrito(variantId) {
-  cart = cart.filter((i) => i.variantId !== variantId);
+  cart = cart.filter((i) => !(i.variantId === variantId && !i.comboId));
   renderCart();
+}
+
+function quitarCombo(comboId) {
+  cart = cart.filter((i) => i.comboId !== comboId);
+  renderCart();
+}
+
+async function abrirSelectorCombo() {
+  let combos;
+  try {
+    combos = (await api.get('/combos')).filter((c) => c.status === 'ACTIVE');
+  } catch (error) {
+    showToast({ type: 'danger', title: 'Error', message: error instanceof ApiError ? error.message : 'No se pudieron cargar los combos' });
+    return;
+  }
+  if (combos.length === 0) {
+    showToast({ type: 'warning', title: 'Sin combos', message: 'No hay combos activos configurados.' });
+    return;
+  }
+
+  const body = document.createElement('div');
+  body.innerHTML = combos
+    .map(
+      (c) => `
+    <button type="button" class="vp-result" data-combo="${c.id}" style="display:block; width:100%; text-align:left; padding:var(--space-3); border-bottom:1px solid var(--color-border);">
+      <div style="display:flex; justify-content:space-between; font-weight:600;">
+        <span>${c.name}</span><span class="mono">${formatCurrency(c.price)}</span>
+      </div>
+      <div style="font-size:var(--font-size-xs); color:var(--color-text-muted);">
+        ${c.items.map(comboItemTexto).join(' + ')}
+      </div>
+    </button>
+  `
+    )
+    .join('');
+
+  const modal = openModal({ title: 'Elegir combo', body, maxWidth: '440px' });
+  modal.body.querySelectorAll('[data-combo]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const combo = combos.find((c) => String(c.id) === btn.dataset.combo);
+      closeModal();
+      abrirFormularioComboItems(combo);
+    });
+  });
+}
+
+function comboItemTexto(it) {
+  return it.selectorType === 'CATEGORY'
+    ? `${it.quantity} × cualquier producto de ${it.categoryName}${it.brandName ? ` (marca ${it.brandName})` : ''}`
+    : `${it.quantity} × ${it.productName}`;
+}
+
+function abrirFormularioComboItems(combo) {
+  // Un picker por unidad — incluso una línea de "4 polos" puede terminar
+  // siendo 4 variantes distintas (tallas/colores), no una sola repetida.
+  const slots = combo.items.flatMap((it) => Array.from({ length: it.quantity }, () => it));
+  const pickers = slots.map(() => createVariantPicker({ placeholder: 'Buscar variante…' }));
+
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <div class="alert alert-danger" id="combo-form-error" role="alert" hidden>
+      <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="8"/><path d="M10 6v5M10 14h.01" stroke-linecap="round"/></svg>
+      <span class="alert-message"></span>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:var(--space-4);">
+      ${slots
+        .map(
+          (it, index) => `
+        <div>
+          <label class="field-label">${it.selectorType === 'CATEGORY' ? `Cualquier producto de ${it.categoryName}${it.brandName ? ` (marca ${it.brandName})` : ''}` : it.productName}</label>
+          <div id="combo-item-picker-${index}"></div>
+        </div>
+      `
+        )
+        .join('')}
+    </div>
+  `;
+  slots.forEach((it, index) => {
+    body.querySelector(`#combo-item-picker-${index}`).appendChild(pickers[index].root);
+  });
+
+  const modal = openModal({
+    title: combo.name,
+    subtitle: `Precio del combo: ${formatCurrency(combo.price)}`,
+    body,
+    maxWidth: '480px',
+    footer: `
+      <button class="btn btn-secondary" type="button" data-cancel>Cancelar</button>
+      <button class="btn btn-primary" type="button" data-confirmar>Agregar al carrito</button>
+    `,
+  });
+
+  modal.footer.querySelector('[data-cancel]').addEventListener('click', closeModal);
+  modal.footer.querySelector('[data-confirmar]').addEventListener('click', () => {
+    const errorAlert = modal.body.querySelector('#combo-form-error');
+    errorAlert.hidden = true;
+
+    const seleccionadas = pickers.map((p) => p.getSelected());
+    if (seleccionadas.some((v) => !v)) {
+      errorAlert.querySelector('.alert-message').textContent = 'Elige una variante para cada línea del combo.';
+      errorAlert.hidden = false;
+      return;
+    }
+    const sinStock = seleccionadas.find((v) => v.stock < 1);
+    if (sinStock) {
+      errorAlert.querySelector('.alert-message').textContent = `Stock insuficiente de ${sinStock.productName}.`;
+      errorAlert.hidden = false;
+      return;
+    }
+
+    seleccionadas.forEach((variante) => {
+      cart.push({
+        variantId: variante.variantId,
+        productName: variante.productName,
+        colorName: variante.colorName,
+        sizeName: variante.sizeName,
+        sku: variante.sku,
+        unitPrice: variante.effectivePrice,
+        stock: variante.stock,
+        quantity: 1,
+        comboId: combo.id,
+        comboName: combo.name,
+        comboPrice: combo.price,
+        promotionId: null,
+        promotionName: null,
+        promotionDiscount: 0,
+      });
+    });
+    closeModal();
+    renderCart();
+  });
+}
+
+async function abrirSelectorPromocion(item) {
+  let promociones;
+  try {
+    promociones = await api.get('/promotions/applicable', { query: { variantId: item.variantId } });
+  } catch (error) {
+    showToast({ type: 'danger', title: 'Error', message: error instanceof ApiError ? error.message : 'No se pudieron cargar las promociones' });
+    return;
+  }
+  if (promociones.length === 0) {
+    showToast({ type: 'warning', title: 'Sin promociones', message: 'No hay promociones vigentes para este producto.' });
+    return;
+  }
+
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <div style="display:flex; flex-direction:column;">
+      ${
+        item.promotionId
+          ? `<button type="button" class="vp-result" data-quitar style="display:block; width:100%; text-align:left; padding:var(--space-3); border-bottom:1px solid var(--color-border); color:var(--color-danger-text);">Quitar promoción aplicada</button>`
+          : ''
+      }
+      ${promociones
+        .map(
+          (p) => `
+        <button type="button" class="vp-result" data-promo="${p.id}" style="display:block; width:100%; text-align:left; padding:var(--space-3); border-bottom:1px solid var(--color-border);">
+          <div style="font-weight:600;">${p.name}</div>
+          <div style="font-size:var(--font-size-xs); color:var(--color-text-muted);">${p.discountType === 'PERCENTAGE' ? `${p.discountValue}% de descuento` : `${formatCurrency(p.discountValue)} de descuento`}</div>
+        </button>
+      `
+        )
+        .join('')}
+    </div>
+  `;
+
+  const modal = openModal({ title: 'Aplicar promoción', subtitle: item.productName, body, maxWidth: '400px' });
+  modal.body.querySelector('[data-quitar]')?.addEventListener('click', () => {
+    item.promotionId = null;
+    item.promotionName = null;
+    item.promotionDiscount = 0;
+    closeModal();
+    renderCart();
+  });
+  modal.body.querySelectorAll('[data-promo]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const promo = promociones.find((p) => String(p.id) === btn.dataset.promo);
+      const bruto = item.unitPrice * item.quantity;
+      const descuento = promo.discountType === 'PERCENTAGE' ? bruto * (promo.discountValue / 100) : Math.min(promo.discountValue, bruto);
+      item.promotionId = promo.id;
+      item.promotionName = promo.name;
+      item.promotionDiscount = Math.round(descuento * 100) / 100;
+      closeModal();
+      renderCart();
+    });
+  });
+}
+
+function calcularTotales() {
+  const subtotal = cart.reduce((acc, item) => acc + item.unitPrice * item.quantity, 0);
+  const combosVistos = new Set(cart.filter((i) => i.comboId).map((i) => i.comboId));
+  let descuento = 0;
+  combosVistos.forEach((comboId) => {
+    const itemsCombo = cart.filter((i) => i.comboId === comboId);
+    const normal = itemsCombo.reduce((acc, i) => acc + i.unitPrice * i.quantity, 0);
+    descuento += normal - itemsCombo[0].comboPrice;
+  });
+  descuento += cart.filter((i) => !i.comboId).reduce((acc, i) => acc + i.promotionDiscount, 0);
+  return { subtotal, descuento, total: subtotal - descuento };
+}
+
+function itemIndividualHtml(item) {
+  return `
+    <div style="display:flex; gap:var(--space-3); padding:var(--space-3) 0; border-bottom:1px solid var(--color-border);">
+      <div style="flex:1; min-width:0;">
+        <div style="font-weight:600; font-size:var(--font-size-sm);">${item.productName}</div>
+        <div class="table-cell-muted mono">${item.colorName} / ${item.sizeName}</div>
+        <div style="display:flex; align-items:center; gap:var(--space-2); margin-top:var(--space-2);">
+          <button class="btn btn-ghost btn-sm" type="button" data-qty-down="${item.variantId}" style="width:28px; padding:0;">−</button>
+          <span class="mono" style="min-width:24px; text-align:center;">${item.quantity}</span>
+          <button class="btn btn-ghost btn-sm" type="button" data-qty-up="${item.variantId}" style="width:28px; padding:0;">+</button>
+        </div>
+        ${
+          permissions.has('PROMOCIONES_APLICAR')
+            ? item.promotionId
+              ? `<div style="margin-top:var(--space-2); font-size:var(--font-size-xs);"><span class="badge badge-success" data-promo-badge="${item.variantId}" style="cursor:pointer;">${item.promotionName} −${formatCurrency(item.promotionDiscount)}</span></div>`
+              : `<button type="button" class="btn btn-ghost btn-sm" data-promo-badge="${item.variantId}" style="margin-top:var(--space-2); padding:0; font-size:var(--font-size-xs);">+ Promoción</button>`
+            : ''
+        }
+      </div>
+      <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; justify-content:space-between;">
+        <button class="btn btn-ghost btn-sm" type="button" data-remove="${item.variantId}" aria-label="Quitar">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg>
+        </button>
+        <span class="mono" style="font-weight:600;">${formatCurrency(item.unitPrice * item.quantity - item.promotionDiscount)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function comboGroupHtml(comboId, items) {
+  const normal = items.reduce((acc, i) => acc + i.unitPrice * i.quantity, 0);
+  return `
+    <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-sunken); margin: var(--space-2) 0; padding: var(--space-3);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-2);">
+        <span class="badge badge-info">Combo · ${items[0].comboName}</span>
+        <button class="btn btn-ghost btn-sm" type="button" data-remove-combo="${comboId}" aria-label="Quitar combo">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      ${items
+        .map(
+          (item) => `
+        <div style="display:flex; justify-content:space-between; font-size:var(--font-size-sm); padding: 2px 0;">
+          <span>${item.quantity} × ${item.productName} <span class="table-cell-muted mono">${item.colorName}/${item.sizeName}</span></span>
+        </div>
+      `
+        )
+        .join('')}
+      <div style="display:flex; justify-content:space-between; margin-top:var(--space-2); padding-top:var(--space-2); border-top:1px dashed var(--color-border); font-weight:600;">
+        <span class="table-cell-muted" style="font-weight:400; text-decoration:line-through;">${formatCurrency(normal)}</span>
+        <span class="mono">${formatCurrency(items[0].comboPrice)}</span>
+      </div>
+    </div>
+  `;
 }
 
 function renderCart() {
   const container = document.querySelector('#cart-items');
+  const combosVistos = [];
+  const bloques = [];
+  for (const item of cart) {
+    if (item.comboId) {
+      if (!combosVistos.includes(item.comboId)) {
+        combosVistos.push(item.comboId);
+        bloques.push(comboGroupHtml(item.comboId, cart.filter((i) => i.comboId === item.comboId)));
+      }
+    } else {
+      bloques.push(itemIndividualHtml(item));
+    }
+  }
+
   container.innerHTML = cart.length
-    ? cart
-        .map(
-          (item) => `
-      <div style="display:flex; gap:var(--space-3); padding:var(--space-3) 0; border-bottom:1px solid var(--color-border);">
-        <div style="flex:1; min-width:0;">
-          <div style="font-weight:600; font-size:var(--font-size-sm);">${item.productName}</div>
-          <div class="table-cell-muted mono">${item.colorName} / ${item.sizeName}</div>
-          <div style="display:flex; align-items:center; gap:var(--space-2); margin-top:var(--space-2);">
-            <button class="btn btn-ghost btn-sm" type="button" data-qty-down="${item.variantId}" style="width:28px; padding:0;">−</button>
-            <span class="mono" style="min-width:24px; text-align:center;">${item.quantity}</span>
-            <button class="btn btn-ghost btn-sm" type="button" data-qty-up="${item.variantId}" style="width:28px; padding:0;">+</button>
-          </div>
-        </div>
-        <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; justify-content:space-between;">
-          <button class="btn btn-ghost btn-sm" type="button" data-remove="${item.variantId}" aria-label="Quitar">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg>
-          </button>
-          <span class="mono" style="font-weight:600;">${formatCurrency(item.unitPrice * item.quantity)}</span>
-        </div>
-      </div>
-    `
-        )
-        .join('')
+    ? bloques.join('')
     : `<div class="empty-state" style="padding: var(--space-8) 0;"><span>El carrito está vacío</span></div>`;
 
   container.querySelectorAll('[data-qty-up]').forEach((btn) => btn.addEventListener('click', () => cambiarCantidad(Number(btn.dataset.qtyUp), 1)));
   container.querySelectorAll('[data-qty-down]').forEach((btn) => btn.addEventListener('click', () => cambiarCantidad(Number(btn.dataset.qtyDown), -1)));
   container.querySelectorAll('[data-remove]').forEach((btn) => btn.addEventListener('click', () => quitarDelCarrito(Number(btn.dataset.remove))));
+  container.querySelectorAll('[data-remove-combo]').forEach((btn) => btn.addEventListener('click', () => quitarCombo(Number(btn.dataset.removeCombo))));
+  container.querySelectorAll('[data-promo-badge]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const item = cart.find((i) => i.variantId === Number(btn.dataset.promoBadge) && !i.comboId);
+      if (item) abrirSelectorPromocion(item);
+    });
+  });
 
-  const subtotal = cart.reduce((acc, item) => acc + item.unitPrice * item.quantity, 0);
+  const { subtotal, descuento, total } = calcularTotales();
   document.querySelector('#cart-subtotal').textContent = formatCurrency(subtotal);
-  document.querySelector('#cart-discount').textContent = formatCurrency(0);
-  document.querySelector('#cart-total').textContent = formatCurrency(subtotal);
+  document.querySelector('#cart-discount').textContent = formatCurrency(descuento);
+  document.querySelector('#cart-total').textContent = formatCurrency(total);
   document.querySelector('#btn-cobrar').disabled = cart.length === 0;
 }
 
 async function cobrar() {
-  const subtotal = cart.reduce((acc, item) => acc + item.unitPrice * item.quantity, 0);
+  const { total } = calcularTotales();
   const cliente = customerPicker.getSelected();
 
   await openPagoModal({
-    total: subtotal,
+    total,
     onConfirm: async ({ payments, promoterId }) => {
       const request = {
         customerId: cliente?.id ?? null,
@@ -261,7 +528,13 @@ async function cobrar() {
         cashSessionId: cashSession.id,
         discountAmount: 0,
         notes: null,
-        items: cart.map((item) => ({ variantId: item.variantId, quantity: item.quantity, discountAmount: 0 })),
+        items: cart.map((item) => ({
+          variantId: item.variantId,
+          quantity: item.quantity,
+          discountAmount: 0,
+          comboId: item.comboId,
+          promotionId: item.promotionId,
+        })),
         payments,
       };
       const venta = await api.post('/sales', request);

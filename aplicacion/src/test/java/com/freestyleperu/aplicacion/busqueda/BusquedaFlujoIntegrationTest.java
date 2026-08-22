@@ -87,7 +87,7 @@ class BusquedaFlujoIntegrationTest {
 
         CrearVentaRequest ventaRequest = new CrearVentaRequest(
                 cliente.getId(), null, sesion.id(), null, null,
-                List.of(new ItemVentaRequest(variante.id(), 1, null)),
+                List.of(new ItemVentaRequest(variante.id(), 1, null, null, null)),
                 List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("100.00"), null)));
         VentaResponse venta = ventaService.registrarVenta(ventaRequest, staffId, Set.of());
 
