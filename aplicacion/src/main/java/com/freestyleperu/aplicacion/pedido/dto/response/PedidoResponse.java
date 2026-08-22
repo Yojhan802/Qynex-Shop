@@ -33,5 +33,6 @@ public record PedidoResponse(
         String confirmedByUsername,
         LocalDateTime cancelledAt,
         String cancellationReason,
+        Long saleId,
         List<PedidoItemResponse> items) {
 }

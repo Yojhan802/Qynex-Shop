@@ -39,12 +39,21 @@ import com.freestyleperu.aplicacion.usuario.domain.Usuario;
 import com.freestyleperu.aplicacion.usuario.domain.UsuarioEstado;
 import com.freestyleperu.aplicacion.usuario.repository.RolRepository;
 import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
+import com.freestyleperu.aplicacion.venta.domain.Payment;
+import com.freestyleperu.aplicacion.venta.domain.PaymentStatus;
+import com.freestyleperu.aplicacion.venta.domain.Sale;
+import com.freestyleperu.aplicacion.venta.domain.SaleDetail;
+import com.freestyleperu.aplicacion.venta.domain.SaleStatus;
 import com.freestyleperu.aplicacion.venta.dto.request.CrearVentaRequest;
 import com.freestyleperu.aplicacion.venta.dto.request.ItemVentaRequest;
 import com.freestyleperu.aplicacion.venta.dto.request.PagoVentaRequest;
 import com.freestyleperu.aplicacion.venta.dto.response.VentaResponse;
+import com.freestyleperu.aplicacion.venta.repository.PaymentRepository;
+import com.freestyleperu.aplicacion.venta.repository.SaleDetailRepository;
+import com.freestyleperu.aplicacion.venta.repository.SaleRepository;
 import com.freestyleperu.aplicacion.venta.service.VentaService;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -75,6 +84,90 @@ class DevolucionFlujoIntegrationTest {
     @Autowired private VentaService ventaService;
     @Autowired private DevolucionService devolucionService;
     @Autowired private ProductVariantRepository variantRepository;
+    @Autowired private SaleRepository saleRepository;
+    @Autowired private SaleDetailRepository saleDetailRepository;
+    @Autowired private PaymentRepository paymentRepository;
+
+    @Test
+    void devolverUnaVentaSinCajaConReembolsoQueAfectaCajaRechazaConErrorClaroNoNPE() {
+        Rol rol = new Rol();
+        rol.setCode("TEST_ROL_DEVOLUCION_SINCAJA");
+        rol.setName("Rol de prueba devolución sin caja");
+        rol.setSystem(false);
+        rolRepository.save(rol);
+
+        Usuario usuario = new Usuario();
+        usuario.setUsername("staff.devolucionsincaja");
+        usuario.setPasswordHash("hash");
+        usuario.setFullName("Staff Sin Caja");
+        usuario.setStatus(UsuarioEstado.ACTIVE);
+        usuario.setRoles(new HashSet<>(List.of(rol)));
+        usuarioRepository.save(usuario);
+
+        Category categoria = new Category();
+        categoria.setName("Polos-devolucion-sincaja");
+        categoria.setSlug("polos-devolucion-sincaja");
+        categoryRepository.save(categoria);
+        Color color = new Color();
+        color.setName("Negro-devolucion-sincaja");
+        color.setHexCode("#000000");
+        colorRepository.save(color);
+        Size talla = new Size();
+        talla.setName("M-devolucion-sincaja");
+        talla.setSortOrder((short) 1);
+        sizeRepository.save(talla);
+        ProductoDetalleResponse producto = productoService.crear(new CrearProductoRequest(
+                null, null, "Polo Devolución Sin Caja", categoria.getId(), null, null, null, null, null,
+                new BigDecimal("40.00"), null));
+        VarianteResponse variante = varianteService.crear(producto.id(),
+                new CrearVarianteRequest(color.getId(), talla.getId(), null, null, 10, 1, false));
+
+        PaymentMethod efectivo = new PaymentMethod();
+        efectivo.setCode("EFECTIVO-DEV-SINCAJA");
+        efectivo.setName("Efectivo");
+        efectivo.setType(PaymentMethodType.CASH);
+        efectivo.setAffectsCash(true);
+        efectivo.setRequiresReference(false);
+        efectivo.setSortOrder((short) 1);
+        paymentMethodRepository.save(efectivo);
+
+        // Simula una venta generada por un pedido online confirmado (sin sesión de caja).
+        Sale venta = new Sale();
+        venta.setSaleNumber("V001-TESTDEVSINCAJA");
+        venta.setUser(usuario);
+        venta.setSubtotal(new BigDecimal("40.00"));
+        venta.setDiscountAmount(BigDecimal.ZERO);
+        venta.setTotal(new BigDecimal("40.00"));
+        venta.setStatus(SaleStatus.COMPLETED);
+        venta.setCreatedAt(LocalDateTime.now());
+        Sale ventaGuardada = saleRepository.save(venta);
+
+        SaleDetail detalle = new SaleDetail();
+        detalle.setSale(ventaGuardada);
+        detalle.setVariant(variantRepository.findById(variante.id()).orElseThrow());
+        detalle.setQuantity(1);
+        detalle.setUnitPrice(new BigDecimal("40.00"));
+        detalle.setDiscountAmount(BigDecimal.ZERO);
+        detalle.setSubtotal(new BigDecimal("40.00"));
+        detalle.setProductName("Polo Devolución Sin Caja");
+        detalle.setVariantSku(variante.sku());
+        detalle.setColorName("Negro-devolucion-sincaja");
+        detalle.setSizeName("M-devolucion-sincaja");
+        SaleDetail detalleGuardado = saleDetailRepository.save(detalle);
+
+        Payment pago = new Payment();
+        pago.setSale(ventaGuardada);
+        pago.setPaymentMethod(efectivo);
+        pago.setAmount(new BigDecimal("40.00"));
+        pago.setStatus(PaymentStatus.COMPLETED);
+        pago.setCreatedAt(LocalDateTime.now());
+        paymentRepository.save(pago);
+
+        assertThatThrownBy(() -> devolucionService.registrar(new CrearDevolucionRequest(
+                ventaGuardada.getId(), "Prueba sin caja", efectivo.getId(),
+                List.of(new ItemDevolucionRequest(detalleGuardado.getId(), 1, true))), usuario.getId()))
+                .isInstanceOf(ReglaDeNegocioException.class);
+    }
 
     @Test
     void registraDevolucionParcialConReingresoAStockYReembolsoEnEfectivo() {
@@ -143,7 +236,7 @@ class DevolucionFlujoIntegrationTest {
 
         VentaResponse venta = ventaService.registrarVenta(new CrearVentaRequest(
                         null, null, sesion.id(), null, null,
-                        List.of(new ItemVentaRequest(variante.id(), 5, null)),
+                        List.of(new ItemVentaRequest(variante.id(), 5, null, null, null)),
                         List.of(new PagoVentaRequest(efectivo.getId(), new BigDecimal("200.00"), null))),
                 userId, Set.of());
 

@@ -28,6 +28,7 @@ import com.freestyleperu.aplicacion.venta.repository.SaleRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -133,10 +134,6 @@ public class DevolucionService {
             detail.setSubtotal(subtotal);
             detail.setRestock(item.restock());
             detallesCalculados.add(detail);
-
-            if (item.restock()) {
-                inventarioService.registrarPorDevolucion(saleDetail.getVariant().getId(), item.quantity(), sale.getId(), userId);
-            }
         }
 
         devolucion.setTotalAmount(total);
@@ -148,7 +145,21 @@ public class DevolucionService {
             detallesGuardados.add(returnDetailRepository.save(detail));
         }
 
+        // Orden global por variant_id — mismo criterio de concurrencia que VentaService,
+        // para que devoluciones/ventas concurrentes con las mismas variantes no hagan deadlock.
+        for (ReturnDetail detail : detallesCalculados.stream()
+                .filter(ReturnDetail::isRestock)
+                .sorted(Comparator.comparing(d -> d.getVariant().getId()))
+                .toList()) {
+            inventarioService.registrarPorDevolucion(detail.getVariant().getId(), detail.getQuantity(), sale.getId(), userId);
+        }
+
         if (refundMethod.isAffectsCash()) {
+            if (sale.getCashSession() == null) {
+                throw new ReglaDeNegocioException(
+                        "Esta venta no pasó por caja (proviene de un pedido online) — elige un método de "
+                                + "reembolso que no afecte caja");
+            }
             cajaService.registrarReversion(sale.getCashSession().getId(), total, sale.getId(), userId);
         }
 

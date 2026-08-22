@@ -4,6 +4,7 @@ import com.freestyleperu.aplicacion.cliente.domain.Customer;
 import com.freestyleperu.aplicacion.cliente.repository.CustomerRepository;
 import com.freestyleperu.aplicacion.configuracion.service.ConfiguracionService;
 import com.freestyleperu.aplicacion.inventario.service.InventarioService;
+import com.freestyleperu.aplicacion.notificacion.service.NotificacionService;
 import com.freestyleperu.aplicacion.pago.domain.PaymentMethod;
 import com.freestyleperu.aplicacion.pago.service.PagoService;
 import com.freestyleperu.aplicacion.pedido.domain.Pedido;
@@ -18,6 +19,7 @@ import com.freestyleperu.aplicacion.pedido.dto.response.PedidoResumenResponse;
 import com.freestyleperu.aplicacion.pedido.repository.PedidoDetailRepository;
 import com.freestyleperu.aplicacion.pedido.repository.PedidoRepository;
 import com.freestyleperu.aplicacion.producto.domain.ProductVariant;
+import com.freestyleperu.aplicacion.promocion.service.PromocionService;
 import com.freestyleperu.aplicacion.producto.repository.ProductVariantRepository;
 import com.freestyleperu.aplicacion.shared.audit.AuditResult;
 import com.freestyleperu.aplicacion.shared.audit.AuditService;
@@ -27,7 +29,16 @@ import com.freestyleperu.aplicacion.shared.exception.ReglaDeNegocioException;
 import com.freestyleperu.aplicacion.shared.exception.StockInsuficienteException;
 import com.freestyleperu.aplicacion.shared.util.ImageUploadService;
 import com.freestyleperu.aplicacion.shared.util.SequenceService;
+import com.freestyleperu.aplicacion.usuario.domain.Usuario;
 import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
+import com.freestyleperu.aplicacion.venta.domain.Payment;
+import com.freestyleperu.aplicacion.venta.domain.PaymentStatus;
+import com.freestyleperu.aplicacion.venta.domain.Sale;
+import com.freestyleperu.aplicacion.venta.domain.SaleDetail;
+import com.freestyleperu.aplicacion.venta.domain.SaleStatus;
+import com.freestyleperu.aplicacion.venta.repository.PaymentRepository;
+import com.freestyleperu.aplicacion.venta.repository.SaleDetailRepository;
+import com.freestyleperu.aplicacion.venta.repository.SaleRepository;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -44,7 +55,10 @@ import org.springframework.web.multipart.MultipartFile;
  * Pedidos de la tienda online. El stock no se toca al crear el pedido, solo
  * se valida como referencia — recién se descuenta cuando el staff confirma
  * el pago (ver docs/03-modelo-datos.md, Fase 2): el pago es manual, así que
- * "pedido creado" todavía no significa "pago recibido".
+ * "pedido creado" todavía no significa "pago recibido". Al confirmar, además
+ * de descontar stock, se genera una {@link Sale} real (sin sesión de caja)
+ * para que el pedido entre en el mismo historial/reportes de Ventas y pueda
+ * imprimirse el mismo ticket que usa el POS.
  */
 @Service
 @Transactional(readOnly = true)
@@ -58,9 +72,14 @@ public class PedidoService {
     private final InventarioService inventarioService;
     private final PagoService pagoService;
     private final ConfiguracionService configuracionService;
+    private final PromocionService promocionService;
     private final SequenceService sequenceService;
     private final AuditService auditService;
     private final ImageUploadService imageUploadService;
+    private final SaleRepository saleRepository;
+    private final SaleDetailRepository saleDetailRepository;
+    private final PaymentRepository paymentRepository;
+    private final NotificacionService notificacionService;
 
     private static final String DISTRITO_CONTRAENTREGA = "Huacho";
     private static final String CODIGO_CONTRAENTREGA = "CONTRAENTREGA";
@@ -68,8 +87,10 @@ public class PedidoService {
     public PedidoService(PedidoRepository pedidoRepository, PedidoDetailRepository pedidoDetailRepository,
             ProductVariantRepository variantRepository, CustomerRepository customerRepository,
             UsuarioRepository usuarioRepository, InventarioService inventarioService, PagoService pagoService,
-            ConfiguracionService configuracionService, SequenceService sequenceService, AuditService auditService,
-            ImageUploadService imageUploadService) {
+            ConfiguracionService configuracionService, PromocionService promocionService, SequenceService sequenceService,
+            AuditService auditService, ImageUploadService imageUploadService, SaleRepository saleRepository,
+            SaleDetailRepository saleDetailRepository, PaymentRepository paymentRepository,
+            NotificacionService notificacionService) {
         this.pedidoRepository = pedidoRepository;
         this.pedidoDetailRepository = pedidoDetailRepository;
         this.variantRepository = variantRepository;
@@ -77,10 +98,15 @@ public class PedidoService {
         this.usuarioRepository = usuarioRepository;
         this.inventarioService = inventarioService;
         this.pagoService = pagoService;
+        this.promocionService = promocionService;
         this.configuracionService = configuracionService;
         this.sequenceService = sequenceService;
         this.auditService = auditService;
         this.imageUploadService = imageUploadService;
+        this.saleRepository = saleRepository;
+        this.saleDetailRepository = saleDetailRepository;
+        this.paymentRepository = paymentRepository;
+        this.notificacionService = notificacionService;
     }
 
     public PageResponse<PedidoResumenResponse> listar(PedidoStatus status, LocalDateTime from, LocalDateTime to, Pageable pageable) {
@@ -109,6 +135,10 @@ public class PedidoService {
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Cliente", customerId));
         PaymentMethod paymentMethod = pagoService.obtenerActivoOFallar(request.paymentMethodId());
+        if (paymentMethod.isAffectsCash()) {
+            throw new ReglaDeNegocioException(
+                    "No se puede pagar un pedido online con un método que afecta caja — no hay cajero presente");
+        }
 
         List<ItemPedidoRequest> itemsOrdenados = request.items().stream()
                 .sorted(Comparator.comparing(ItemPedidoRequest::variantId))
@@ -123,9 +153,7 @@ public class PedidoService {
                         "Solo quedan " + variant.getStock() + " unidades de " + variant.getProduct().getName()
                                 + " (" + variant.getColor().getName() + " / " + variant.getSize().getName() + ")");
             }
-            BigDecimal unitPrice = variant.getProduct().getPromoPrice() != null
-                    ? variant.getProduct().getPromoPrice()
-                    : variant.getProduct().getPrice();
+            BigDecimal unitPrice = promocionService.precioEfectivoOnline(variant.getProduct());
             BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(item.quantity()));
             detalles.add(new DetalleCalculado(variant, item.quantity(), unitPrice, subtotal));
         }
@@ -173,7 +201,9 @@ public class PedidoService {
         auditService.log("PEDIDO_CREADO", "PEDIDO", guardado.getId(), null,
                 new Object[] { guardado.getOrderNumber(), guardado.getTotal() }, AuditResult.SUCCESS);
 
-        return toResponse(guardado, detallesGuardados);
+        PedidoResponse response = toResponse(guardado, detallesGuardados);
+        notificacionService.notificarPedidoNuevo(response);
+        return response;
     }
 
     @Transactional
@@ -190,16 +220,64 @@ public class PedidoService {
                         "Ya no hay stock suficiente de " + detail.getProductName() + " para confirmar este pedido");
             }
         }
-        for (PedidoDetail detail : detalles) {
+        // Orden global por variant_id — evita deadlocks entre confirmaciones/ventas
+        // concurrentes que comparten variantes (ver docs/04-reglas-negocio.md, concurrencia).
+        for (PedidoDetail detail : detalles.stream().sorted(Comparator.comparing(d -> d.getVariant().getId())).toList()) {
             inventarioService.registrarPorPedido(detail.getVariant().getId(), detail.getQuantity(), pedido.getId(), staffUserId);
         }
 
+        Usuario staff = usuarioRepository.findById(staffUserId)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Usuario", staffUserId));
+
+        Sale sale = new Sale();
+        sale.setSaleNumber(sequenceService.next("VENTA", "V001", 8));
+        sale.setCustomer(pedido.getCustomer());
+        sale.setUser(staff);
+        sale.setSubtotal(pedido.getSubtotal());
+        sale.setDiscountAmount(BigDecimal.ZERO);
+        sale.setShippingAmount(pedido.getShippingCost());
+        sale.setTotal(pedido.getTotal());
+        sale.setStatus(SaleStatus.COMPLETED);
+        sale.setNotes("Pedido online " + pedido.getOrderNumber()
+                + (pedido.getPaymentReference() != null ? " — ref: " + pedido.getPaymentReference() : ""));
+        sale.setCreatedAt(LocalDateTime.now());
+        Sale ventaGuardada = saleRepository.save(sale);
+
+        for (PedidoDetail detail : detalles) {
+            SaleDetail saleDetail = new SaleDetail();
+            saleDetail.setSale(ventaGuardada);
+            saleDetail.setVariant(detail.getVariant());
+            saleDetail.setQuantity(detail.getQuantity());
+            saleDetail.setUnitPrice(detail.getUnitPrice());
+            saleDetail.setDiscountAmount(BigDecimal.ZERO);
+            saleDetail.setSubtotal(detail.getSubtotal());
+            saleDetail.setProductName(detail.getProductName());
+            saleDetail.setVariantSku(detail.getVariantSku());
+            saleDetail.setColorName(detail.getColorName());
+            saleDetail.setSizeName(detail.getSizeName());
+            saleDetailRepository.save(saleDetail);
+        }
+
+        // El pago de un pedido online nunca pasa por caja (no hay sesión física detrás) — solo se registra el Payment.
+        Payment payment = new Payment();
+        payment.setSale(ventaGuardada);
+        payment.setPaymentMethod(pedido.getPaymentMethod());
+        payment.setAmount(pedido.getTotal());
+        payment.setReference(pedido.getPaymentReference());
+        payment.setStatus(PaymentStatus.COMPLETED);
+        payment.setCreatedAt(pedido.getCreatedAt());
+        paymentRepository.save(payment);
+
         pedido.setStatus(PedidoStatus.CONFIRMED);
         pedido.setConfirmedAt(LocalDateTime.now());
-        pedido.setConfirmedBy(usuarioRepository.getReferenceById(staffUserId));
+        pedido.setConfirmedBy(staff);
+        pedido.setSale(ventaGuardada);
 
-        auditService.log("PEDIDO_CONFIRMADO", "PEDIDO", pedido.getId(), null, pedido.getOrderNumber(), AuditResult.SUCCESS);
-        return toResponse(pedido, detalles);
+        auditService.log("PEDIDO_CONFIRMADO", "PEDIDO", pedido.getId(), null,
+                new Object[] { pedido.getOrderNumber(), ventaGuardada.getSaleNumber() }, AuditResult.SUCCESS);
+        PedidoResponse response = toResponse(pedido, detalles);
+        notificacionService.notificarPedidoActualizado(pedido.getCustomer().getId(), response);
+        return response;
     }
 
     @Transactional
@@ -211,8 +289,19 @@ public class PedidoService {
 
         List<PedidoDetail> detalles = pedidoDetailRepository.findAllByPedidoId(id);
         if (pedido.getStatus() == PedidoStatus.CONFIRMED) {
-            for (PedidoDetail detail : detalles) {
+            // Orden global por variant_id — mismo criterio de concurrencia que confirmarPago().
+            for (PedidoDetail detail : detalles.stream().sorted(Comparator.comparing(d -> d.getVariant().getId())).toList()) {
                 inventarioService.registrarPorCancelacionPedido(detail.getVariant().getId(), detail.getQuantity(), pedido.getId(), staffUserId);
+            }
+            // La venta generada al confirmar se marca cancelada tal cual, sin volver a tocar
+            // inventario/caja — el pedido ya hizo su propia reversión de stock arriba, y estos
+            // pedidos nunca afectan caja (ver confirmarPago), así que no hay nada más que revertir.
+            if (pedido.getSale() != null) {
+                Sale sale = pedido.getSale();
+                sale.setStatus(SaleStatus.CANCELLED);
+                sale.setCancelledAt(LocalDateTime.now());
+                sale.setCancelledBy(usuarioRepository.getReferenceById(staffUserId));
+                sale.setCancellationReason(request.reason());
             }
         }
 
@@ -221,7 +310,9 @@ public class PedidoService {
         pedido.setCancellationReason(request.reason());
 
         auditService.log("PEDIDO_CANCELADO", "PEDIDO", pedido.getId(), null, request.reason(), AuditResult.SUCCESS);
-        return toResponse(pedido, detalles);
+        PedidoResponse response = toResponse(pedido, detalles);
+        notificacionService.notificarPedidoActualizado(pedido.getCustomer().getId(), response);
+        return response;
     }
 
     @Transactional
@@ -313,6 +404,7 @@ public class PedidoService {
                 pedido.getConfirmedBy() != null ? pedido.getConfirmedBy().getUsername() : null,
                 pedido.getCancelledAt(),
                 pedido.getCancellationReason(),
+                pedido.getSale() != null ? pedido.getSale().getId() : null,
                 items);
     }
 

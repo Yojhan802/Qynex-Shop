@@ -1,0 +1,47 @@
+# Unidad systemd para el despliegue nativo (sin Docker) sobre un VPS chico
+# (pensado para OVZ VPS 2000: 2 vCPU / 2 GB RAM, compartido con MySQL y
+# nginx en la misma máquina — ver docs/08-despliegue.md, "Despliegue nativo").
+#
+# Instalación:
+#   sudo cp deploy/freestyleperu-backend.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now freestyleperu-backend
+#
+# Ajustar WorkingDirectory/ExecStart si el .jar vive en otra ruta, y
+# EnvironmentFile con la ubicación real del .env (mismas variables que
+# aplicacion/.env.example).
+
+[Unit]
+Description=Freestyle Perú - Backend (Spring Boot)
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=freestyle
+WorkingDirectory=/opt/freestyleperu
+EnvironmentFile=/opt/freestyleperu/.env
+# -Xmx768m dimensionado para un VPS de 2 GB total, dejando margen para MySQL +
+# nginx + el sistema operativo (ver docs/08-despliegue.md). -XX:+ExitOnOutOfMemoryError
+# hace que un OOM del JVM termine el proceso limpio en vez de quedar colgado
+# sirviendo a medias — systemd lo reinicia solo gracias a Restart=on-failure.
+ExecStart=/usr/bin/java \
+  -Xms384m -Xmx768m \
+  -XX:+UseG1GC \
+  -XX:MaxMetaspaceSize=128m \
+  -XX:+ExitOnOutOfMemoryError \
+  -jar /opt/freestyleperu/app.jar
+
+Restart=on-failure
+RestartSec=5
+# Evita que un reinicio en bucle (ej. config rota) consuma el VPS: máximo 5
+# reinicios en 60s, después systemd deja la unidad en "failed" para revisión manual.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+# Endurecimiento básico del proceso — no puede escribir fuera de lo que necesita.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/freestyleperu/uploads
+
+[Install]
+WantedBy=multi-user.target

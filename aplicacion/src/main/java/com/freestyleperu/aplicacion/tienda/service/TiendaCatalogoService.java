@@ -8,6 +8,7 @@ import com.freestyleperu.aplicacion.producto.domain.Product;
 import com.freestyleperu.aplicacion.producto.domain.ProductVariant;
 import com.freestyleperu.aplicacion.producto.repository.ProductRepository;
 import com.freestyleperu.aplicacion.producto.repository.ProductVariantRepository;
+import com.freestyleperu.aplicacion.promocion.service.PromocionService;
 import com.freestyleperu.aplicacion.shared.dto.PageResponse;
 import com.freestyleperu.aplicacion.shared.domain.EstadoGeneral;
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
@@ -19,14 +20,25 @@ import com.freestyleperu.aplicacion.tienda.dto.response.PublicProductoDetalleRes
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicProductoResumenResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicShippingInfoResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicVarianteResponse;
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Lectura pública del catálogo — nunca expone SKU/código interno/barcode/stock exacto (ver plan Fase 2). */
+/**
+ * Lectura pública del catálogo — nunca expone SKU/código interno/barcode/stock
+ * exacto (ver plan Fase 2). En un pico de tráfico (ej. Black Friday) esta es
+ * la ruta más pegada — se cachea unos segundos (`storeCatalog`,
+ * `spring.cache.caffeine.spec`) para no golpear la base de datos por cada
+ * visita. El checkout (`PedidoService.crear`) nunca lee de esta caché: valida
+ * stock siempre contra la base en el momento, así que un dato de "disponible"
+ * con unos segundos de retraso nunca permite vender de más, a lo sumo muestra
+ * "sin stock" un momento después de lo ideal.
+ */
 @Service
 @Transactional(readOnly = true)
 public class TiendaCatalogoService {
@@ -37,20 +49,24 @@ public class TiendaCatalogoService {
     private final BrandRepository brandRepository;
     private final PaymentMethodRepository paymentMethodRepository;
     private final ConfiguracionService configuracionService;
+    private final PromocionService promocionService;
 
     private static final String DISTRITO_ENVIO_GRATIS = "Huacho";
 
     public TiendaCatalogoService(ProductRepository productRepository, ProductVariantRepository variantRepository,
             CategoryRepository categoryRepository, BrandRepository brandRepository,
-            PaymentMethodRepository paymentMethodRepository, ConfiguracionService configuracionService) {
+            PaymentMethodRepository paymentMethodRepository, ConfiguracionService configuracionService,
+            PromocionService promocionService) {
         this.productRepository = productRepository;
         this.variantRepository = variantRepository;
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
         this.paymentMethodRepository = paymentMethodRepository;
         this.configuracionService = configuracionService;
+        this.promocionService = promocionService;
     }
 
+    @Cacheable("storeCatalogProducts")
     public PageResponse<PublicProductoResumenResponse> listarProductos(
             String search, Long categoryId, Long brandId, Pageable pageable) {
         return PageResponse.of(
@@ -58,6 +74,7 @@ public class TiendaCatalogoService {
                 this::toResumen);
     }
 
+    @Cacheable("storeCatalogProductDetail")
     public PublicProductoDetalleResponse obtenerProducto(Long id) {
         Product product = productRepository.findById(id)
                 .filter(p -> p.getStatus() == EstadoGeneral.ACTIVE)
@@ -70,10 +87,24 @@ public class TiendaCatalogoService {
 
         return new PublicProductoDetalleResponse(
                 product.getId(), product.getName(), product.getDescription(), product.getMaterial(), product.getFit(),
-                product.getPrice(), product.getPromoPrice(), product.getImageUrl(), product.getSizeGuideImageUrl(),
+                product.getPrice(), promoPriceParaMostrar(product), product.getImageUrl(), product.getSizeGuideImageUrl(),
                 product.getCategory().getName(), product.getBrand() != null ? product.getBrand().getName() : null, variantes);
     }
 
+    /**
+     * El {@code promoPrice} que se expone al público reutiliza el mismo campo
+     * de siempre: si una promoción marcada {@code visibleOnline} deja un
+     * precio menor al normal, se muestra esa — si no, el {@code promoPrice}
+     * estático del producto (o nulo si tampoco hay). El frontend de la
+     * tienda no necesita saber nada de promociones, solo sigue leyendo
+     * {@code promoPrice} como ya lo hacía.
+     */
+    private BigDecimal promoPriceParaMostrar(Product product) {
+        BigDecimal efectivo = promocionService.precioEfectivoOnline(product);
+        return efectivo.compareTo(product.getPrice()) < 0 ? efectivo : null;
+    }
+
+    @Cacheable("storeCatalogCategories")
     public List<PublicCategoriaResponse> listarCategorias() {
         return categoryRepository.findAllByOrderByNameAsc().stream()
                 .filter(c -> c.getStatus() == EstadoGeneral.ACTIVE)
@@ -81,6 +112,7 @@ public class TiendaCatalogoService {
                 .toList();
     }
 
+    @Cacheable("storeCatalogBrands")
     public List<PublicMarcaResponse> listarMarcas() {
         return brandRepository.findAllByOrderByNameAsc().stream()
                 .filter(b -> b.getStatus() == EstadoGeneral.ACTIVE)
@@ -88,13 +120,17 @@ public class TiendaCatalogoService {
                 .toList();
     }
 
+    @Cacheable("storeCatalogShipping")
     public PublicShippingInfoResponse obtenerInfoEnvio() {
         return new PublicShippingInfoResponse(configuracionService.obtenerTarifaEnvio(), DISTRITO_ENVIO_GRATIS);
     }
 
+    @Cacheable("storeCatalogPaymentMethods")
     public List<PublicMetodoPagoResponse> listarMetodosPago() {
+        // affectsCash = true (ej. EFECTIVO) no tiene sentido en un checkout online sin cajero
+        // presente — mismo criterio que ya usa la seña de separaciones (RN-27).
         return paymentMethodRepository.findAllByOrderBySortOrderAsc().stream()
-                .filter(m -> m.getStatus() == EstadoGeneral.ACTIVE)
+                .filter(m -> m.getStatus() == EstadoGeneral.ACTIVE && !m.isAffectsCash())
                 .map(m -> new PublicMetodoPagoResponse(
                         m.getId(), m.getCode(), m.getName(), m.getType(), m.isRequiresReference(),
                         m.getAccountHolder(), m.getAccountNumber(), m.getQrImageUrl()))
@@ -119,7 +155,7 @@ public class TiendaCatalogoService {
                 .toList();
 
         return new PublicProductoResumenResponse(
-                product.getId(), product.getName(), product.getPrice(), product.getPromoPrice(), product.getImageUrl(),
+                product.getId(), product.getName(), product.getPrice(), promoPriceParaMostrar(product), product.getImageUrl(),
                 product.getCategory().getName(), product.getBrand() != null ? product.getBrand().getName() : null,
                 colores, inStock);
     }

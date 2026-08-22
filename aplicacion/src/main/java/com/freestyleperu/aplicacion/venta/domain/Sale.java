@@ -48,8 +48,9 @@ public class Sale {
     @JoinColumn(name = "promoter_id")
     private Promoter promoter;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "cash_session_id", nullable = false)
+    /** Nulo cuando la venta viene de confirmar un pedido online — esos nunca pasan por una sesión de caja física. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cash_session_id")
     private CashSession cashSession;
 
     @Column(name = "subtotal", nullable = false, precision = 12, scale = 2)
@@ -57,6 +58,10 @@ public class Sale {
 
     @Column(name = "discount_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal discountAmount = BigDecimal.ZERO;
+
+    /** Costo de envío cuando la venta viene de un pedido online (0 para ventas de POS/separaciones). */
+    @Column(name = "shipping_amount", nullable = false, precision = 12, scale = 2)
+    private BigDecimal shippingAmount = BigDecimal.ZERO;
 
     @Column(name = "total", nullable = false, precision = 12, scale = 2)
     private BigDecimal total;

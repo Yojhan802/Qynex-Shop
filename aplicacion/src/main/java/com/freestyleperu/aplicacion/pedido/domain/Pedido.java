@@ -3,6 +3,7 @@ package com.freestyleperu.aplicacion.pedido.domain;
 import com.freestyleperu.aplicacion.cliente.domain.Customer;
 import com.freestyleperu.aplicacion.pago.domain.PaymentMethod;
 import com.freestyleperu.aplicacion.usuario.domain.Usuario;
+import com.freestyleperu.aplicacion.venta.domain.Sale;
 import jakarta.persistence.Column;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -21,9 +22,11 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Pedido de la tienda online. Deliberadamente NO es un {@code Sale}: una
- * venta exige cajero y caja abierta (ambos NOT NULL), que un pedido web no
- * tiene al crearse — ver plan de Fase 2 en docs/03-modelo-datos.md.
+ * Pedido de la tienda online. Al crearse todavía no es una venta (el pago es
+ * manual, así que "pedido creado" no significa "pago recibido"). Al
+ * confirmar el pago ({@code PedidoService.confirmarPago}) sí se genera una
+ * {@link Sale} real (sin sesión de caja, porque el pago online nunca pasa
+ * por caja física) — ver docs/03-modelo-datos.md.
  */
 @Getter
 @Setter
@@ -111,4 +114,9 @@ public class Pedido {
 
     @Column(name = "cancellation_reason", length = 255)
     private String cancellationReason;
+
+    /** No nulo desde que se confirma el pago — la venta real que generó este pedido. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sale_id")
+    private Sale sale;
 }

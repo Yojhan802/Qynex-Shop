@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.freestyleperu.aplicacion.catalogo.domain.Category;
 import com.freestyleperu.aplicacion.configuracion.domain.CompanySettings;
 import com.freestyleperu.aplicacion.configuracion.domain.Plan;
+import com.freestyleperu.aplicacion.configuracion.domain.SubscriptionStatus;
 import com.freestyleperu.aplicacion.configuracion.repository.CompanySettingsRepository;
 import com.freestyleperu.aplicacion.catalogo.domain.Color;
 import com.freestyleperu.aplicacion.catalogo.domain.Size;
@@ -18,6 +19,7 @@ import com.freestyleperu.aplicacion.inventario.domain.Branch;
 import com.freestyleperu.aplicacion.inventario.domain.Warehouse;
 import com.freestyleperu.aplicacion.inventario.repository.BranchRepository;
 import com.freestyleperu.aplicacion.inventario.repository.WarehouseRepository;
+import com.freestyleperu.aplicacion.notificacion.service.NotificacionService;
 import com.freestyleperu.aplicacion.pago.domain.PaymentMethod;
 import com.freestyleperu.aplicacion.pago.domain.PaymentMethodType;
 import com.freestyleperu.aplicacion.pago.repository.PaymentMethodRepository;
@@ -43,15 +45,25 @@ import com.freestyleperu.aplicacion.usuario.domain.Usuario;
 import com.freestyleperu.aplicacion.usuario.domain.UsuarioEstado;
 import com.freestyleperu.aplicacion.usuario.repository.RolRepository;
 import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
+import com.freestyleperu.aplicacion.venta.domain.Sale;
+import com.freestyleperu.aplicacion.venta.domain.SaleStatus;
+import com.freestyleperu.aplicacion.venta.repository.PaymentRepository;
+import com.freestyleperu.aplicacion.venta.repository.SaleDetailRepository;
+import com.freestyleperu.aplicacion.venta.repository.SaleRepository;
+import java.io.IOException;
+import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -72,6 +84,10 @@ class PedidoFlujoIntegrationTest {
     @Autowired private BranchRepository branchRepository;
     @Autowired private WarehouseRepository warehouseRepository;
     @Autowired private CompanySettingsRepository companySettingsRepository;
+    @Autowired private SaleRepository saleRepository;
+    @Autowired private SaleDetailRepository saleDetailRepository;
+    @Autowired private PaymentRepository paymentRepository;
+    @Autowired private NotificacionService notificacionService;
 
     /** PedidoService.resolverCostoEnvio exige una tarifa plana configurada (salvo contraentrega). */
     private void aseguraConfiguracionEmpresa() {
@@ -85,7 +101,10 @@ class PedidoFlujoIntegrationTest {
         settings.setCurrencySymbol("S/");
         settings.setIgvRate(new BigDecimal("0.18"));
         settings.setShippingFlatRate(new BigDecimal("15.00"));
+        settings.setReservationDepositAmount(new BigDecimal("20.00"));
+        settings.setReservationExpirationDays(3);
         settings.setPlan(Plan.ECOMMERCE);
+        settings.setSubscriptionStatus(SubscriptionStatus.ACTIVA);
         settings.setUpdatedAt(java.time.LocalDateTime.now());
         companySettingsRepository.save(settings);
     }
@@ -105,13 +124,19 @@ class PedidoFlujoIntegrationTest {
     }
 
     @Test
-    void creaPedidoSinTocarStockYConfirmarPagoReciénLoDescuenta() {
+    void creaPedidoSinTocarStockYConfirmarPagoReciénLoDescuenta() throws Exception {
         aseguraConfiguracionEmpresa();
         aseguraAlmacenActivo("1");
         VarianteResponse variante = crearVarianteConStock("Polo Piqué", "Blanco", "M", new BigDecimal("80.00"), 5);
         PaymentMethod yape = metodoPago("YAPE");
         Long customerId = nuevoCliente("cliente1@test.com").getId();
         Long staffUserId = nuevoStaff("staff.pedidos1").getId();
+
+        // Notificaciones en tiempo real: crear() avisa a staff, confirmarPago() avisa al cliente dueño del pedido.
+        CapturingEmitter staffEmitter = new CapturingEmitter();
+        inyectarStaffEmitter(staffEmitter);
+        CapturingEmitter clienteEmitter = new CapturingEmitter();
+        inyectarClienteEmitter(customerId, clienteEmitter);
 
         PedidoResponse pedido = pedidoService.crear(
                 new CrearPedidoRequest(
@@ -127,12 +152,26 @@ class PedidoFlujoIntegrationTest {
         assertThat(pedido.items()).hasSize(1);
         // El stock no se toca al crear el pedido — recién se confirma el pago manualmente.
         assertThat(variantRepository.findById(variante.id()).orElseThrow().getStock()).isEqualTo(5);
+        assertThat(staffEmitter.eventosRecibidos).isEqualTo(1);
+        assertThat(clienteEmitter.eventosRecibidos).isEqualTo(0);
 
         PedidoResponse confirmado = pedidoService.confirmarPago(pedido.id(), staffUserId);
+        assertThat(clienteEmitter.eventosRecibidos).isEqualTo(1);
         assertThat(confirmado.status()).isEqualTo(PedidoStatus.CONFIRMED);
         assertThat(confirmado.confirmedAt()).isNotNull();
         assertThat(confirmado.confirmedByUsername()).isEqualTo("staff.pedidos1");
         assertThat(variantRepository.findById(variante.id()).orElseThrow().getStock()).isEqualTo(3);
+
+        // Confirmar el pago genera una Sale real (sin caja) para que el pedido aparezca en Ventas y tenga ticket.
+        assertThat(confirmado.saleId()).isNotNull();
+        Sale venta = saleRepository.findById(confirmado.saleId()).orElseThrow();
+        assertThat(venta.getCashSession()).isNull();
+        assertThat(venta.getStatus()).isEqualTo(SaleStatus.COMPLETED);
+        assertThat(venta.getSubtotal()).isEqualByComparingTo("160.00");
+        assertThat(venta.getShippingAmount()).isEqualByComparingTo("15.00");
+        assertThat(venta.getTotal()).isEqualByComparingTo("175.00");
+        assertThat(saleDetailRepository.findAllBySaleId(venta.getId())).hasSize(1);
+        assertThat(paymentRepository.findAllBySaleId(venta.getId())).hasSize(1);
 
         // No se puede confirmar dos veces.
         assertThatThrownBy(() -> pedidoService.confirmarPago(pedido.id(), staffUserId))
@@ -161,8 +200,13 @@ class PedidoFlujoIntegrationTest {
                 confirmado.id(), new CancelarPedidoRequest("Cliente cambió de opinión"), staffUserId);
         assertThat(cancelado.status()).isEqualTo(PedidoStatus.CANCELLED);
         assertThat(cancelado.cancellationReason()).isEqualTo("Cliente cambió de opinión");
-        // El stock vuelve a como estaba antes de confirmar.
+        // El stock vuelve a como estaba antes de confirmar — UNA sola vez, no duplicado por la venta enlazada.
         assertThat(variantRepository.findById(variante.id()).orElseThrow().getStock()).isEqualTo(4);
+
+        // La venta generada al confirmar también queda anulada, sin volver a tocar stock/caja.
+        Sale venta = saleRepository.findById(confirmado.saleId()).orElseThrow();
+        assertThat(venta.getStatus()).isEqualTo(SaleStatus.CANCELLED);
+        assertThat(venta.getCancellationReason()).isEqualTo("Cliente cambió de opinión");
 
         assertThatThrownBy(() -> pedidoService.cancelar(cancelado.id(), new CancelarPedidoRequest("de nuevo"), staffUserId))
                 .isInstanceOf(ReglaDeNegocioException.class);
@@ -271,6 +315,35 @@ class PedidoFlujoIntegrationTest {
                 .isInstanceOf(ReglaDeNegocioException.class);
     }
 
+    @Test
+    void rechazaCrearPedidoConMetodoDePagoQueAfectaCaja() {
+        aseguraConfiguracionEmpresa();
+        VarianteResponse variante = crearVarianteConStock("Short Deportivo", "Negro", "M", new BigDecimal("35.00"), 3);
+        PaymentMethod efectivo = paymentMethodRepository.findAllByOrderBySortOrderAsc().stream()
+                .filter(m -> m.getCode().equals("EFECTIVO"))
+                .findFirst()
+                .orElseGet(() -> {
+                    PaymentMethod method = new PaymentMethod();
+                    method.setCode("EFECTIVO");
+                    method.setName("Efectivo");
+                    method.setType(PaymentMethodType.CASH);
+                    method.setAffectsCash(true);
+                    method.setRequiresReference(false);
+                    method.setSortOrder((short) 1);
+                    return paymentMethodRepository.save(method);
+                });
+        Long customerId = nuevoCliente("cliente.efectivo@test.com").getId();
+
+        // No tiene sentido pagar en efectivo un checkout online sin cajero presente.
+        assertThatThrownBy(() -> pedidoService.crear(
+                new CrearPedidoRequest(
+                        List.of(new ItemPedidoRequest(variante.id(), 1)),
+                        efectivo.getId(), null, "45000007", "Cliente", "Efectivo", "Prueba", "900777888", "Calle Dos 20",
+                        "Lima", "Lima", "Surco", null),
+                customerId))
+                .isInstanceOf(ReglaDeNegocioException.class);
+    }
+
     private VarianteResponse crearVarianteConStock(String producto, String color, String talla, BigDecimal precio, int stock) {
         Category categoria = new Category();
         categoria.setName(producto + "-cat");
@@ -307,6 +380,31 @@ class PedidoFlujoIntegrationTest {
                     method.setSortOrder((short) 1);
                     return paymentMethodRepository.save(method);
                 });
+    }
+
+    /** NotificacionService no expone quién está suscrito — se inyecta un emitter de prueba por reflexión (ver NotificacionServiceTest). */
+    @SuppressWarnings("unchecked")
+    private void inyectarStaffEmitter(SseEmitter emitter) throws Exception {
+        Field field = NotificacionService.class.getDeclaredField("staffEmitters");
+        field.setAccessible(true);
+        ((List<SseEmitter>) field.get(notificacionService)).add(emitter);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void inyectarClienteEmitter(Long customerId, SseEmitter emitter) throws Exception {
+        Field field = NotificacionService.class.getDeclaredField("emittersPorCliente");
+        field.setAccessible(true);
+        Map<Long, List<SseEmitter>> map = (Map<Long, List<SseEmitter>>) field.get(notificacionService);
+        map.computeIfAbsent(customerId, k -> new CopyOnWriteArrayList<>()).add(emitter);
+    }
+
+    private static class CapturingEmitter extends SseEmitter {
+        int eventosRecibidos = 0;
+
+        @Override
+        public void send(SseEventBuilder builder) throws IOException {
+            eventosRecibidos++;
+        }
     }
 
     private Customer nuevoCliente(String email) {

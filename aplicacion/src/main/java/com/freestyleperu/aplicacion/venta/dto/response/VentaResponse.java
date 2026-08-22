@@ -16,6 +16,7 @@ public record VentaResponse(
         String sellerName,
         BigDecimal subtotal,
         BigDecimal discountAmount,
+        BigDecimal shippingAmount,
         BigDecimal total,
         SaleStatus status,
         String notes,

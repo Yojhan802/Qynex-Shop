@@ -29,12 +29,22 @@ spring:
     multipart:
       max-file-size: 5MB
       max-request-size: 5MB
+  web:
+    error:
+      include-message: never
+      include-stacktrace: never
+  cache:
+    # Sin `cache-names`: cada nombre usado en @Cacheable (storeCatalog*) se crea
+    # solo, todas comparten el mismo spec de abajo.
+    caffeine:
+      # TTL corto a propósito (catálogo público, docs/03-modelo-datos.md §12):
+      # alcanza para absorber una ráfaga de navegación sin servir datos viejos
+      # por mucho tiempo, y evita tener que invalidar la caché a mano en cada
+      # endpoint de escritura de productos/categorías/marcas.
+      spec: expireAfterWrite=${STORE_CATALOG_CACHE_SECONDS:45}s,maximumSize=${STORE_CATALOG_CACHE_MAX_ENTRIES:500}
 
 server:
   port: ${SERVER_PORT:8080}
-  error:
-    include-message: never
-    include-stacktrace: never
 
 management:
   endpoints:
@@ -48,6 +58,8 @@ management:
 app:
   uploads:
     dir: ${UPLOADS_DIR:./uploads}
+  ops:
+    api-key: ${OPS_API_KEY:}
   jwt:
     secret: ${JWT_SECRET:}
     access-token-minutes: ${JWT_ACCESS_MINUTES:30}
@@ -78,14 +90,26 @@ logging:
     com.freestyleperu.aplicacion: DEBUG
 
 ---
+# Perfil de producción: valores pensados para un VPS chico compartido con MySQL
+# y nginx en la misma máquina (ej. OVZ VPS 2000: 2 vCPU / 2 GB RAM) — más
+# conexiones/hilos de los que el hardware puede sostener no ayuda al
+# rendimiento, solo compite por la misma RAM y CPU. Todo es ajustable por
+# variable de entorno sin recompilar, para cuando suban de plan.
 spring:
   config:
     activate:
       on-profile: prod
   jpa:
     show-sql: false
+  datasource:
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:8}
+      minimum-idle: ${DB_POOL_MIN:2}
+      connection-timeout: ${DB_POOL_TIMEOUT_MS:10000}
 
 server:
-  error:
-    include-message: never
-    include-stacktrace: never
+  tomcat:
+    threads:
+      max: ${TOMCAT_MAX_THREADS:50}
+      min-spare: ${TOMCAT_MIN_THREADS:10}
+    accept-count: ${TOMCAT_ACCEPT_COUNT:100}
