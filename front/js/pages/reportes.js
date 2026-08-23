@@ -43,8 +43,14 @@ function init() {
   cargarPanelActivo();
 }
 
+// OJO: nunca usar toISOString() para "la fecha de hoy" — convierte a UTC, y
+// Perú está en UTC-5: entre las 7pm y medianoche hora local ya es "mañana"
+// en UTC, así que el botón "Hoy" terminaba consultando un día sin ventas
+// todavía. Se arma la fecha con los componentes locales (mismo criterio que
+// ya usaban inicioMesIso()/inicioAnioIso(), que por eso nunca tuvieron este bug).
 function hoyIso() {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function inicioMesIso() {
   const d = new Date();
@@ -181,7 +187,7 @@ async function cargarCaja() {
 }
 
 function exportarCsv() {
-  const fecha = new Date().toISOString().slice(0, 10);
+  const fecha = hoyIso();
   const rango = range.from || range.to ? ` (${range.from ?? '…'} a ${range.to ?? '…'})` : '';
 
   if (activeTab === 'ventas') {
