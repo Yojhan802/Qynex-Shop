@@ -148,6 +148,19 @@
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<!-- @SpringBootTest no pasa por AplicacionApplication.main(), así que la
+					     zona horaria fijada ahí no aplica en tests — se fija acá también para
+					     que "hoy" se calcule igual en tests que en producción, sin importar en
+					     qué zona horaria corra la máquina/CI. -->
+					<systemPropertyVariables>
+						<user.timezone>America/Lima</user.timezone>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-compiler-plugin</artifactId>
 				<executions>
 					<execution>
