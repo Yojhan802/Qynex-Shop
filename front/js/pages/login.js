@@ -1,7 +1,11 @@
 import { login, getSession } from '../core/auth.js';
-import { fetchPublicBranding, getCachedPublicBranding, resolveLogoUrl } from '../core/public-branding.js';
+import { fetchPublicBranding, resolveLogoUrl, applyFavicon } from '../core/public-branding.js';
 
-aplicarMarca(getCachedPublicBranding());
+// Sin caché-primero a propósito: el login se carga una sola vez por sesión (a
+// diferencia del sidebar del panel, que se repinta en cada navegación), así
+// que el ahorro de una caché no compensa el riesgo de mostrar por un
+// instante una marca vieja si cambió desde la última vez. Mientras se
+// resuelve el fetch, el HTML ya trae el Qynex por defecto como estado de carga.
 fetchPublicBranding().then(aplicarMarca);
 
 function aplicarMarca(branding) {
@@ -15,6 +19,7 @@ function aplicarMarca(branding) {
     document.querySelector('#brand-logo-mobile').src = logoUrl;
   }
   document.querySelector('#brand-logo-mobile').alt = branding.name;
+  applyFavicon(logoUrl);
 }
 
 const form = document.querySelector('#login-form');

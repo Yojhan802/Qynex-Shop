@@ -46,7 +46,7 @@
 
   <script type="module">
     import { API_ORIGIN } from './js/core/api.js';
-    import { fetchPublicBranding, getCachedPublicBranding, resolveLogoUrl } from './js/core/public-branding.js';
+    import { fetchPublicBranding, resolveLogoUrl, applyFavicon } from './js/core/public-branding.js';
 
     function aplicarMarca(branding) {
       document.getElementById('page-title').textContent = `Servicio suspendido · ${branding.name}`;
@@ -59,8 +59,9 @@
         document.getElementById('brand-logo-mobile').src = logoUrl;
       }
       document.getElementById('brand-logo-mobile').alt = branding.name;
+      applyFavicon(logoUrl);
     }
-    aplicarMarca(getCachedPublicBranding());
+    // Sin caché-primero, mismo criterio que login.js — página de una sola carga.
     fetchPublicBranding().then(aplicarMarca);
 
     const btn = document.getElementById('reintentar');

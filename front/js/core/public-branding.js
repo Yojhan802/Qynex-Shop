@@ -35,3 +35,15 @@ export function getCachedPublicBranding() {
 export function resolveLogoUrl(branding) {
   return branding?.logoUrl ? `${API_ORIGIN}${branding.logoUrl}` : null;
 }
+
+/**
+ * El ícono de la pestaña (`<link rel="icon">`) no se actualiza solo cuando
+ * cambia el logo — a diferencia de una <img>, nada vuelve a pedirlo salvo
+ * que se le cambie el href a mano. Sin logo propio, se deja el estático
+ * (Qynex) que ya trae el HTML.
+ */
+export function applyFavicon(logoUrl) {
+  if (!logoUrl) return;
+  const link = document.querySelector('link[rel="icon"]');
+  if (link) link.href = logoUrl;
+}

@@ -1,6 +1,6 @@
 import { getCustomerSession, logoutCliente } from '../core/customer-auth.js';
 import { cartCount } from '../core/cart.js';
-import { fetchPublicBranding, getCachedPublicBranding, resolveLogoUrl } from '../../../../js/core/public-branding.js';
+import { fetchPublicBranding, getCachedPublicBranding, resolveLogoUrl, applyFavicon } from '../../../../js/core/public-branding.js';
 
 /**
  * Header/footer comunes de la tienda pública. `basePath` es la ruta relativa
@@ -55,6 +55,7 @@ function aplicarMarcaTienda(branding) {
   const logoUrl = resolveLogoUrl(branding);
   if (logoEl && logoUrl) logoEl.src = logoUrl;
   if (logoEl) logoEl.alt = branding.name;
+  applyFavicon(logoUrl);
 
   const footerEl = document.querySelector('#store-footer-text');
   if (footerEl) footerEl.textContent = `© ${new Date().getFullYear()} ${branding.name}. Todos los derechos reservados.`;

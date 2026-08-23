@@ -176,8 +176,14 @@ async function actualizarMarca() {
     if (nombreEl) nombreEl.textContent = nombre;
   }
   if (settings.logoUrl) {
+    const logoUrl = `${API_ORIGIN}${settings.logoUrl}`;
     const logoEl = document.querySelector('#sidebar-brand-logo');
-    if (logoEl) logoEl.src = `${API_ORIGIN}${settings.logoUrl}`;
+    if (logoEl) logoEl.src = logoUrl;
+    // El ícono de la pestaña no se actualiza solo con un logo nuevo — a
+    // diferencia de una <img>, nada vuelve a pedirlo salvo que se le
+    // cambie el href a mano.
+    const faviconEl = document.querySelector('link[rel="icon"]');
+    if (faviconEl) faviconEl.href = logoUrl;
   }
 }
 
