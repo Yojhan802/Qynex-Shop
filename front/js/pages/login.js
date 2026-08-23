@@ -20,6 +20,12 @@ function aplicarMarca(branding) {
   }
   document.querySelector('#brand-logo-mobile').alt = branding.name;
   applyFavicon(logoUrl);
+
+  // Quedaban ocultos por CSS (visibility:hidden en el HTML) para no mostrar
+  // ni un instante el Qynex por defecto mientras se resuelve este fetch.
+  ['#brand-logo-desktop', '#brand-name-desktop', '#brand-footer', '#brand-logo-mobile'].forEach((sel) => {
+    document.querySelector(sel).style.visibility = 'visible';
+  });
 }
 
 const form = document.querySelector('#login-form');

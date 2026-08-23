@@ -174,6 +174,9 @@ async function actualizarMarca() {
   if (nombre) {
     const nombreEl = document.querySelector('#sidebar-brand-name');
     if (nombreEl) nombreEl.textContent = nombre;
+    // El <title> de cada página trae "Qynex" como marca por defecto (ver
+    // docs/03 §15) — se reemplaza por la razón social real ya personalizada.
+    document.title = document.title.replace('Qynex', nombre);
   }
   if (settings.logoUrl) {
     const logoUrl = `${API_ORIGIN}${settings.logoUrl}`;

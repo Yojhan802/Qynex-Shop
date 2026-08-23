@@ -50,6 +50,7 @@ export function renderStoreShell({ basePath = '', active = '' } = {}) {
 function aplicarMarcaTienda(branding) {
   const nombreEl = document.querySelector('#store-brand-name');
   if (nombreEl) nombreEl.textContent = branding.name;
+  document.title = document.title.replace('Qynex', branding.name);
 
   const logoEl = document.querySelector('#store-brand-logo');
   const logoUrl = resolveLogoUrl(branding);
