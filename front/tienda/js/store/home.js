@@ -38,9 +38,13 @@ function swatchesHtml(colors) {
 function productCard(p) {
   const imageUrl = p.imageUrl ? `${API_ORIGIN}${p.imageUrl}` : placeholderImage();
   const tieneDescuento = p.promoPrice != null;
+  const descuentoPct = tieneDescuento ? Math.round((1 - p.promoPrice / p.price) * 100) : null;
   return `
     <a class="store-product-card" href="producto.html?id=${p.id}">
-      <div class="store-product-image"><img src="${imageUrl}" alt="${p.name}" loading="lazy" /></div>
+      <div class="store-product-image">
+        <img src="${imageUrl}" alt="${p.name}" loading="lazy" />
+        ${descuentoPct ? `<span class="store-product-tag">-${descuentoPct}%</span>` : ''}
+      </div>
       <div class="store-product-body">
         <span class="store-product-meta">${p.brandName ?? p.categoryName}</span>
         <span class="store-product-name">${p.name}</span>

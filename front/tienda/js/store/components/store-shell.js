@@ -15,22 +15,26 @@ export function renderStoreShell({ basePath = '', active = '' } = {}) {
   if (header) {
     header.innerHTML = `
       <a class="store-brand" href="${basePath}index.html">
-        <img id="store-brand-logo" src="${basePath}../assets/brand/logo-mark-dark.png" alt="" />
+        <span class="store-brand-logobox" id="store-brand-logobox">Q</span>
+        <img id="store-brand-logo" src="${basePath}../assets/brand/logo-mark-dark.png" alt="" hidden />
         <span id="store-brand-name">Qynex</span>
       </a>
       <nav class="store-nav" aria-label="Navegación de la tienda">
         <a href="${basePath}index.html" ${active === 'catalogo' ? "aria-current='page'" : ''}>Catálogo</a>
+        <a href="${basePath}index.html#category-banners">Categorías</a>
         ${
           session
             ? `<a href="${basePath}cuenta/pedidos.html" ${active === 'pedidos' ? "aria-current='page'" : ''}>Mis pedidos</a>
                <a href="#" data-logout>Salir (${session.customer.fullName.split(' ')[0]})</a>`
             : `<a href="${basePath}cuenta/login.html">Ingresar</a>`
         }
-        <a class="store-cart-link" href="${basePath}carrito.html" aria-label="Carrito">
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2 3h2l2.4 12.4a2 2 0 002 1.6h8.7a2 2 0 002-1.6L21 8H6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </nav>
+      <div class="store-header-actions">
+        <a class="store-icon-btn store-cart-link" href="${basePath}carrito.html" aria-label="Carrito">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2 3h2l2.4 12.4a2 2 0 002 1.6h8.7a2 2 0 002-1.6L21 8H6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span class="store-cart-count" id="store-cart-count">${cartCount()}</span>
         </a>
-      </nav>
+      </div>
     `;
     header.querySelector('[data-logout]')?.addEventListener('click', (event) => {
       event.preventDefault();
@@ -40,7 +44,23 @@ export function renderStoreShell({ basePath = '', active = '' } = {}) {
   }
 
   if (footer) {
-    footer.innerHTML = `<p id="store-footer-text">© ${new Date().getFullYear()} Qynex. Todos los derechos reservados.</p>`;
+    footer.innerHTML = `
+      <div class="store-footer-top">
+        <div>
+          <div class="store-footer-brand" id="store-footer-name">Qynex</div>
+          <p>Envíos a todo el Perú. Paga con Yape, Plin, transferencia o contraentrega en Huacho.</p>
+        </div>
+        <div>
+          <h3>TIENDA</h3>
+          <div class="store-footer-links">
+            <a href="${basePath}index.html">Inicio</a>
+            <a href="${basePath}index.html#catalog-sections">Catálogo</a>
+            <a href="${basePath}index.html#category-banners">Categorías</a>
+          </div>
+        </div>
+      </div>
+      <div class="store-footer-copy" id="store-footer-text">© ${new Date().getFullYear()} Qynex. Todos los derechos reservados.</div>
+    `;
   }
 
   aplicarMarcaTienda(getCachedPublicBranding());
@@ -48,14 +68,23 @@ export function renderStoreShell({ basePath = '', active = '' } = {}) {
 }
 
 function aplicarMarcaTienda(branding) {
-  const nombreEl = document.querySelector('#store-brand-name');
-  if (nombreEl) nombreEl.textContent = branding.name;
   document.title = document.title.replace('Qynex', branding.name);
+
+  document.querySelectorAll('#store-brand-name, #store-footer-name').forEach((el) => {
+    el.textContent = branding.name;
+  });
+
+  const logoboxEl = document.querySelector('#store-brand-logobox');
+  if (logoboxEl) logoboxEl.textContent = branding.name.trim().charAt(0).toUpperCase() || 'Q';
 
   const logoEl = document.querySelector('#store-brand-logo');
   const logoUrl = resolveLogoUrl(branding);
-  if (logoEl && logoUrl) logoEl.src = logoUrl;
-  if (logoEl) logoEl.alt = branding.name;
+  if (logoEl) {
+    logoEl.hidden = !logoUrl;
+    if (logoUrl) logoEl.src = logoUrl;
+    logoEl.alt = branding.name;
+  }
+  if (logoboxEl) logoboxEl.hidden = Boolean(logoUrl);
   applyFavicon(logoUrl);
 
   const footerEl = document.querySelector('#store-footer-text');
