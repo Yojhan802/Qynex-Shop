@@ -9,11 +9,16 @@ import com.freestyleperu.aplicacion.tienda.dto.response.PublicProductoResumenRes
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicShippingInfoResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicVarianteResponse;
 import com.freestyleperu.aplicacion.tienda.service.TiendaCatalogoService;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -21,18 +26,33 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Asistente de compras de la tienda pública (plan IA). El system prompt solo
- * incluye datos reales leídos en el momento (catálogo con tallas/colores/stock
- * reales, envío, métodos de pago) — nunca se le pide al modelo que invente
- * algo que no esté en ese contexto. El historial lo manda el frontend (sin
- * sesión en el backend) para que la conversación tenga memoria de un turno a otro.
+ * incluye datos reales leídos en el momento (catálogo completo por categoría,
+ * tallas/colores/stock del producto puntual si aplica, envío, métodos de
+ * pago) — nunca se le pide al modelo que invente algo que no esté ahí. El
+ * historial lo manda el frontend (sin sesión en el backend).
  */
 @Service
 @Transactional(readOnly = true)
 public class AsistenteTiendaService {
 
     private static final int MAX_PRODUCTOS_CONTEXTO = 6;
+    private static final int MAX_PRODUCTOS_CATALOGO_COMPLETO = 60;
     private static final int MIN_LARGO_PALABRA_NORMALIZABLE = 4;
     private static final int MAX_TURNOS_HISTORIAL = 8;
+    // Cualquier mención a un id de producto — no solo el formato de enlace producto.html?id=N,
+    // porque el modelo a veces cita "(id 4, S/ 79.90)" suelto sin envolverlo en el enlace, y ese
+    // caso también hay que validar contra los ids reales (así se detectó "Pantalón Jeans Slim
+    // Fit (id 4)", un producto 100% inventado que no tenía enlace pero sí un id falso).
+    private static final Pattern PATRON_CUALQUIER_ID = Pattern.compile("(?i)\\bid\\s*[:#]?\\s*(\\d+)\\b");
+    // Alucinación sin ningún id citado (ej. "Sí, tenemos varios buzos disponibles"). Se aplica
+    // cuando el cliente nombró una categoría real sin stock, o cuando la búsqueda puntual no
+    // encontró nada — en ambos casos, si además no cita ningún id real, no tiene de dónde haber
+    // sacado esa afirmación.
+    private static final Pattern PATRON_AFIRMACION_FALSA = Pattern.compile(
+            "(?i)\\b(te (puedo|podemos) (recomendar|mostrar|ofrecer)|puedo (recomendarte|mostrarte|ofrecerte)|"
+                    + "te recomiendo|aquí tienes|tenemos (varios|varias|algunas|algunos|disponible|disponibles)|"
+                    + "contamos con|s[ií],?\\s+(tenemos|contamos|hay)|claro,?\\s+tenemos)\\b");
+    private static final String RESPUESTA_SIN_PRODUCTO = "No encontré eso en la tienda ahora mismo. ¿Te ayudo con algo más?";
 
     private final TiendaCatalogoService catalogoService;
     private final ConfiguracionService configuracionService;
@@ -47,14 +67,42 @@ public class AsistenteTiendaService {
 
     public String responder(String mensajeCliente, List<AsistenteHistorialItem> historial) {
         List<AsistenteHistorialItem> turnosRecientes = ultimosTurnos(historial);
-        String systemPrompt = construirSystemPrompt(mensajeCliente, turnosRecientes);
+        List<PublicProductoResumenResponse> productosEspecificos = buscarProductosRelevantes(mensajeCliente, turnosRecientes);
+        boolean categoriaNombradaVacia = categoriaFueNombradaYEstaVacia(mensajeCliente, turnosRecientes);
+        Map<String, List<PublicProductoResumenResponse>> catalogoPorCategoria = catalogoCompletoPorCategoria();
+
+        Set<Long> idsReales = new HashSet<>();
+        productosEspecificos.forEach(p -> idsReales.add(p.id()));
+        catalogoPorCategoria.values().forEach(lista -> lista.forEach(p -> idsReales.add(p.id())));
+
+        String systemPrompt = construirSystemPrompt(productosEspecificos, catalogoPorCategoria);
 
         List<OpenRouterClient.OpenRouterMessage> mensajes = new ArrayList<>();
         mensajes.add(new OpenRouterClient.OpenRouterMessage("system", systemPrompt));
         turnosRecientes.forEach(h -> mensajes.add(new OpenRouterClient.OpenRouterMessage(h.role(), h.content())));
         mensajes.add(new OpenRouterClient.OpenRouterMessage("user", mensajeCliente));
 
-        return openRouterClient.completar(mensajes);
+        String respuesta = openRouterClient.completar(mensajes);
+
+        // Guardrail 1: cualquier id citado (con enlace producto.html?id=N o suelto como "id 4")
+        // debe ser real — aplica siempre, sea consulta puntual o combo/outfit.
+        Matcher citas = PATRON_CUALQUIER_ID.matcher(respuesta);
+        boolean citoAlgunIdValido = false;
+        while (citas.find()) {
+            if (!idsReales.contains(Long.valueOf(citas.group(1)))) {
+                return RESPUESTA_SIN_PRODUCTO;
+            }
+            citoAlgunIdValido = true;
+        }
+
+        // Guardrail 2: si la búsqueda puntual no encontró nada (o el cliente nombró una categoría
+        // real sin stock) y la respuesta afirma tener algo SIN citar ningún id real que lo respalde,
+        // es una alucinación pura — no tiene de dónde haber sacado esa afirmación.
+        boolean sinBaseReal = (categoriaNombradaVacia || productosEspecificos.isEmpty()) && !citoAlgunIdValido;
+        if (sinBaseReal && PATRON_AFIRMACION_FALSA.matcher(respuesta).find()) {
+            return RESPUESTA_SIN_PRODUCTO;
+        }
+        return respuesta;
     }
 
     /** El frontend puede mandar una conversación larga — nos quedamos solo con los últimos turnos para no disparar el costo. */
@@ -63,50 +111,109 @@ public class AsistenteTiendaService {
         return historial.subList(desde, historial.size());
     }
 
-    private String construirSystemPrompt(String mensajeCliente, List<AsistenteHistorialItem> historial) {
+    private String construirSystemPrompt(List<PublicProductoResumenResponse> productosEspecificos,
+            Map<String, List<PublicProductoResumenResponse>> catalogoPorCategoria) {
         String nombreTienda = configuracionService.obtenerBranding().name();
         PublicShippingInfoResponse envio = catalogoService.obtenerInfoEnvio();
         List<PublicMetodoPagoResponse> metodosPago = catalogoService.listarMetodosPago();
-        List<PublicProductoResumenResponse> productos = buscarProductosRelevantes(mensajeCliente, historial);
 
         StringBuilder prompt = new StringBuilder();
         prompt.append("Eres el asistente virtual de la tienda online de ").append(nombreTienda)
-                .append(", un negocio de ropa en Perú. Responde siempre en español, de forma breve, cordial y directa.\n\n");
-        prompt.append("SOLO puedes hablar de esta tienda: sus productos, envíos, métodos de pago y el proceso de compra. ")
-                .append("Si te preguntan algo fuera de eso (aunque sepas la respuesta), dilo amablemente sin responderla y redirige la conversación a la tienda.\n\n");
-        prompt.append("Nunca inventes stock, tallas, colores o precios que no estén en la información de abajo. ")
-                .append("Si preguntan por una talla o color específico, revisa la lista de cada producto antes de responder. ")
-                .append("Si no tienes el dato, dile al cliente que lo confirme en la ficha del producto o al finalizar su pedido. ")
-                .append("Si preguntan por tallas/colores/precio sin decir de qué producto (y no hay ninguno en la lista de abajo ni se mencionó antes en la conversación), ")
-                .append("pregunta amablemente a cuál producto se refiere en vez de negarte a ayudar.\n\n");
-        prompt.append("Cuando hables de un producto puntual, incluye siempre su enlace exactamente en este formato, ")
-                .append("como texto plano y sin nada alrededor (sin https://, sin dominio, sin corchetes): ")
-                .append("producto.html?id=<ID>. Es la única forma que tiene el cliente de \"ir al producto\".\n\n");
+                .append(", un negocio de ropa en Perú. Respondes en español, breve, cordial y directo, ")
+                .append("y te comportas como un vendedor experto: propositivo, cálido, te gusta ayudar a decidir y ")
+                .append("sugerir combinaciones reales — pero SIEMPRE con productos y precios reales, nunca inventados.\n\n");
+        prompt.append("SOLO puedes hablar de esta tienda. Si te preguntan algo fuera de eso, NUNCA la respondas aunque la sepas ")
+                .append("— ni siquiera un dato simple como una capital o una fecha. Dilo amablemente y redirige a la tienda. Ejemplo:\n")
+                .append("Cliente: \"¿cuál es la capital de Francia?\"\n")
+                .append("Tú: \"Eso no lo puedo responder, solo te ayudo con temas de la tienda. ¿Te ayudo con algo de aquí?\"\n\n");
+        prompt.append("REGLA MÁS IMPORTANTE, por encima de cualquier otra: el \"Catálogo completo\" y los \"Productos relevantes\" ")
+                .append("de más abajo son la ÚNICA fuente de verdad sobre qué vende esta tienda. Nunca menciones un producto, ")
+                .append("precio, talla, color o id que no esté literalmente ahí. Inventar disponibilidad es el peor error que puedes cometer.\n\n");
+        prompt.append("Si el cliente pide una categoría marcada como SIN STOCK: dilo con buena onda, sin sonar cortante, y sin ")
+                .append("prometer una fecha de reposición que no tienes confirmada — algo como \"por ahora no tenemos eso en catálogo, ")
+                .append("seguimos ampliando\" — y si hay algo real en otra categoría que pueda interesarle, ofrécelo también.\n\n");
+        prompt.append("Si el cliente pide un outfit, combo o te da un presupuesto: arma una propuesta real usando el \"Catálogo ")
+                .append("completo\" de abajo — suma los precios reales de los productos que seleccionas y quédate dentro del ")
+                .append("presupuesto si te dieron uno. Si alguna prenda del outfit (ej. pantalón) está en una categoría SIN STOCK, ")
+                .append("dilo con la misma buena onda de arriba y arma el resto con lo que sí hay — no inventes esa prenda.\n\n");
+        prompt.append("Solo cuando tengas un producto real con su id (del catálogo completo o de los productos relevantes), ")
+                .append("puedes darle su enlace al cliente: escribe la palabra producto.html?id= seguida directamente del número ")
+                .append("de ese id (ej.: si el id es 7, escribes producto.html?id=7 — nunca inventes un número).\n\n");
+        prompt.append("Cuidado con esta trampa: que un color exista en una talla, y esa misma talla exista en otro color, ")
+                .append("NO significa que esa talla y ese color específicos estén juntos en stock — revisa \"variantes CON stock\" ")
+                .append("del producto puntual (más abajo) antes de confirmar una combinación exacta de talla+color.\n\n");
 
         prompt.append("Envío: S/ ").append(envio.flatRate()).append(" a todo el Perú, gratis en ")
                 .append(envio.freeShippingDistrict()).append(".\n");
-
         prompt.append("Métodos de pago disponibles: ").append(
                 metodosPago.stream().map(PublicMetodoPagoResponse::name).collect(Collectors.joining(", ")))
                 .append(".\n\n");
 
-        if (productos.isEmpty()) {
-            prompt.append("No se encontraron productos del catálogo relacionados con el mensaje del cliente.\n");
-        } else {
-            prompt.append("Productos del catálogo relevantes para su pregunta, con tallas/colores y disponibilidad reales:\n");
-            productos.forEach(p -> {
+        prompt.append("Catálogo completo, por categoría (úsalo para armar combos/outfits o para saber qué categorías no tienen stock):\n");
+        catalogoPorCategoria.forEach((categoria, productos) -> {
+            if (productos.isEmpty()) {
+                prompt.append("- ").append(categoria).append(": SIN STOCK por ahora\n");
+            } else {
+                prompt.append("- ").append(categoria).append(": ").append(
+                        productos.stream()
+                                .map(p -> p.name() + " (id " + p.id() + ", S/ " + precioMostrar(p) + ")")
+                                .collect(Collectors.joining("; ")))
+                        .append("\n");
+            }
+        });
+        prompt.append("\n");
+
+        if (!productosEspecificos.isEmpty()) {
+            prompt.append("Productos relevantes para la pregunta puntual del cliente, con tallas/colores reales. ")
+                    .append("\"Variantes CON stock\" lista SOLO las combinaciones talla-color que sí tienen stock — cualquier ")
+                    .append("combinación que no aparezca ahí exactamente está agotada:\n");
+            productosEspecificos.forEach(p -> {
                 PublicProductoDetalleResponse detalle = catalogoService.obtenerProducto(p.id());
-                prompt.append("- ").append(p.name())
-                        .append(" (id ").append(p.id()).append(", ").append(p.categoryName()).append(")")
-                        .append(", S/ ").append(p.promoPrice() != null ? p.promoPrice() : p.price())
-                        .append(" — tallas: ").append(tallasDisponibles(detalle))
-                        .append(" — colores: ").append(coloresDisponibles(detalle))
-                        .append(" — enlace: producto.html?id=").append(p.id())
+                prompt.append("- ").append(p.name()).append(" (id ").append(p.id()).append(")")
+                        .append(" — variantes CON stock: ").append(variantesDisponibles(detalle))
                         .append("\n");
             });
         }
 
         return prompt.toString();
+    }
+
+    private String precioMostrar(PublicProductoResumenResponse p) {
+        BigDecimal precio = p.promoPrice() != null ? p.promoPrice() : p.price();
+        return precio.toPlainString();
+    }
+
+    /** Todo el catálogo activo, agrupado por categoría — incluye las categorías sin ningún producto. */
+    private Map<String, List<PublicProductoResumenResponse>> catalogoCompletoPorCategoria() {
+        List<PublicCategoriaResponse> categorias = catalogoService.listarCategorias();
+        List<PublicProductoResumenResponse> todos = catalogoService
+                .listarProductos(null, null, null, PageRequest.of(0, MAX_PRODUCTOS_CATALOGO_COMPLETO))
+                .content();
+
+        Map<String, List<PublicProductoResumenResponse>> porCategoria = todos.stream()
+                .collect(Collectors.groupingBy(PublicProductoResumenResponse::categoryName, LinkedHashMap::new, Collectors.toList()));
+
+        Map<String, List<PublicProductoResumenResponse>> resultado = new LinkedHashMap<>();
+        categorias.forEach(c -> resultado.put(c.name(), porCategoria.getOrDefault(c.name(), List.of())));
+        return resultado;
+    }
+
+    /**
+     * True si el cliente (o el historial reciente) nombró una categoría real por su nombre y esa
+     * categoría no tiene ningún producto activo — la señal más confiable de "esto no existe, no es
+     * un tema de talla/color puntual". Se usa para decidir cuándo aplicar el guardrail de
+     * afirmaciones falsas sin bloquear respuestas legítimas tipo "no tenemos X, pero sí Y".
+     */
+    private boolean categoriaFueNombradaYEstaVacia(String mensajeCliente, List<AsistenteHistorialItem> historial) {
+        String contextoReciente = historial.stream().map(AsistenteHistorialItem::content).collect(Collectors.joining(" "))
+                + " " + mensajeCliente;
+        List<String> palabrasContexto = normalizarMensaje(contextoReciente);
+
+        return catalogoService.listarCategorias().stream()
+                .filter(c -> palabrasContexto.contains(normalizarPalabra(c.name())))
+                .anyMatch(c -> catalogoService
+                        .listarProductos(null, c.id(), null, PageRequest.of(0, 1))
+                        .content().isEmpty());
     }
 
     /**
@@ -160,27 +267,20 @@ public class AsistenteTiendaService {
         return p;
     }
 
-    /** Agrupa variantes por talla: disponible si al menos un color de esa talla tiene stock. */
-    private String tallasDisponibles(PublicProductoDetalleResponse detalle) {
-        Map<String, Boolean> porTalla = new LinkedHashMap<>();
-        for (PublicVarianteResponse v : detalle.variants()) {
-            porTalla.merge(v.sizeName(), v.inStock(), (a, b) -> a || b);
-        }
-        if (porTalla.isEmpty()) return "sin información de tallas";
-        return porTalla.entrySet().stream()
-                .map(e -> e.getKey() + (e.getValue() ? " (disponible)" : " (agotada)"))
-                .collect(Collectors.joining(", "));
-    }
-
-    /** Agrupa variantes por color: disponible si al menos una talla de ese color tiene stock. */
-    private String coloresDisponibles(PublicProductoDetalleResponse detalle) {
-        Map<String, Boolean> porColor = new LinkedHashMap<>();
-        for (PublicVarianteResponse v : detalle.variants()) {
-            porColor.merge(v.colorName(), v.inStock(), (a, b) -> a || b);
-        }
-        if (porColor.isEmpty()) return "sin información de colores";
-        return porColor.entrySet().stream()
-                .map(e -> e.getKey() + (e.getValue() ? " (disponible)" : " (agotado)"))
-                .collect(Collectors.joining(", "));
+    /**
+     * Lista SOLO las combinaciones talla-color con stock real — a propósito no incluye las
+     * agotadas ni agrega por talla/color separado. Un modelo barato no siempre distingue bien
+     * una etiqueta "(agotado)" dentro de una lista larga (eso causó respuestas falsas: "talla S
+     * en beige" cuando el beige real solo tenía stock en talla M, o "talla L disponible" cuando
+     * TODA la talla L estaba agotada) — pero si la combinación simplemente no aparece en la
+     * lista, no tiene nada que malinterpretar.
+     */
+    private String variantesDisponibles(PublicProductoDetalleResponse detalle) {
+        if (detalle.variants().isEmpty()) return "sin variantes registradas";
+        List<String> conStock = detalle.variants().stream()
+                .filter(PublicVarianteResponse::inStock)
+                .map(v -> v.sizeName() + "-" + v.colorName())
+                .toList();
+        return conStock.isEmpty() ? "AGOTADO en todas las tallas y colores" : String.join(", ", conStock);
     }
 }
