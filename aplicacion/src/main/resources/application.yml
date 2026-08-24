@@ -69,6 +69,10 @@ app:
   security:
     max-failed-attempts: 5
     lock-duration-minutes: 15
+  openrouter:
+    api-key: ${OPENROUTER_API_KEY:}
+    base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}
+    model: ${OPENROUTER_MODEL:}
 
 logging:
   pattern:

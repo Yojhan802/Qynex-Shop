@@ -1,6 +1,7 @@
 import { getCustomerSession, logoutCliente } from '../core/customer-auth.js';
 import { cartCount } from '../core/cart.js';
 import { fetchPublicBranding, getCachedPublicBranding, resolveLogoUrl, applyFavicon } from '../../../../js/core/public-branding.js';
+import { mountAiWidget } from './store-ai-widget.js';
 
 /**
  * Header/footer comunes de la tienda pública. `basePath` es la ruta relativa
@@ -65,6 +66,8 @@ export function renderStoreShell({ basePath = '', active = '' } = {}) {
 
   aplicarMarcaTienda(getCachedPublicBranding());
   fetchPublicBranding().then(aplicarMarcaTienda);
+
+  if (!document.querySelector('.ai-widget')) mountAiWidget(basePath);
 }
 
 function aplicarMarcaTienda(branding) {

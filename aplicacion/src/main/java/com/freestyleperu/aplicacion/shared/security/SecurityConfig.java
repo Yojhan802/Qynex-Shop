@@ -1,5 +1,6 @@
 package com.freestyleperu.aplicacion.shared.security;
 
+import com.freestyleperu.aplicacion.ia.OpenRouterProperties;
 import java.util.List;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -20,7 +21,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity(prePostEnabled = true)
-@EnableConfigurationProperties({ JwtProperties.class, CorsProperties.class, AccountLockProperties.class })
+@EnableConfigurationProperties({ JwtProperties.class, CorsProperties.class, AccountLockProperties.class, OpenRouterProperties.class })
 public class SecurityConfig {
 
     private static final int BCRYPT_STRENGTH = 12;
@@ -65,6 +66,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/login", "/api/auth/refresh").permitAll()
                         .requestMatchers("/api/store/auth/register", "/api/store/auth/login", "/api/store/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/store/catalog/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/store/assistant/chat").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/store/assistant/enabled").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/system/info").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/system/branding").permitAll()
