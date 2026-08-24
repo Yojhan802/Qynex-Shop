@@ -2,8 +2,11 @@ package com.freestyleperu.aplicacion.producto.web;
 
 import com.freestyleperu.aplicacion.producto.dto.request.ActualizarProductoRequest;
 import com.freestyleperu.aplicacion.producto.dto.request.CrearProductoRequest;
+import com.freestyleperu.aplicacion.producto.dto.request.GenerarDescripcionRequest;
+import com.freestyleperu.aplicacion.producto.dto.response.GenerarDescripcionResponse;
 import com.freestyleperu.aplicacion.producto.dto.response.ProductoDetalleResponse;
 import com.freestyleperu.aplicacion.producto.dto.response.ProductoResumenResponse;
+import com.freestyleperu.aplicacion.producto.service.ProductoAsistenteService;
 import com.freestyleperu.aplicacion.producto.service.ProductoService;
 import com.freestyleperu.aplicacion.shared.domain.EstadoGeneral;
 import com.freestyleperu.aplicacion.shared.dto.CambiarEstadoRequest;
@@ -29,9 +32,11 @@ import org.springframework.web.multipart.MultipartFile;
 public class ProductoController {
 
     private final ProductoService productoService;
+    private final ProductoAsistenteService productoAsistenteService;
 
-    public ProductoController(ProductoService productoService) {
+    public ProductoController(ProductoService productoService, ProductoAsistenteService productoAsistenteService) {
         this.productoService = productoService;
+        this.productoAsistenteService = productoAsistenteService;
     }
 
     @GetMapping("/api/products")
@@ -85,5 +90,12 @@ public class ProductoController {
     @PreAuthorize("hasAuthority('" + Permisos.PRODUCTOS_EDITAR + "')")
     public ProductoDetalleResponse actualizarGuiaTallas(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
         return productoService.actualizarGuiaTallas(id, file);
+    }
+
+    /** "Generar con IA" en el formulario de producto (plan IA) — funciona tanto al crear como al editar. */
+    @PostMapping("/api/products/assistant/description")
+    @PreAuthorize("hasAnyAuthority('" + Permisos.PRODUCTOS_CREAR + "', '" + Permisos.PRODUCTOS_EDITAR + "') and @planGate.tienePlan('IA')")
+    public GenerarDescripcionResponse generarDescripcion(@Valid @RequestBody GenerarDescripcionRequest request) {
+        return new GenerarDescripcionResponse(productoAsistenteService.generarDescripcion(request));
     }
 }

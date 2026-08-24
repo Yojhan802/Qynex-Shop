@@ -40,7 +40,40 @@ function init() {
   document.querySelector('#btn-rango-mes').addEventListener('click', () => aplicarRangoRapido(inicioMesIso(), hoyIso()));
   document.querySelector('#btn-rango-anio').addEventListener('click', () => aplicarRangoRapido(inicioAnioIso(), hoyIso()));
 
+  document.querySelector('#form-asistente-reportes').addEventListener('submit', preguntarAsistente);
+
   cargarPanelActivo();
+}
+
+async function preguntarAsistente(event) {
+  event.preventDefault();
+  const input = document.querySelector('#input-pregunta-reporte');
+  const pregunta = input.value.trim();
+  if (!pregunta) return;
+
+  const datos = activeTab === 'ventas' ? ultimoReporteVentas : ultimoReporteCaja;
+  const respuestaEl = document.querySelector('#respuesta-asistente-reportes');
+  if (!datos) {
+    respuestaEl.innerHTML = `<div class="empty-state"><span>Espera a que cargue el reporte antes de preguntar.</span></div>`;
+    return;
+  }
+
+  const boton = event.target.querySelector('button[type="submit"]');
+  boton.disabled = true;
+  respuestaEl.innerHTML = `<p class="table-cell-muted">Pensando…</p>`;
+
+  try {
+    const { respuesta } = await api.post('/reports/assistant/ask', { pregunta, datos: JSON.stringify(datos) });
+    respuestaEl.innerHTML = `<p>${escapeHtml(respuesta)}</p>`;
+  } catch (error) {
+    respuestaEl.innerHTML = `<div class="empty-state"><span>${error instanceof ApiError ? error.message : 'No se pudo responder'}</span></div>`;
+  } finally {
+    boton.disabled = false;
+  }
+}
+
+function escapeHtml(texto) {
+  return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // OJO: nunca usar toISOString() para "la fecha de hoy" — convierte a UTC, y
@@ -84,7 +117,7 @@ async function cargarVentas() {
       api.get('/reports/sales/by-promoter', { query: range }),
       api.get('/reports/payments/non-cash', { query: range }),
     ]);
-    ultimoReporteVentas = { porCategoria, porMetodo, porProducto, porVendedor, porPromotor, pagosDigitales };
+    ultimoReporteVentas = { resumen, porCategoria, porMetodo, porProducto, porVendedor, porPromotor, pagosDigitales };
 
     document.querySelector('#stat-ventas-cantidad').textContent = resumen.count;
     document.querySelector('#stat-ventas-total').textContent = formatCurrency(resumen.total);

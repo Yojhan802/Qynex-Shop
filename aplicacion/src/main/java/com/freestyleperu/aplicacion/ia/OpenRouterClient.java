@@ -54,7 +54,7 @@ public class OpenRouterClient {
     record OpenRouterChatRequest(String model, List<OpenRouterMessage> messages, @JsonProperty("max_tokens") int maxTokens) {
     }
 
-    record OpenRouterMessage(String role, String content) {
+    public record OpenRouterMessage(String role, String content) {
     }
 
     record OpenRouterChatResponse(List<OpenRouterChoice> choices) {

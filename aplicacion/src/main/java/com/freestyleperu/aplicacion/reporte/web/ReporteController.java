@@ -1,5 +1,7 @@
 package com.freestyleperu.aplicacion.reporte.web;
 
+import com.freestyleperu.aplicacion.reporte.dto.request.AsistenteReporteRequest;
+import com.freestyleperu.aplicacion.reporte.dto.response.AsistenteReporteResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.CajaSesionResumenResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.DashboardResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.ProductoTopResponse;
@@ -7,13 +9,17 @@ import com.freestyleperu.aplicacion.reporte.dto.response.PromotorReporteResponse
 import com.freestyleperu.aplicacion.reporte.dto.response.ResumenPeriodoResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.SerieDiaResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.SerieEtiquetaResponse;
+import com.freestyleperu.aplicacion.reporte.service.ReporteAsistenteService;
 import com.freestyleperu.aplicacion.reporte.service.ReporteService;
 import com.freestyleperu.aplicacion.shared.security.Permisos;
+import jakarta.validation.Valid;
 import java.time.LocalDate;
 import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -22,9 +28,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReporteController {
 
     private final ReporteService reporteService;
+    private final ReporteAsistenteService reporteAsistenteService;
 
-    public ReporteController(ReporteService reporteService) {
+    public ReporteController(ReporteService reporteService, ReporteAsistenteService reporteAsistenteService) {
         this.reporteService = reporteService;
+        this.reporteAsistenteService = reporteAsistenteService;
     }
 
     @GetMapping("/api/reports/dashboard")
@@ -96,5 +104,12 @@ public class ReporteController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return reporteService.sesionesCaja(from, to);
+    }
+
+    /** "Pregúntale a tus datos" (plan IA) — el frontend manda la pregunta y el reporte que ya tiene en pantalla. */
+    @PostMapping("/api/reports/assistant/ask")
+    @PreAuthorize("hasAuthority('" + Permisos.REPORTES_CONSULTAR + "') and @planGate.tienePlan('IA')")
+    public AsistenteReporteResponse preguntarAsistente(@Valid @RequestBody AsistenteReporteRequest request) {
+        return new AsistenteReporteResponse(reporteAsistenteService.responder(request));
     }
 }
