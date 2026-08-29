@@ -135,3 +135,10 @@ server:
       max: ${TOMCAT_MAX_THREADS:50}
       min-spare: ${TOMCAT_MIN_THREADS:10}
     accept-count: ${TOMCAT_ACCEPT_COUNT:100}
+
+app:
+  tenant:
+    # Ver Javadoc de TenantResolutionFilter — apagar esto (false) solo si el perfil "prod" se usa
+    # por su tamaño de pool/hilos pero TODAVÍA no hay un subdominio real configurado (ej. una demo
+    # servida por IP/localhost). Con un subdominio real de por medio, dejar esto en true siempre.
+    strict-subdomain-resolution: ${TENANT_STRICT_SUBDOMAIN_RESOLUTION:true}

@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Optional;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -26,6 +27,14 @@ import tools.jackson.databind.ObjectMapper;
  * header de desarrollo {@code X-Tenant-Slug} para simular un subdominio, y si no viene se cae al
  * tenant por defecto de la Fase 1 ({@link TenantContext#DEFAULT_TENANT_ID}) — así el resto de la
  * suite de tests y el flujo manual de desarrollo existentes siguen funcionando sin tocarlos.
+ *
+ * <p>{@code app.tenant.strict-subdomain-resolution} (default {@code true}) es un escape hatch
+ * deliberadamente separado del perfil de Spring: un despliegue puede necesitar el tamaño de
+ * pool/hilos del perfil "prod" (ver application.yml) mientras todavía no tiene un subdominio real
+ * configurado (ej. una demo servida por IP/localhost antes de tener dominio) — sin este flag,
+ * esa combinación no tendría forma de funcionar sin degradar la resolución estricta para
+ * despliegues reales que sí tienen subdominio. Default {@code true} preserva el comportamiento
+ * estricto de siempre; hay que apagarlo a propósito.
  */
 @Component
 public class TenantResolutionFilter extends OncePerRequestFilter {
@@ -39,11 +48,14 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
     private final TenantSlugResolver tenantSlugResolver;
     private final Environment environment;
     private final ObjectMapper objectMapper;
+    private final boolean strictSubdomainResolution;
 
-    public TenantResolutionFilter(TenantSlugResolver tenantSlugResolver, Environment environment, ObjectMapper objectMapper) {
+    public TenantResolutionFilter(TenantSlugResolver tenantSlugResolver, Environment environment, ObjectMapper objectMapper,
+            @Value("${app.tenant.strict-subdomain-resolution:true}") boolean strictSubdomainResolution) {
         this.tenantSlugResolver = tenantSlugResolver;
         this.environment = environment;
         this.objectMapper = objectMapper;
+        this.strictSubdomainResolution = strictSubdomainResolution;
     }
 
     @Override
@@ -54,7 +66,7 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
             return;
         }
 
-        boolean permiteOverrideDeDesarrollo = !environment.matchesProfiles("prod");
+        boolean permiteOverrideDeDesarrollo = !environment.matchesProfiles("prod") || !strictSubdomainResolution;
         String slugHeader = permiteOverrideDeDesarrollo ? request.getHeader(HEADER_DEV_SLUG) : null;
 
         Long tenantId;

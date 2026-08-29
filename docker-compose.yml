@@ -44,6 +44,9 @@ services:
       TOMCAT_MAX_THREADS: ${TOMCAT_MAX_THREADS:-50}
       TOMCAT_MIN_THREADS: ${TOMCAT_MIN_THREADS:-10}
       TOMCAT_ACCEPT_COUNT: ${TOMCAT_ACCEPT_COUNT:-100}
+      # true SOLO si todavía no hay un subdominio real apuntando a este despliegue (ver Javadoc
+      # de TenantResolutionFilter) — con un subdominio real, dejar en true (el default).
+      TENANT_STRICT_SUBDOMAIN_RESOLUTION: ${TENANT_STRICT_SUBDOMAIN_RESOLUTION:-true}
     volumes:
       - uploads_data:/app/uploads
     healthcheck:
