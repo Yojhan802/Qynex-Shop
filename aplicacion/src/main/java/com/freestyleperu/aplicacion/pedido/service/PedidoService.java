@@ -52,13 +52,16 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Pedidos de la tienda online. El stock no se toca al crear el pedido, solo
- * se valida como referencia — recién se descuenta cuando el staff confirma
- * el pago (ver docs/03-modelo-datos.md, Fase 2): el pago es manual, así que
- * "pedido creado" todavía no significa "pago recibido". Al confirmar, además
- * de descontar stock, se genera una {@link Sale} real (sin sesión de caja)
- * para que el pedido entre en el mismo historial/reportes de Ventas y pueda
- * imprimirse el mismo ticket que usa el POS.
+ * Pedidos de la tienda online. El stock se retiene al crear el pedido (RN corregida —
+ * ver ALTA PED-07 en la auditoría: antes no se tocaba hasta confirmar el pago, lo que
+ * permitía que dos pedidos concurrentes por la última unidad pasaran ambos a "pendiente
+ * de pago"), igual que hace una separación física. El pago sigue siendo manual (ver
+ * docs/03-modelo-datos.md, Fase 2): "pedido creado" no significa "pago recibido", pero
+ * "pedido creado" sí significa que esa unidad ya no está disponible para nadie más. Al
+ * confirmar, el stock ya está retenido — solo se genera la {@link Sale} real (sin sesión
+ * de caja) para que el pedido entre en el mismo historial/reportes de Ventas y pueda
+ * imprimirse el mismo ticket que usa el POS. Si el pedido se anula antes de confirmarse,
+ * el stock retenido se libera.
  */
 @Service
 @Transactional(readOnly = true)
@@ -83,6 +86,7 @@ public class PedidoService {
 
     private static final String DISTRITO_CONTRAENTREGA = "Huacho";
     private static final String CODIGO_CONTRAENTREGA = "CONTRAENTREGA";
+    private static final String USUARIO_SISTEMA = "sistema_tienda";
 
     public PedidoService(PedidoRepository pedidoRepository, PedidoDetailRepository pedidoDetailRepository,
             ProductVariantRepository variantRepository, CustomerRepository customerRepository,
@@ -151,7 +155,7 @@ public class PedidoService {
             if (variant.getStock() < item.quantity()) {
                 throw new StockInsuficienteException(
                         "Solo quedan " + variant.getStock() + " unidades de " + variant.getProduct().getName()
-                                + " (" + variant.getColor().getName() + " / " + variant.getSize().getName() + ")");
+                                + " (" + variant.getVariantLabel() + ")");
             }
             BigDecimal unitPrice = promocionService.precioEfectivoOnline(variant.getProduct());
             BigDecimal subtotal = unitPrice.multiply(BigDecimal.valueOf(item.quantity()));
@@ -193,9 +197,17 @@ public class PedidoService {
             detail.setSubtotal(dc.subtotal());
             detail.setProductName(dc.variant().getProduct().getName());
             detail.setVariantSku(dc.variant().getSku());
-            detail.setColorName(dc.variant().getColor().getName());
-            detail.setSizeName(dc.variant().getSize().getName());
+            detail.setVariantLabel(dc.variant().getVariantLabel());
             detallesGuardados.add(pedidoDetailRepository.save(detail));
+        }
+
+        // Retiene el stock de inmediato (detalles ya viene en orden por variant_id, mismo
+        // criterio de concurrencia que Ventas/Reservas — ver docs/04-reglas-negocio.md).
+        // Si no hay stock suficiente, ajustarStock() lanza StockInsuficienteException y
+        // toda la transacción se revierte, incluyendo el pedido recién guardado.
+        Long sistemaId = resolverUsuarioSistema();
+        for (DetalleCalculado dc : detalles) {
+            inventarioService.registrarReservaPorPedido(dc.variant().getId(), dc.quantity(), guardado.getId(), sistemaId);
         }
 
         auditService.log("PEDIDO_CREADO", "PEDIDO", guardado.getId(), null,
@@ -213,18 +225,9 @@ public class PedidoService {
             throw new ReglaDeNegocioException("Solo se puede confirmar un pedido pendiente de pago");
         }
 
+        // El stock ya quedó retenido al crear el pedido (ver crear()) — confirmar el pago
+        // no vuelve a tocar inventario, solo materializa la venta a partir de lo ya reservado.
         List<PedidoDetail> detalles = pedidoDetailRepository.findAllByPedidoId(id);
-        for (PedidoDetail detail : detalles) {
-            if (detail.getVariant().getStock() < detail.getQuantity()) {
-                throw new StockInsuficienteException(
-                        "Ya no hay stock suficiente de " + detail.getProductName() + " para confirmar este pedido");
-            }
-        }
-        // Orden global por variant_id — evita deadlocks entre confirmaciones/ventas
-        // concurrentes que comparten variantes (ver docs/04-reglas-negocio.md, concurrencia).
-        for (PedidoDetail detail : detalles.stream().sorted(Comparator.comparing(d -> d.getVariant().getId())).toList()) {
-            inventarioService.registrarPorPedido(detail.getVariant().getId(), detail.getQuantity(), pedido.getId(), staffUserId);
-        }
 
         Usuario staff = usuarioRepository.findById(staffUserId)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Usuario", staffUserId));
@@ -253,8 +256,7 @@ public class PedidoService {
             saleDetail.setSubtotal(detail.getSubtotal());
             saleDetail.setProductName(detail.getProductName());
             saleDetail.setVariantSku(detail.getVariantSku());
-            saleDetail.setColorName(detail.getColorName());
-            saleDetail.setSizeName(detail.getSizeName());
+            saleDetail.setVariantLabel(detail.getVariantLabel());
             saleDetailRepository.save(saleDetail);
         }
 
@@ -288,9 +290,17 @@ public class PedidoService {
         }
 
         List<PedidoDetail> detalles = pedidoDetailRepository.findAllByPedidoId(id);
-        if (pedido.getStatus() == PedidoStatus.CONFIRMED) {
-            // Orden global por variant_id — mismo criterio de concurrencia que confirmarPago().
-            for (PedidoDetail detail : detalles.stream().sorted(Comparator.comparing(d -> d.getVariant().getId())).toList()) {
+        // Orden global por variant_id en ambos casos — mismo criterio de concurrencia que
+        // confirmarPago()/crear() (ver docs/04-reglas-negocio.md, concurrencia).
+        List<PedidoDetail> detallesOrdenados = detalles.stream().sorted(Comparator.comparing(d -> d.getVariant().getId())).toList();
+        if (pedido.getStatus() == PedidoStatus.PENDING_PAYMENT) {
+            // El stock se retuvo al crear el pedido (ver crear()) — anular antes de confirmar el
+            // pago libera esa retención, igual que cancelar una separación física.
+            for (PedidoDetail detail : detallesOrdenados) {
+                inventarioService.registrarLiberacionReservaPorPedido(detail.getVariant().getId(), detail.getQuantity(), pedido.getId(), staffUserId);
+            }
+        } else if (pedido.getStatus() == PedidoStatus.CONFIRMED) {
+            for (PedidoDetail detail : detallesOrdenados) {
                 inventarioService.registrarPorCancelacionPedido(detail.getVariant().getId(), detail.getQuantity(), pedido.getId(), staffUserId);
             }
             // La venta generada al confirmar se marca cancelada tal cual, sin volver a tocar
@@ -347,6 +357,14 @@ public class PedidoService {
         return configuracionService.obtenerTarifaEnvio();
     }
 
+    /** Usuario técnico al que se atribuyen los movimientos de inventario que dispara la tienda online sin un cajero de por medio (ver V37 migration). */
+    private Long resolverUsuarioSistema() {
+        return usuarioRepository.findByUsername(USUARIO_SISTEMA)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Falta el usuario técnico '" + USUARIO_SISTEMA + "' — ¿se ejecutó la migración V37?"))
+                .getId();
+    }
+
     private Map<Long, ProductVariant> cargarVariantes(List<ItemPedidoRequest> items) {
         Map<Long, ProductVariant> resultado = new HashMap<>();
         for (ItemPedidoRequest item : items) {
@@ -373,7 +391,7 @@ public class PedidoService {
     private PedidoResponse toResponse(Pedido pedido, List<PedidoDetail> detalles) {
         List<PedidoItemResponse> items = detalles.stream()
                 .map(d -> new PedidoItemResponse(
-                        d.getVariant().getId(), d.getProductName(), d.getVariantSku(), d.getColorName(), d.getSizeName(),
+                        d.getVariant().getId(), d.getProductName(), d.getVariantSku(), d.getVariantLabel(),
                         d.getQuantity(), d.getUnitPrice(), d.getSubtotal()))
                 .toList();
         return new PedidoResponse(

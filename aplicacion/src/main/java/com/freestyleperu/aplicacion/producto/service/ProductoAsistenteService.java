@@ -1,5 +1,6 @@
 package com.freestyleperu.aplicacion.producto.service;
 
+import com.freestyleperu.aplicacion.configuracion.service.ConfiguracionService;
 import com.freestyleperu.aplicacion.ia.OpenRouterClient;
 import com.freestyleperu.aplicacion.producto.dto.request.GenerarDescripcionRequest;
 import java.util.List;
@@ -12,13 +13,16 @@ import org.springframework.stereotype.Service;
 public class ProductoAsistenteService {
 
     private final OpenRouterClient openRouterClient;
+    private final ConfiguracionService configuracionService;
 
-    public ProductoAsistenteService(OpenRouterClient openRouterClient) {
+    public ProductoAsistenteService(OpenRouterClient openRouterClient, ConfiguracionService configuracionService) {
         this.openRouterClient = openRouterClient;
+        this.configuracionService = configuracionService;
     }
 
     public String generarDescripcion(GenerarDescripcionRequest request) {
-        String systemPrompt = "Escribes descripciones de producto para el catálogo de una tienda de ropa en Perú. "
+        String frase = configuracionService.obtenerContextoIA().frase();
+        String systemPrompt = "Escribes descripciones de producto para el catálogo de " + frase + ". "
                 + "En español, entre 2 y 4 frases, tono cercano y vendedor pero sin exagerar. "
                 + "Usa SOLO los datos que se te dan abajo — si un dato no está (ej. material o calce), no lo menciones ni lo inventes. "
                 + "Responde únicamente con el texto de la descripción, sin comillas ni títulos.\n\n"

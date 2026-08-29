@@ -4,7 +4,7 @@ import { renderStoreShell } from './components/store-shell.js';
 import { getCart, cartTotal, clearCart } from './core/cart.js';
 import { getDepartamentos, getProvincias, getDistritos } from './core/ubigeo.js';
 import { renderStoreSteps } from './components/store-steps.js';
-import { formatCurrency } from '../../../js/core/format.js';
+import { formatCurrency, escapeHtml } from '../../../js/core/format.js';
 import { showToast } from '../../../js/components/toast.js';
 
 const CODIGO_CONTRAENTREGA = 'CONTRAENTREGA';
@@ -232,7 +232,7 @@ function actualizarResumen() {
       .map(
         (it) => `
       <div class="store-summary-row">
-        <span>${it.productName} (${it.colorName}/${it.sizeName}) × ${it.quantity}</span>
+        <span>${escapeHtml(it.productName)} (${escapeHtml(it.variantLabel)}) × ${it.quantity}</span>
         <span>${formatCurrency(it.unitPrice * it.quantity)}</span>
       </div>
     `

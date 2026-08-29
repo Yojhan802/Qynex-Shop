@@ -197,8 +197,7 @@ public class VentaService {
             detail.setPromotion(dc.promotion());
             detail.setProductName(dc.variant().getProduct().getName());
             detail.setVariantSku(dc.variant().getSku());
-            detail.setColorName(dc.variant().getColor().getName());
-            detail.setSizeName(dc.variant().getSize().getName());
+            detail.setVariantLabel(dc.variant().getVariantLabel());
             detallesGuardados.add(saleDetailRepository.save(detail));
         }
 
@@ -445,7 +444,7 @@ public class VentaService {
     private VentaResponse toResponse(Sale sale, List<SaleDetail> detalles, List<Payment> pagos) {
         List<VentaItemResponse> items = detalles.stream()
                 .map(d -> new VentaItemResponse(
-                        d.getVariant().getId(), d.getProductName(), d.getVariantSku(), d.getColorName(), d.getSizeName(),
+                        d.getVariant().getId(), d.getProductName(), d.getVariantSku(), d.getVariantLabel(),
                         d.getQuantity(), d.getUnitPrice(), d.getDiscountAmount(), d.getSubtotal(),
                         d.getCombo() != null ? d.getCombo().getId() : null,
                         d.getPromotion() != null ? d.getPromotion().getId() : null))

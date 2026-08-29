@@ -1,12 +1,12 @@
 package com.freestyleperu.aplicacion.catalogo.repository;
 
-import com.freestyleperu.aplicacion.catalogo.domain.Size;
+import com.freestyleperu.aplicacion.catalogo.domain.Attribute;
 import java.util.List;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface SizeRepository extends JpaRepository<Size, Long> {
+public interface AttributeRepository extends JpaRepository<Attribute, Long> {
 
     boolean existsByNameIgnoreCase(String name);
 
-    List<Size> findAllByOrderBySortOrderAsc();
+    List<Attribute> findAllByOrderByNameAsc();
 }

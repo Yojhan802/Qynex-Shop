@@ -1,17 +1,22 @@
 package com.freestyleperu.aplicacion.tienda.service;
 
+import com.freestyleperu.aplicacion.catalogo.domain.AttributeInputType;
 import com.freestyleperu.aplicacion.catalogo.repository.BrandRepository;
 import com.freestyleperu.aplicacion.catalogo.repository.CategoryRepository;
 import com.freestyleperu.aplicacion.configuracion.service.ConfiguracionService;
 import com.freestyleperu.aplicacion.pago.repository.PaymentMethodRepository;
 import com.freestyleperu.aplicacion.producto.domain.Product;
+import com.freestyleperu.aplicacion.producto.domain.ProductAttribute;
 import com.freestyleperu.aplicacion.producto.domain.ProductVariant;
+import com.freestyleperu.aplicacion.producto.domain.VariantAttributeValue;
+import com.freestyleperu.aplicacion.producto.repository.ProductAttributeRepository;
 import com.freestyleperu.aplicacion.producto.repository.ProductRepository;
 import com.freestyleperu.aplicacion.producto.repository.ProductVariantRepository;
 import com.freestyleperu.aplicacion.promocion.service.PromocionService;
 import com.freestyleperu.aplicacion.shared.dto.PageResponse;
 import com.freestyleperu.aplicacion.shared.domain.EstadoGeneral;
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
+import com.freestyleperu.aplicacion.tienda.dto.response.PublicAttributeValueResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicCategoriaResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicColorSwatchResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicMarcaResponse;
@@ -21,8 +26,10 @@ import com.freestyleperu.aplicacion.tienda.dto.response.PublicProductoResumenRes
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicShippingInfoResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicVarianteResponse;
 import java.math.BigDecimal;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
@@ -45,6 +52,7 @@ public class TiendaCatalogoService {
 
     private final ProductRepository productRepository;
     private final ProductVariantRepository variantRepository;
+    private final ProductAttributeRepository productAttributeRepository;
     private final CategoryRepository categoryRepository;
     private final BrandRepository brandRepository;
     private final PaymentMethodRepository paymentMethodRepository;
@@ -54,11 +62,12 @@ public class TiendaCatalogoService {
     private static final String DISTRITO_ENVIO_GRATIS = "Huacho";
 
     public TiendaCatalogoService(ProductRepository productRepository, ProductVariantRepository variantRepository,
-            CategoryRepository categoryRepository, BrandRepository brandRepository,
-            PaymentMethodRepository paymentMethodRepository, ConfiguracionService configuracionService,
-            PromocionService promocionService) {
+            ProductAttributeRepository productAttributeRepository, CategoryRepository categoryRepository,
+            BrandRepository brandRepository, PaymentMethodRepository paymentMethodRepository,
+            ConfiguracionService configuracionService, PromocionService promocionService) {
         this.productRepository = productRepository;
         this.variantRepository = variantRepository;
+        this.productAttributeRepository = productAttributeRepository;
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
         this.paymentMethodRepository = paymentMethodRepository;
@@ -66,7 +75,7 @@ public class TiendaCatalogoService {
         this.promocionService = promocionService;
     }
 
-    @Cacheable("storeCatalogProducts")
+    @Cacheable(cacheNames = "storeCatalogProducts", keyGenerator = "tenantAwareKeyGenerator")
     public PageResponse<PublicProductoResumenResponse> listarProductos(
             String search, Long categoryId, Long brandId, Pageable pageable) {
         return PageResponse.of(
@@ -74,15 +83,16 @@ public class TiendaCatalogoService {
                 this::toResumen);
     }
 
-    @Cacheable("storeCatalogProductDetail")
+    @Cacheable(cacheNames = "storeCatalogProductDetail", keyGenerator = "tenantAwareKeyGenerator")
     public PublicProductoDetalleResponse obtenerProducto(Long id) {
         Product product = productRepository.findById(id)
                 .filter(p -> p.getStatus() == EstadoGeneral.ACTIVE)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Producto", id));
 
-        List<PublicVarianteResponse> variantes = variantRepository.findAllByProductIdOrderBySizeSortOrderAscColorNameAsc(id).stream()
+        Map<Long, Short> posiciones = posicionesDelProducto(id);
+        List<PublicVarianteResponse> variantes = variantRepository.findAllByProductId(id).stream()
                 .filter(v -> v.getStatus() == EstadoGeneral.ACTIVE)
-                .map(this::toVariante)
+                .map(v -> toVariante(v, posiciones))
                 .toList();
 
         return new PublicProductoDetalleResponse(
@@ -104,7 +114,7 @@ public class TiendaCatalogoService {
         return efectivo.compareTo(product.getPrice()) < 0 ? efectivo : null;
     }
 
-    @Cacheable("storeCatalogCategories")
+    @Cacheable(cacheNames = "storeCatalogCategories", keyGenerator = "tenantAwareKeyGenerator")
     public List<PublicCategoriaResponse> listarCategorias() {
         return categoryRepository.findAllByOrderByNameAsc().stream()
                 .filter(c -> c.getStatus() == EstadoGeneral.ACTIVE)
@@ -112,7 +122,7 @@ public class TiendaCatalogoService {
                 .toList();
     }
 
-    @Cacheable("storeCatalogBrands")
+    @Cacheable(cacheNames = "storeCatalogBrands", keyGenerator = "tenantAwareKeyGenerator")
     public List<PublicMarcaResponse> listarMarcas() {
         return brandRepository.findAllByOrderByNameAsc().stream()
                 .filter(b -> b.getStatus() == EstadoGeneral.ACTIVE)
@@ -120,12 +130,12 @@ public class TiendaCatalogoService {
                 .toList();
     }
 
-    @Cacheable("storeCatalogShipping")
+    @Cacheable(cacheNames = "storeCatalogShipping", keyGenerator = "tenantAwareKeyGenerator")
     public PublicShippingInfoResponse obtenerInfoEnvio() {
         return new PublicShippingInfoResponse(configuracionService.obtenerTarifaEnvio(), DISTRITO_ENVIO_GRATIS);
     }
 
-    @Cacheable("storeCatalogPaymentMethods")
+    @Cacheable(cacheNames = "storeCatalogPaymentMethods", keyGenerator = "tenantAwareKeyGenerator")
     public List<PublicMetodoPagoResponse> listarMetodosPago() {
         // affectsCash = true (ej. EFECTIVO) no tiene sentido en un checkout online sin cajero
         // presente — mismo criterio que ya usa la seña de separaciones (RN-27).
@@ -140,17 +150,21 @@ public class TiendaCatalogoService {
     private static final int MAX_SWATCHES = 6;
 
     private PublicProductoResumenResponse toResumen(Product product) {
-        List<ProductVariant> variantesActivas = variantRepository
-                .findAllByProductIdOrderBySizeSortOrderAscColorNameAsc(product.getId()).stream()
+        List<ProductVariant> variantesActivas = variantRepository.findAllByProductId(product.getId()).stream()
                 .filter(v -> v.getStatus() == EstadoGeneral.ACTIVE)
                 .toList();
         boolean inStock = variantesActivas.stream().anyMatch(v -> v.getStock() > 0);
 
+        // Ya no exclusivo de "Color": cualquier atributo SWATCH del producto aparece como swatch
+        // en la tarjeta del listado (ver Javadoc de PublicColorSwatchResponse).
         List<PublicColorSwatchResponse> colores = variantesActivas.stream()
+                .flatMap(v -> v.getAttributeValues().stream())
+                .map(VariantAttributeValue::getAttributeValue)
+                .filter(valor -> valor.getAttribute().getInputType() == AttributeInputType.SWATCH)
                 .collect(Collectors.toMap(
-                        v -> v.getColor().getId(), v -> v.getColor(), (a, b) -> a, LinkedHashMap::new))
+                        av -> av.getId(), av -> av, (a, b) -> a, LinkedHashMap::new))
                 .values().stream()
-                .map(color -> new PublicColorSwatchResponse(color.getName(), color.getHexCode()))
+                .map(valor -> new PublicColorSwatchResponse(valor.getValue(), valor.getHexCode()))
                 .limit(MAX_SWATCHES)
                 .toList();
 
@@ -160,9 +174,22 @@ public class TiendaCatalogoService {
                 colores, inStock);
     }
 
-    private PublicVarianteResponse toVariante(ProductVariant variant) {
-        return new PublicVarianteResponse(
-                variant.getId(), variant.getColor().getId(), variant.getColor().getName(), variant.getColor().getHexCode(),
-                variant.getSize().getId(), variant.getSize().getName(), variant.getStock() > 0);
+    private Map<Long, Short> posicionesDelProducto(Long productId) {
+        return productAttributeRepository.findAllByProductIdOrderByPositionAsc(productId).stream()
+                .collect(Collectors.toMap(pa -> pa.getAttribute().getId(), ProductAttribute::getPosition));
+    }
+
+    private PublicVarianteResponse toVariante(ProductVariant variant, Map<Long, Short> posiciones) {
+        List<PublicAttributeValueResponse> atributos = variant.getAttributeValues().stream()
+                .sorted(Comparator.comparing(vav -> posiciones.get(vav.getAttributeValue().getAttribute().getId())))
+                .map(vav -> new PublicAttributeValueResponse(
+                        vav.getAttributeValue().getAttribute().getId(),
+                        vav.getAttributeValue().getAttribute().getName(),
+                        vav.getAttributeValue().getAttribute().getInputType(),
+                        vav.getAttributeValue().getId(),
+                        vav.getAttributeValue().getValue(),
+                        vav.getAttributeValue().getHexCode()))
+                .toList();
+        return new PublicVarianteResponse(variant.getId(), variant.getVariantLabel(), atributos, variant.getStock() > 0);
     }
 }

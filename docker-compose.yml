@@ -35,6 +35,15 @@ services:
       SERVER_PORT: 8080
       UPLOADS_DIR: /app/uploads
       OPS_API_KEY: ${OPS_API_KEY:-}
+      # Los defaults de abajo repiten los del perfil prod de application.yml — Docker Compose
+      # fija la variable como string vacío si no está en .env (no la omite), lo que rompería el
+      # parseo numérico de Spring si no hubiera un valor de respaldo acá. Subir estos números es
+      # el ajuste real de capacidad — ver docs/08-despliegue.md, sección de capacidad.
+      DB_POOL_MAX: ${DB_POOL_MAX:-8}
+      DB_POOL_MIN: ${DB_POOL_MIN:-2}
+      TOMCAT_MAX_THREADS: ${TOMCAT_MAX_THREADS:-50}
+      TOMCAT_MIN_THREADS: ${TOMCAT_MIN_THREADS:-10}
+      TOMCAT_ACCEPT_COUNT: ${TOMCAT_ACCEPT_COUNT:-100}
     volumes:
       - uploads_data:/app/uploads
     healthcheck:

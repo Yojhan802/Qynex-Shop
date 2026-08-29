@@ -2,7 +2,7 @@ import { storeApi, ApiError, API_ORIGIN, refreshAccessToken } from './core/store
 import { requireCustomerSession } from './core/customer-auth.js';
 import { getCustomerSession } from './core/customer-session.js';
 import { renderStoreShell } from './components/store-shell.js';
-import { formatCurrency, formatDateTime } from '../../../js/core/format.js';
+import { formatCurrency, formatDateTime, escapeHtml } from '../../../js/core/format.js';
 import { openModal } from '../../../js/components/modal.js';
 import { showToast } from '../../../js/components/toast.js';
 import { connectLiveStream } from '../../../js/core/live-stream.js';
@@ -15,7 +15,7 @@ function pedidoCard(p) {
     <div class="card" style="margin-bottom: var(--space-4); cursor:pointer;" data-id="${p.id}">
       <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
         <div>
-          <h3>${p.orderNumber}</h3>
+          <h3>${escapeHtml(p.orderNumber)}</h3>
           <p>${formatDateTime(p.createdAt)}</p>
         </div>
         <span class="badge ${STATUS_CLASSES[p.status] || 'badge-neutral'}">${STATUS_LABELS[p.status] || p.status}</span>
@@ -41,7 +41,7 @@ function abrirModalDetalle(pedido) {
     .map(
       (it) => `
     <div class="store-summary-row">
-      <span>${it.productName} (${it.colorName}/${it.sizeName}) × ${it.quantity}</span>
+      <span>${escapeHtml(it.productName)} (${escapeHtml(it.variantLabel)}) × ${it.quantity}</span>
       <span>${formatCurrency(it.subtotal)}</span>
     </div>
   `
@@ -51,10 +51,10 @@ function abrirModalDetalle(pedido) {
   const body = document.createElement('div');
   body.innerHTML = `
     <div style="margin-bottom: var(--space-4);">
-      <div><strong>Entrega:</strong> ${pedido.address}, ${pedido.district}, ${pedido.province}, ${pedido.department}</div>
-      <div><strong>Método de pago:</strong> ${pedido.paymentMethodName}</div>
+      <div><strong>Entrega:</strong> ${escapeHtml(pedido.address)}, ${escapeHtml(pedido.district)}, ${escapeHtml(pedido.province)}, ${escapeHtml(pedido.department)}</div>
+      <div><strong>Método de pago:</strong> ${escapeHtml(pedido.paymentMethodName)}</div>
       ${pedido.confirmedAt ? `<div><strong>Confirmado:</strong> ${formatDateTime(pedido.confirmedAt)}</div>` : ''}
-      ${pedido.status === 'CANCELLED' && pedido.cancellationReason ? `<div><strong>Motivo de anulación:</strong> ${pedido.cancellationReason}</div>` : ''}
+      ${pedido.status === 'CANCELLED' && pedido.cancellationReason ? `<div><strong>Motivo de anulación:</strong> ${escapeHtml(pedido.cancellationReason)}</div>` : ''}
     </div>
 
     ${itemsHtml}

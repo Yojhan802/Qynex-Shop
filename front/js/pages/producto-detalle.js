@@ -9,7 +9,7 @@ import { statusBadge } from '../components/status-badge.js';
 import { renderEan13Svg } from '../components/barcode.js';
 import { imprimirEtiquetas } from '../components/label.js';
 import { showToast } from '../components/toast.js';
-import { formatCurrency, formatDateLong } from '../core/format.js';
+import { formatCurrency, formatDateLong, escapeHtml } from '../core/format.js';
 
 const session = requireSession();
 const productId = new URLSearchParams(window.location.search).get('id');
@@ -103,7 +103,7 @@ function renderHeader() {
     const confirmado = nuevoEstado === 'INACTIVE'
       ? await confirmAction({
           title: 'Desactivar producto',
-          message: `"${producto.name}" dejará de estar disponible en el POS y en los listados activos. ¿Continuar?`,
+          message: `"${escapeHtml(producto.name)}" dejará de estar disponible en el POS y en los listados activos. ¿Continuar?`,
           confirmLabel: 'Desactivar',
         })
       : true;
@@ -120,13 +120,22 @@ function renderHeader() {
 }
 
 function renderVariantes() {
+  const head = document.querySelector('#variants-head');
   const body = document.querySelector('#variants-body');
+
+  // Todas las variantes de un producto comparten el mismo conjunto de atributos (ver
+  // ProductAttribute) — la primera variante ya nos dice qué columnas mostrar, en orden.
+  const nombresAtributos = producto.variants?.[0]?.attributes.map((a) => a.attributeName) ?? ['Variante'];
+  const columnasFijas = 6; // SKU, código de barras, stock, mínimo, estado, acciones
+  head.innerHTML = `<tr>${nombresAtributos.map((n) => `<th>${escapeHtml(n)}</th>`).join('')}
+    <th>SKU</th><th>Código de barras</th><th>Stock</th><th>Mínimo</th><th>Estado</th><th></th></tr>`;
+
   if (!producto.variants || producto.variants.length === 0) {
     body.innerHTML = `
-      <tr><td colspan="8">
+      <tr><td colspan="${nombresAtributos.length + columnasFijas}">
         <div class="empty-state">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="7" width="16" height="13" rx="1.5"/><path d="M8 7V5.5A2.5 2.5 0 0110.5 3h3A2.5 2.5 0 0116 5.5V7"/></svg>
-          <span>Este producto todavía no tiene variantes. Agrega una o genera la matriz color × talla.</span>
+          <span>Este producto todavía no tiene variantes. Agrega una o genera la matriz de combinaciones.</span>
         </div>
       </td></tr>
     `;
@@ -137,19 +146,24 @@ function renderVariantes() {
     .map((v) => {
       const toggleLabel = v.status === 'ACTIVE' ? 'Desactivar' : 'Activar';
       const stockStyle = v.stock === 0 ? 'color:var(--color-danger-text);font-weight:600;' : v.stock <= v.minStock ? 'color:var(--color-warning-text);font-weight:600;' : '';
-      return `
-        <tr>
+      const celdasAtributos = v.attributes
+        .map(
+          (a) => `
           <td>
             <span style="display:inline-flex; align-items:center; gap:6px;">
-              ${v.colorHex ? `<span style="width:12px;height:12px;border-radius:3px;background:${v.colorHex};border:1px solid var(--color-border-strong);display:inline-block;"></span>` : ''}
-              ${v.colorName}
+              ${a.inputType === 'SWATCH' && a.hexCode ? `<span style="width:12px;height:12px;border-radius:3px;background:${a.hexCode};border:1px solid var(--color-border-strong);display:inline-block;"></span>` : ''}
+              ${escapeHtml(a.value)}
             </span>
-          </td>
-          <td>${v.sizeName}</td>
-          <td class="mono">${v.sku}</td>
+          </td>`
+        )
+        .join('');
+      return `
+        <tr>
+          ${celdasAtributos}
+          <td class="mono">${escapeHtml(v.sku)}</td>
           <td>
             ${v.barcode
-              ? `<button class="btn btn-ghost btn-sm mono" type="button" data-action="ver-codigo" data-id="${v.id}">${v.barcode}</button>`
+              ? `<button class="btn btn-ghost btn-sm mono" type="button" data-action="ver-codigo" data-id="${v.id}">${escapeHtml(v.barcode)}</button>`
               : `<button class="btn btn-secondary btn-sm" type="button" data-action="asignar-codigo" data-id="${v.id}">Generar código</button>`}
           </td>
           <td style="${stockStyle}">${v.stock}</td>
@@ -180,7 +194,7 @@ function verCodigo(variantId) {
   const variante = producto.variants.find((v) => String(v.id) === variantId);
   const modal = openModal({
     title: 'Código de barras',
-    subtitle: `${producto.name} · ${variante.colorName} / ${variante.sizeName}`,
+    subtitle: `${producto.name} · ${variante.variantLabel}`,
     maxWidth: '360px',
     body: `
       <div style="display:flex; justify-content:center; padding: var(--space-2) 0;">${renderEan13Svg(variante.barcode)}</div>
@@ -261,8 +275,7 @@ function actualizarVarianteLocal(varianteActualizada) {
 }
 
 function abrirModalNuevaVariante() {
-  const colores = activeOnly(catalog.colors);
-  const tallas = activeOnly(catalog.sizes);
+  const atributos = activeOnly(catalog.attributes);
 
   const modal = openModal({
     title: 'Agregar variante',
@@ -274,20 +287,18 @@ function abrirModalNuevaVariante() {
           <span class="alert-message"></span>
         </div>
         <div class="form-grid">
+          ${atributos
+            .map(
+              (a) => `
           <div class="field">
-            <label class="field-label" for="vf-color">Color</label>
-            <select class="select" id="vf-color" required>
+            <label class="field-label" for="vf-attr-${a.id}">${escapeHtml(a.name)}</label>
+            <select class="select" id="vf-attr-${a.id}" data-attribute-id="${a.id}" required>
               <option value="">Selecciona…</option>
-              ${colores.map((c) => `<option value="${c.id}">${c.name}</option>`).join('')}
+              ${activeOnly(a.values).map((v) => `<option value="${v.id}">${escapeHtml(v.value)}</option>`).join('')}
             </select>
-          </div>
-          <div class="field">
-            <label class="field-label" for="vf-size">Talla</label>
-            <select class="select" id="vf-size" required>
-              <option value="">Selecciona…</option>
-              ${tallas.map((s) => `<option value="${s.id}">${s.name}</option>`).join('')}
-            </select>
-          </div>
+          </div>`
+            )
+            .join('')}
           <div class="field">
             <label class="field-label" for="vf-stock">Stock inicial</label>
             <input class="input" type="number" id="vf-stock" min="0" step="1" value="0" />
@@ -313,25 +324,26 @@ function abrirModalNuevaVariante() {
     const errorAlert = modal.body.querySelector('#variante-form-error');
     errorAlert.hidden = true;
 
+    const attributeValueIds = atributos.map((a) => Number(modal.body.querySelector(`#vf-attr-${a.id}`).value) || null);
+    if (attributeValueIds.some((id) => !id)) {
+      errorAlert.querySelector('.alert-message').textContent = `Selecciona ${atributos.map((a) => a.name.toLowerCase()).join(' y ')}.`;
+      errorAlert.hidden = false;
+      return;
+    }
+
     const payload = {
-      colorId: Number(modal.body.querySelector('#vf-color').value) || null,
-      sizeId: Number(modal.body.querySelector('#vf-size').value) || null,
+      attributeValueIds,
       stock: Number(modal.body.querySelector('#vf-stock').value) || 0,
       minStock: Number(modal.body.querySelector('#vf-min-stock').value) || 0,
       generateBarcode: modal.body.querySelector('#vf-generate-barcode').checked,
     };
-    if (!payload.colorId || !payload.sizeId) {
-      errorAlert.querySelector('.alert-message').textContent = 'Selecciona color y talla.';
-      errorAlert.hidden = false;
-      return;
-    }
 
     try {
       const nuevaVariante = await api.post(`/products/${producto.id}/variants`, payload);
       producto.variants.push(nuevaVariante);
       renderVariantes();
       closeModal();
-      showToast({ type: 'success', title: 'Variante agregada', message: `${nuevaVariante.colorName} / ${nuevaVariante.sizeName}` });
+      showToast({ type: 'success', title: 'Variante agregada', message: nuevaVariante.variantLabel });
     } catch (error) {
       errorAlert.querySelector('.alert-message').textContent = error instanceof ApiError ? error.message : 'No se pudo agregar la variante';
       errorAlert.hidden = false;
@@ -340,12 +352,11 @@ function abrirModalNuevaVariante() {
 }
 
 function abrirModalMatriz() {
-  const colores = activeOnly(catalog.colors);
-  const tallas = activeOnly(catalog.sizes);
+  const atributos = activeOnly(catalog.attributes);
 
   const modal = openModal({
     title: 'Generar matriz de variantes',
-    subtitle: 'Crea todas las combinaciones de los colores y tallas seleccionados. Las que ya existan se omiten.',
+    subtitle: 'Crea todas las combinaciones de los valores seleccionados. Las que ya existan se omiten.',
     maxWidth: '560px',
     body: `
       <form id="matriz-form" novalidate>
@@ -354,18 +365,17 @@ function abrirModalMatriz() {
           <span class="alert-message"></span>
         </div>
         <div class="form-grid">
+          ${atributos
+            .map(
+              (a) => `
           <div class="field">
-            <span class="field-label">Colores</span>
+            <span class="field-label">${escapeHtml(a.name)}</span>
             <div style="display:flex; flex-direction:column; gap:8px; max-height:180px; overflow-y:auto; padding: var(--space-2) 0;">
-              ${colores.map((c) => `<label class="checkbox-field"><input type="checkbox" name="mf-color" value="${c.id}" /> ${c.name}</label>`).join('')}
+              ${activeOnly(a.values).map((v) => `<label class="checkbox-field"><input type="checkbox" name="mf-attr-${a.id}" value="${v.id}" /> ${escapeHtml(v.value)}</label>`).join('')}
             </div>
-          </div>
-          <div class="field">
-            <span class="field-label">Tallas</span>
-            <div style="display:flex; flex-direction:column; gap:8px; max-height:180px; overflow-y:auto; padding: var(--space-2) 0;">
-              ${tallas.map((s) => `<label class="checkbox-field"><input type="checkbox" name="mf-size" value="${s.id}" /> ${s.name}</label>`).join('')}
-            </div>
-          </div>
+          </div>`
+            )
+            .join('')}
           <div class="field">
             <label class="field-label" for="mf-min-stock">Stock mínimo</label>
             <input class="input" type="number" id="mf-min-stock" min="0" step="1" value="1" />
@@ -387,17 +397,17 @@ function abrirModalMatriz() {
     const errorAlert = modal.body.querySelector('#matriz-form-error');
     errorAlert.hidden = true;
 
-    const colorIds = [...modal.body.querySelectorAll('input[name="mf-color"]:checked')].map((el) => Number(el.value));
-    const sizeIds = [...modal.body.querySelectorAll('input[name="mf-size"]:checked')].map((el) => Number(el.value));
-    if (colorIds.length === 0 || sizeIds.length === 0) {
-      errorAlert.querySelector('.alert-message').textContent = 'Selecciona al menos un color y una talla.';
+    const attributeValueIdGroups = atributos.map((a) =>
+      [...modal.body.querySelectorAll(`input[name="mf-attr-${a.id}"]:checked`)].map((el) => Number(el.value))
+    );
+    if (attributeValueIdGroups.some((grupo) => grupo.length === 0)) {
+      errorAlert.querySelector('.alert-message').textContent = `Selecciona al menos un valor de ${atributos.map((a) => a.name.toLowerCase()).join(' y ')}.`;
       errorAlert.hidden = false;
       return;
     }
 
     const payload = {
-      colorIds,
-      sizeIds,
+      attributeValueIdGroups,
       minStock: Number(modal.body.querySelector('#mf-min-stock').value) || 0,
       generateBarcodes: modal.body.querySelector('#mf-generate-barcodes').checked,
     };

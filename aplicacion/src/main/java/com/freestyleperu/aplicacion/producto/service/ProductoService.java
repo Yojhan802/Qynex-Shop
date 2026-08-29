@@ -185,7 +185,7 @@ public class ProductoService {
     }
 
     private List<ProductVariant> variantsDe(Long productId) {
-        return variantRepository.findAllByProductIdOrderBySizeSortOrderAscColorNameAsc(productId);
+        return variantRepository.findAllByProductId(productId);
     }
 
     private Product buscarOFallar(Long id) {

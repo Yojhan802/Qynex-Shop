@@ -187,6 +187,19 @@ function renderIdentidadForm(settings) {
           <label class="field-label" for="ef-email">Email</label>
           <input class="input" type="email" id="ef-email" maxlength="120" value="${settings.email ?? ''}" />
         </div>
+        <div class="field">
+          <label class="field-label" for="ef-vertical">Rubro del negocio</label>
+          <select class="select" id="ef-vertical">
+            <option value="CLOTHING" ${settings.businessVertical === 'CLOTHING' ? 'selected' : ''}>Ropa</option>
+            <option value="GENERAL" ${settings.businessVertical === 'GENERAL' ? 'selected' : ''}>Otro (general)</option>
+          </select>
+          <span class="field-hint">Ajusta cómo responde el asistente de IA de la tienda.</span>
+        </div>
+        <div class="field field-span-2">
+          <label class="field-label" for="ef-vertical-desc">Descripción del negocio (opcional)</label>
+          <input class="input" id="ef-vertical-desc" maxlength="255" placeholder="Ej. una ferretería en Perú" value="${settings.businessDescription ?? ''}" />
+          <span class="field-hint">Cómo se presenta el asistente de IA al cliente. Si lo dejas vacío, se usa un texto genérico según el rubro.</span>
+        </div>
       </div>
 
       <div style="display:flex; justify-content:space-between; align-items:center; padding-top: var(--space-4); border-top: 1px solid var(--color-border);">
@@ -214,6 +227,8 @@ function renderIdentidadForm(settings) {
         address: document.querySelector('#ef-address').value.trim() || null,
         phone: document.querySelector('#ef-phone').value.trim() || null,
         email: document.querySelector('#ef-email').value.trim() || null,
+        businessVertical: document.querySelector('#ef-vertical').value,
+        businessDescription: document.querySelector('#ef-vertical-desc').value.trim() || null,
       });
       showToast({ type: 'success', title: 'Configuración guardada' });
       renderIdentidadForm(actualizado);

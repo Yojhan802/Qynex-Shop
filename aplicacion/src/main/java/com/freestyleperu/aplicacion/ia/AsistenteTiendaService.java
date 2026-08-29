@@ -1,5 +1,7 @@
 package com.freestyleperu.aplicacion.ia;
 
+import com.freestyleperu.aplicacion.configuracion.domain.BusinessVertical;
+import com.freestyleperu.aplicacion.configuracion.dto.response.ContextoNegocioIAResponse;
 import com.freestyleperu.aplicacion.configuracion.service.ConfiguracionService;
 import com.freestyleperu.aplicacion.ia.dto.AsistenteHistorialItem;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicCategoriaResponse;
@@ -114,12 +116,13 @@ public class AsistenteTiendaService {
     private String construirSystemPrompt(List<PublicProductoResumenResponse> productosEspecificos,
             Map<String, List<PublicProductoResumenResponse>> catalogoPorCategoria) {
         String nombreTienda = configuracionService.obtenerBranding().name();
+        ContextoNegocioIAResponse negocio = configuracionService.obtenerContextoIA();
         PublicShippingInfoResponse envio = catalogoService.obtenerInfoEnvio();
         List<PublicMetodoPagoResponse> metodosPago = catalogoService.listarMetodosPago();
 
         StringBuilder prompt = new StringBuilder();
         prompt.append("Eres el asistente virtual de la tienda online de ").append(nombreTienda)
-                .append(", un negocio de ropa en Perú. Respondes en español, breve, cordial y directo, ")
+                .append(", ").append(negocio.frase()).append(". Respondes en español, breve, cordial y directo, ")
                 .append("y te comportas como un vendedor experto: propositivo, cálido, te gusta ayudar a decidir y ")
                 .append("sugerir combinaciones reales — pero SIEMPRE con productos y precios reales, nunca inventados.\n\n");
         prompt.append("SOLO puedes hablar de esta tienda. Si te preguntan algo fuera de eso, NUNCA la respondas aunque la sepas ")
@@ -128,20 +131,22 @@ public class AsistenteTiendaService {
                 .append("Tú: \"Eso no lo puedo responder, solo te ayudo con temas de la tienda. ¿Te ayudo con algo de aquí?\"\n\n");
         prompt.append("REGLA MÁS IMPORTANTE, por encima de cualquier otra: el \"Catálogo completo\" y los \"Productos relevantes\" ")
                 .append("de más abajo son la ÚNICA fuente de verdad sobre qué vende esta tienda. Nunca menciones un producto, ")
-                .append("precio, talla, color o id que no esté literalmente ahí. Inventar disponibilidad es el peor error que puedes cometer.\n\n");
+                .append("precio, variante o id que no esté literalmente ahí. Inventar disponibilidad es el peor error que puedes cometer.\n\n");
         prompt.append("Si el cliente pide una categoría marcada como SIN STOCK: dilo con buena onda, sin sonar cortante, y sin ")
                 .append("prometer una fecha de reposición que no tienes confirmada — algo como \"por ahora no tenemos eso en catálogo, ")
                 .append("seguimos ampliando\" — y si hay algo real en otra categoría que pueda interesarle, ofrécelo también.\n\n");
-        prompt.append("Si el cliente pide un outfit, combo o te da un presupuesto: arma una propuesta real usando el \"Catálogo ")
-                .append("completo\" de abajo — suma los precios reales de los productos que seleccionas y quédate dentro del ")
-                .append("presupuesto si te dieron uno. Si alguna prenda del outfit (ej. pantalón) está en una categoría SIN STOCK, ")
-                .append("dilo con la misma buena onda de arriba y arma el resto con lo que sí hay — no inventes esa prenda.\n\n");
+        if (negocio.vertical() == BusinessVertical.CLOTHING) {
+            prompt.append("Si el cliente pide un outfit, combo o te da un presupuesto: arma una propuesta real usando el \"Catálogo ")
+                    .append("completo\" de abajo — suma los precios reales de los productos que seleccionas y quédate dentro del ")
+                    .append("presupuesto si te dieron uno. Si alguna prenda del outfit (ej. pantalón) está en una categoría SIN STOCK, ")
+                    .append("dilo con la misma buena onda de arriba y arma el resto con lo que sí hay — no inventes esa prenda.\n\n");
+        }
         prompt.append("Solo cuando tengas un producto real con su id (del catálogo completo o de los productos relevantes), ")
                 .append("puedes darle su enlace al cliente: escribe la palabra producto.html?id= seguida directamente del número ")
                 .append("de ese id (ej.: si el id es 7, escribes producto.html?id=7 — nunca inventes un número).\n\n");
-        prompt.append("Cuidado con esta trampa: que un color exista en una talla, y esa misma talla exista en otro color, ")
-                .append("NO significa que esa talla y ese color específicos estén juntos en stock — revisa \"variantes CON stock\" ")
-                .append("del producto puntual (más abajo) antes de confirmar una combinación exacta de talla+color.\n\n");
+        prompt.append("Cuidado con esta trampa: que un valor de un atributo del producto (ej. un color) exista, y un valor de otro ")
+                .append("atributo (ej. una talla) también exista, NO significa que esa combinación específica esté en stock junta ")
+                .append("— revisa \"variantes CON stock\" del producto puntual (más abajo) antes de confirmar una combinación exacta.\n\n");
 
         prompt.append("Envío: S/ ").append(envio.flatRate()).append(" a todo el Perú, gratis en ")
                 .append(envio.freeShippingDistrict()).append(".\n");
@@ -279,7 +284,7 @@ public class AsistenteTiendaService {
         if (detalle.variants().isEmpty()) return "sin variantes registradas";
         List<String> conStock = detalle.variants().stream()
                 .filter(PublicVarianteResponse::inStock)
-                .map(v -> v.sizeName() + "-" + v.colorName())
+                .map(PublicVarianteResponse::variantLabel)
                 .toList();
         return conStock.isEmpty() ? "AGOTADO en todas las tallas y colores" : String.join(", ", conStock);
     }

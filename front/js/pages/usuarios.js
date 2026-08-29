@@ -8,7 +8,7 @@ import { confirmAction } from '../components/confirm.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
 import { debounce } from '../core/debounce.js';
-import { formatDateTime } from '../core/format.js';
+import { formatDateTime, escapeHtml } from '../core/format.js';
 
 const ESTADO_SIGUIENTE = {
   ACTIVE: { status: 'INACTIVE', label: 'Desactivar' },
@@ -54,10 +54,10 @@ async function cargarUsuarios() {
             return `
         <tr>
           <td>
-            <div class="table-cell-primary">${u.fullName}</div>
-            <div class="table-cell-muted mono">${u.username}</div>
+            <div class="table-cell-primary">${escapeHtml(u.fullName)}</div>
+            <div class="table-cell-muted mono">${escapeHtml(u.username)}</div>
           </td>
-          <td>${u.roles.map((r) => `<span class="badge badge-neutral">${r.name}</span>`).join(' ') || '—'}</td>
+          <td>${u.roles.map((r) => `<span class="badge badge-neutral">${escapeHtml(r.name)}</span>`).join(' ') || '—'}</td>
           <td class="table-cell-muted">${formatDateTime(u.lastLoginAt)}</td>
           <td>${statusBadge(u.status)}</td>
           <td>
@@ -122,7 +122,7 @@ async function cambiarEstado(id, currentStatus) {
 async function resetearPassword(usuario) {
   const confirmado = await confirmAction({
     title: 'Resetear contraseña',
-    message: `Se generará una contraseña temporal para <strong>${usuario.fullName}</strong>, que deberá cambiar en su próximo ingreso. ¿Continuar?`,
+    message: `Se generará una contraseña temporal para <strong>${escapeHtml(usuario.fullName)}</strong>, que deberá cambiar en su próximo ingreso. ¿Continuar?`,
     confirmLabel: 'Generar contraseña',
     danger: false,
   });
@@ -143,7 +143,7 @@ function mostrarPasswordTemporal(usuario, temporaryPassword) {
     maxWidth: '440px',
     body: `
       <p style="color: var(--color-text-secondary); margin-bottom: var(--space-3);">
-        Comparte esta contraseña con <strong>${usuario.fullName}</strong> por un canal seguro. No volverá a mostrarse.
+        Comparte esta contraseña con <strong>${escapeHtml(usuario.fullName)}</strong> por un canal seguro. No volverá a mostrarse.
       </p>
       <div class="mono" style="font-size: var(--font-size-lg); font-weight:700; text-align:center; padding: var(--space-4); background: var(--color-surface-muted); border-radius: var(--radius-md); letter-spacing: 1px;">
         ${temporaryPassword}

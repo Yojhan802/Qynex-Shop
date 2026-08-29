@@ -1,5 +1,6 @@
 package com.freestyleperu.aplicacion.configuracion.dto.response;
 
+import com.freestyleperu.aplicacion.configuracion.domain.BusinessVertical;
 import com.freestyleperu.aplicacion.configuracion.domain.Plan;
 import com.freestyleperu.aplicacion.configuracion.domain.SubscriptionStatus;
 import java.math.BigDecimal;
@@ -18,6 +19,8 @@ public record CompanySettingsResponse(
         String phone,
         String email,
         String logoUrl,
+        BusinessVertical businessVertical,
+        String businessDescription,
         String currencyCode,
         String currencySymbol,
         BigDecimal igvRate,

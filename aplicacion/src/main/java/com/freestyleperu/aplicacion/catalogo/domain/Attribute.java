@@ -7,22 +7,29 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Tipo de atributo configurable por tenant ("Color", "Talla", "Voltaje"...) — reemplaza las
+ * entidades fijas {@code Color}/{@code Size}. Cada producto elige qué atributos usa vía
+ * {@link com.freestyleperu.aplicacion.producto.domain.ProductAttribute}.
+ */
 @Getter
 @Setter
 @NoArgsConstructor
 @Entity
-@Table(name = "colors")
-public class Color extends BaseEntity {
+@Table(name = "attributes", uniqueConstraints = @UniqueConstraint(columnNames = { "tenant_id", "name" }))
+public class Attribute extends BaseEntity {
 
-    @Column(name = "name", nullable = false, unique = true, length = 40)
+    @Column(name = "name", nullable = false, length = 40)
     private String name;
 
-    @Column(name = "hex_code", length = 7)
-    private String hexCode;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "input_type", nullable = false, length = 20)
+    private AttributeInputType inputType;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)

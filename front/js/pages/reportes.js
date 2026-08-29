@@ -3,7 +3,7 @@ import { api, ApiError } from '../core/api.js';
 import { renderShell } from '../components/shell.js';
 import { renderBarList, renderStackedBar } from '../components/charts.js';
 import { colorForPaymentMethod } from '../core/payment-colors.js';
-import { formatCurrency, formatDateLong } from '../core/format.js';
+import { formatCurrency, formatDateLong, escapeHtml } from '../core/format.js';
 import { descargarCsv } from '../core/csv.js';
 
 let activeTab = 'ventas';
@@ -70,10 +70,6 @@ async function preguntarAsistente(event) {
   } finally {
     boton.disabled = false;
   }
-}
-
-function escapeHtml(texto) {
-  return texto.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // OJO: nunca usar toISOString() para "la fecha de hoy" — convierte a UTC, y

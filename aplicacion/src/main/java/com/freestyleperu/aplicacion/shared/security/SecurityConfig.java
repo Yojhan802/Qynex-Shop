@@ -52,6 +52,7 @@ public class SecurityConfig {
             JwtAuthenticationFilter jwtAuthenticationFilter,
             SubscriptionStatusFilter subscriptionStatusFilter,
             OpsApiKeyAuthenticationFilter opsApiKeyAuthenticationFilter,
+            TenantResolutionFilter tenantResolutionFilter,
             RestAuthenticationEntryPoint authenticationEntryPoint,
             RestAccessDeniedHandler accessDeniedHandler,
             CorsConfigurationSource corsConfigurationSource) throws Exception {
@@ -76,7 +77,8 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(opsApiKeyAuthenticationFilter, JwtAuthenticationFilter.class)
-                .addFilterBefore(subscriptionStatusFilter, JwtAuthenticationFilter.class);
+                .addFilterBefore(subscriptionStatusFilter, JwtAuthenticationFilter.class)
+                .addFilterBefore(tenantResolutionFilter, OpsApiKeyAuthenticationFilter.class);
         return http.build();
     }
 }

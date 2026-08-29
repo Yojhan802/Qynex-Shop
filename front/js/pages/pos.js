@@ -8,7 +8,7 @@ import { createVariantPicker } from '../components/variant-picker.js';
 import { openPagoModal } from '../components/pago-modal.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { showToast } from '../components/toast.js';
-import { formatCurrency, formatDateTime } from '../core/format.js';
+import { formatCurrency, formatDateTime, escapeHtml } from '../core/format.js';
 import { debounce } from '../core/debounce.js';
 import { renderPagination } from '../components/pagination.js';
 import { imprimirTicket } from '../components/ticket.js';
@@ -137,8 +137,8 @@ async function buscar(query) {
               .map(
                 (v) => `
               <tr class="${v.stock === 0 ? '' : 'clickable'}" data-id="${v.variantId}" style="${v.stock === 0 ? 'opacity:.5;' : ''}">
-                <td class="table-cell-primary">${v.productName} <span class="table-cell-muted">${v.colorName} / ${v.sizeName}</span></td>
-                <td class="mono">${v.sku}</td>
+                <td class="table-cell-primary">${escapeHtml(v.productName)} <span class="table-cell-muted">${escapeHtml(v.variantLabel)}</span></td>
+                <td class="mono">${escapeHtml(v.sku)}</td>
                 <td class="mono">${formatCurrency(v.effectivePrice)}</td>
                 <td>${v.stock}</td>
                 <td>${v.stock > 0 ? '<span class="badge badge-info">Agregar</span>' : '<span class="badge badge-danger">Sin stock</span>'}</td>
@@ -185,8 +185,7 @@ function agregarAlCarrito(variante) {
     cart.push({
       variantId: variante.variantId,
       productName: variante.productName,
-      colorName: variante.colorName,
-      sizeName: variante.sizeName,
+      variantLabel: variante.variantLabel,
       sku: variante.sku,
       unitPrice: variante.effectivePrice,
       stock: variante.stock,
@@ -246,7 +245,7 @@ async function abrirSelectorCombo() {
       (c) => `
     <button type="button" class="vp-result" data-combo="${c.id}" style="display:block; width:100%; text-align:left; padding:var(--space-3); border-bottom:1px solid var(--color-border);">
       <div style="display:flex; justify-content:space-between; font-weight:600;">
-        <span>${c.name}</span><span class="mono">${formatCurrency(c.price)}</span>
+        <span>${escapeHtml(c.name)}</span><span class="mono">${formatCurrency(c.price)}</span>
       </div>
       <div style="font-size:var(--font-size-xs); color:var(--color-text-muted);">
         ${c.items.map(comboItemTexto).join(' + ')}
@@ -268,8 +267,8 @@ async function abrirSelectorCombo() {
 
 function comboItemTexto(it) {
   return it.selectorType === 'CATEGORY'
-    ? `${it.quantity} × cualquier producto de ${it.categoryName}${it.brandName ? ` (marca ${it.brandName})` : ''}`
-    : `${it.quantity} × ${it.productName}`;
+    ? `${it.quantity} × cualquier producto de ${escapeHtml(it.categoryName)}${it.brandName ? ` (marca ${escapeHtml(it.brandName)})` : ''}`
+    : `${it.quantity} × ${escapeHtml(it.productName)}`;
 }
 
 function abrirFormularioComboItems(combo) {
@@ -334,8 +333,7 @@ function abrirFormularioComboItems(combo) {
       cart.push({
         variantId: variante.variantId,
         productName: variante.productName,
-        colorName: variante.colorName,
-        sizeName: variante.sizeName,
+        variantLabel: variante.variantLabel,
         sku: variante.sku,
         unitPrice: variante.effectivePrice,
         stock: variante.stock,
@@ -378,7 +376,7 @@ async function abrirSelectorPromocion(item) {
         .map(
           (p) => `
         <button type="button" class="vp-result" data-promo="${p.id}" style="display:block; width:100%; text-align:left; padding:var(--space-3); border-bottom:1px solid var(--color-border);">
-          <div style="font-weight:600;">${p.name}</div>
+          <div style="font-weight:600;">${escapeHtml(p.name)}</div>
           <div style="font-size:var(--font-size-xs); color:var(--color-text-muted);">${p.discountType === 'PERCENTAGE' ? `${p.discountValue}% de descuento` : `${formatCurrency(p.discountValue)} de descuento`}</div>
         </button>
       `
@@ -426,8 +424,8 @@ function itemIndividualHtml(item) {
   return `
     <div style="display:flex; gap:var(--space-3); padding:var(--space-3) 0; border-bottom:1px solid var(--color-border);">
       <div style="flex:1; min-width:0;">
-        <div style="font-weight:600; font-size:var(--font-size-sm);">${item.productName}</div>
-        <div class="table-cell-muted mono">${item.colorName} / ${item.sizeName}</div>
+        <div style="font-weight:600; font-size:var(--font-size-sm);">${escapeHtml(item.productName)}</div>
+        <div class="table-cell-muted mono">${escapeHtml(item.variantLabel)}</div>
         <div style="display:flex; align-items:center; gap:var(--space-2); margin-top:var(--space-2);">
           <button class="btn btn-ghost btn-sm" type="button" data-qty-down="${item.variantId}" style="width:28px; padding:0;">−</button>
           <span class="mono" style="min-width:24px; text-align:center;">${item.quantity}</span>
@@ -436,7 +434,7 @@ function itemIndividualHtml(item) {
         ${
           permissions.has('PROMOCIONES_APLICAR')
             ? item.promotionId
-              ? `<div style="margin-top:var(--space-2); font-size:var(--font-size-xs);"><span class="badge badge-success" data-promo-badge="${item.variantId}" style="cursor:pointer;">${item.promotionName} −${formatCurrency(item.promotionDiscount)}</span></div>`
+              ? `<div style="margin-top:var(--space-2); font-size:var(--font-size-xs);"><span class="badge badge-success" data-promo-badge="${item.variantId}" style="cursor:pointer;">${escapeHtml(item.promotionName)} −${formatCurrency(item.promotionDiscount)}</span></div>`
               : `<button type="button" class="btn btn-ghost btn-sm" data-promo-badge="${item.variantId}" style="margin-top:var(--space-2); padding:0; font-size:var(--font-size-xs);">+ Promoción</button>`
             : ''
         }
@@ -456,7 +454,7 @@ function comboGroupHtml(comboId, items) {
   return `
     <div style="padding:var(--space-3) 0; border-bottom:1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface-sunken); margin: var(--space-2) 0; padding: var(--space-3);">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-2);">
-        <span class="badge badge-info">Combo · ${items[0].comboName}</span>
+        <span class="badge badge-info">Combo · ${escapeHtml(items[0].comboName)}</span>
         <button class="btn btn-ghost btn-sm" type="button" data-remove-combo="${comboId}" aria-label="Quitar combo">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg>
         </button>
@@ -465,7 +463,7 @@ function comboGroupHtml(comboId, items) {
         .map(
           (item) => `
         <div style="display:flex; justify-content:space-between; font-size:var(--font-size-sm); padding: 2px 0;">
-          <span>${item.quantity} × ${item.productName} <span class="table-cell-muted mono">${item.colorName}/${item.sizeName}</span></span>
+          <span>${item.quantity} × ${escapeHtml(item.productName)} <span class="table-cell-muted mono">${escapeHtml(item.variantLabel)}</span></span>
         </div>
       `
         )
@@ -559,7 +557,7 @@ function mostrarTicket(venta) {
           .map(
             (item) => `
           <div style="display:flex; justify-content:space-between;">
-            <span>${item.quantity} × ${item.productName} (${item.colorName}/${item.sizeName})</span>
+            <span>${item.quantity} × ${escapeHtml(item.productName)} (${escapeHtml(item.variantLabel)})</span>
             <span class="mono">${formatCurrency(item.subtotal)}</span>
           </div>
         `
@@ -604,10 +602,10 @@ async function cargarHistorial() {
           .map(
             (v) => `
         <tr>
-          <td class="table-cell-primary mono">${v.saleNumber}</td>
+          <td class="table-cell-primary mono">${escapeHtml(v.saleNumber)}</td>
           <td class="table-cell-muted">${formatDateTime(v.createdAt)}</td>
-          <td>${v.customerName ?? '—'}</td>
-          <td>${v.sellerName}</td>
+          <td>${v.customerName ? escapeHtml(v.customerName) : '—'}</td>
+          <td>${escapeHtml(v.sellerName)}</td>
           <td class="mono">${formatCurrency(v.total)}</td>
           <td><span class="badge ${SALE_STATUS_CLASSES[v.status] ?? 'badge-neutral'}">${SALE_STATUS_LABELS[v.status] ?? v.status}</span></td>
           <td>
@@ -654,7 +652,7 @@ async function verDetalleVenta(saleId) {
           .map(
             (item) => `
           <div style="display:flex; justify-content:space-between;">
-            <span>${item.quantity} × ${item.productName} (${item.colorName}/${item.sizeName})</span>
+            <span>${item.quantity} × ${escapeHtml(item.productName)} (${escapeHtml(item.variantLabel)})</span>
             <span class="mono">${formatCurrency(item.subtotal)}</span>
           </div>
         `
@@ -665,14 +663,14 @@ async function verDetalleVenta(saleId) {
         </div>
         <div style="margin-top: var(--space-3); padding-top: var(--space-3); border-top:1px solid var(--color-border);">
           <div style="font-weight:600; margin-bottom: var(--space-2);">Pagos</div>
-          ${venta.payments.map((p) => `<div style="display:flex; justify-content:space-between;"><span>${p.paymentMethodName}${p.reference ? ` (${p.reference})` : ''}</span><span class="mono">${formatCurrency(p.amount)}</span></div>`).join('')}
+          ${venta.payments.map((p) => `<div style="display:flex; justify-content:space-between;"><span>${escapeHtml(p.paymentMethodName)}${p.reference ? ` (${escapeHtml(p.reference)})` : ''}</span><span class="mono">${formatCurrency(p.amount)}</span></div>`).join('')}
         </div>
         ${
           venta.status !== 'COMPLETED'
             ? `<div class="alert alert-warning" style="margin-top: var(--space-3);"><span class="alert-message">${
                 venta.status === 'CANCELLED'
-                  ? `Anulada${venta.cancelledByUsername ? ` por ${venta.cancelledByUsername}` : ''}: ${venta.cancellationReason ?? ''}`
-                  : SALE_STATUS_LABELS[venta.status] ?? venta.status
+                  ? `Anulada${venta.cancelledByUsername ? ` por ${escapeHtml(venta.cancelledByUsername)}` : ''}: ${escapeHtml(venta.cancellationReason ?? '')}`
+                  : escapeHtml(SALE_STATUS_LABELS[venta.status] ?? venta.status)
               }</span></div>`
             : ''
         }
@@ -767,8 +765,8 @@ async function abrirFormularioDevolucion(venta) {
             <div style="border:1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3);">
               <div style="display:flex; justify-content:space-between; align-items:center; gap:var(--space-3);">
                 <div>
-                  <div style="font-weight:600; font-size:var(--font-size-sm);">${item.productName}</div>
-                  <div class="table-cell-muted mono">${item.variantSku} · disponible para devolver: ${item.quantityReturnable}</div>
+                  <div style="font-weight:600; font-size:var(--font-size-sm);">${escapeHtml(item.productName)}</div>
+                  <div class="table-cell-muted mono">${escapeHtml(item.variantSku)} · disponible para devolver: ${item.quantityReturnable}</div>
                 </div>
                 <input class="input" type="number" min="0" max="${item.quantityReturnable}" value="0" style="width:80px; text-align:right;" data-dev-qty="${item.saleDetailId}" />
               </div>
@@ -878,7 +876,7 @@ async function cargarPromotores() {
           .map(
             (p) => `
         <tr>
-          <td class="table-cell-primary">${p.name}</td>
+          <td class="table-cell-primary">${escapeHtml(p.name)}</td>
           <td>${statusBadge(p.status)}</td>
           <td>
             <div class="table-actions">

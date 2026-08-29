@@ -2,7 +2,7 @@ import { getCart, updateCartQuantity, removeFromCart, cartTotal } from './core/c
 import { renderStoreShell, actualizarContadorCarrito } from './components/store-shell.js';
 import { renderStoreSteps } from './components/store-steps.js';
 import { API_ORIGIN } from './core/store-api.js';
-import { formatCurrency } from '../../../js/core/format.js';
+import { formatCurrency, escapeHtml } from '../../../js/core/format.js';
 
 function placeholderImage() {
   return `data:image/svg+xml;utf8,${encodeURIComponent(
@@ -37,10 +37,10 @@ function render() {
     .map(
       (it) => `
     <div class="store-cart-item">
-      <img src="${it.imageUrl ? `${API_ORIGIN}${it.imageUrl}` : placeholderImage()}" alt="${it.productName}" />
+      <img src="${it.imageUrl ? `${API_ORIGIN}${it.imageUrl}` : placeholderImage()}" alt="${escapeHtml(it.productName)}" />
       <div>
-        <div style="font-weight:600;">${it.productName}</div>
-        <div class="store-product-meta">${it.colorName} / ${it.sizeName}</div>
+        <div style="font-weight:600;">${escapeHtml(it.productName)}</div>
+        <div class="store-product-meta">${escapeHtml(it.variantLabel)}</div>
         <div class="store-product-meta">${formatCurrency(it.unitPrice)} c/u</div>
         <div style="display:flex; align-items:center; gap: var(--space-4); margin-top: var(--space-2);">
           <div class="store-qty-stepper">

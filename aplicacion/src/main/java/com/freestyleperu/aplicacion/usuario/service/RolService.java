@@ -11,9 +11,11 @@ import com.freestyleperu.aplicacion.usuario.dto.request.ActualizarRolRequest;
 import com.freestyleperu.aplicacion.usuario.dto.request.AsignarPermisosRequest;
 import com.freestyleperu.aplicacion.usuario.dto.request.CrearRolRequest;
 import com.freestyleperu.aplicacion.usuario.dto.response.RolResponse;
+import com.freestyleperu.aplicacion.usuario.domain.Usuario;
 import com.freestyleperu.aplicacion.usuario.mapper.RolMapper;
 import com.freestyleperu.aplicacion.usuario.repository.PermisoRepository;
 import com.freestyleperu.aplicacion.usuario.repository.RolRepository;
+import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -26,13 +28,15 @@ public class RolService {
 
     private final RolRepository rolRepository;
     private final PermisoRepository permisoRepository;
+    private final UsuarioRepository usuarioRepository;
     private final RolMapper rolMapper;
     private final AuditService auditService;
 
     public RolService(RolRepository rolRepository, PermisoRepository permisoRepository,
-            RolMapper rolMapper, AuditService auditService) {
+            UsuarioRepository usuarioRepository, RolMapper rolMapper, AuditService auditService) {
         this.rolRepository = rolRepository;
         this.permisoRepository = permisoRepository;
+        this.usuarioRepository = usuarioRepository;
         this.rolMapper = rolMapper;
         this.auditService = auditService;
     }
@@ -46,31 +50,46 @@ public class RolService {
     }
 
     @Transactional
-    public RolResponse crear(CrearRolRequest request) {
+    public RolResponse crear(CrearRolRequest request, Long currentUserId) {
         if (rolRepository.existsByCode(request.code())) {
             throw new RecursoDuplicadoException("Ya existe un rol con el código " + request.code());
         }
+        short hierarchyLevel = request.hierarchyLevel() == null ? (short) 0 : request.hierarchyLevel().shortValue();
+        validarTechoDeAsignacion(currentUserId, hierarchyLevel);
         Rol rol = new Rol();
         rol.setCode(request.code());
         rol.setName(request.name());
         rol.setDescription(request.description());
         rol.setSystem(false);
-        rol.setHierarchyLevel(request.hierarchyLevel() == null ? (short) 0 : request.hierarchyLevel().shortValue());
+        rol.setHierarchyLevel(hierarchyLevel);
         Rol guardado = rolRepository.save(rol);
         auditService.log("ROL_CREADO", "ROL", guardado.getId(), null, request, AuditResult.SUCCESS);
         return rolMapper.toResponse(guardado);
     }
 
     @Transactional
-    public RolResponse actualizar(Long id, ActualizarRolRequest request) {
+    public RolResponse actualizar(Long id, ActualizarRolRequest request, Long currentUserId) {
         Rol rol = buscarOFallar(id);
         rol.setName(request.name());
         rol.setDescription(request.description());
         if (request.hierarchyLevel() != null) {
-            rol.setHierarchyLevel(request.hierarchyLevel().shortValue());
+            short hierarchyLevel = request.hierarchyLevel().shortValue();
+            validarTechoDeAsignacion(currentUserId, hierarchyLevel);
+            rol.setHierarchyLevel(hierarchyLevel);
         }
         auditService.log("ROL_ACTUALIZADO", "ROL", rol.getId(), null, request, AuditResult.SUCCESS);
         return rolMapper.toResponse(rol);
+    }
+
+    /** RN-25 aplicada a roles: no se puede crear/editar un rol con un techo de asignación por encima del propio. */
+    private void validarTechoDeAsignacion(Long currentUserId, short hierarchyLevel) {
+        Usuario actor = usuarioRepository.findWithRolesById(currentUserId)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Usuario", currentUserId));
+        int techo = actor.getRoles().stream().mapToInt(Rol::getHierarchyLevel).max().orElse(0);
+        if (hierarchyLevel > techo) {
+            throw new OperacionNoPermitidaException(
+                    "No puedes asignar un techo de asignación (" + hierarchyLevel + ") superior a tu propio nivel de autorización");
+        }
     }
 
     @Transactional
