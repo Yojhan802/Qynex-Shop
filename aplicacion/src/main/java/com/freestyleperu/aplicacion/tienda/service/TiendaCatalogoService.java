@@ -5,12 +5,16 @@ import com.freestyleperu.aplicacion.catalogo.repository.BrandRepository;
 import com.freestyleperu.aplicacion.catalogo.repository.CategoryRepository;
 import com.freestyleperu.aplicacion.configuracion.service.ConfiguracionService;
 import com.freestyleperu.aplicacion.pago.repository.PaymentMethodRepository;
+import com.freestyleperu.aplicacion.pago.service.PaymentProviderConfigurationService;
+import com.freestyleperu.aplicacion.pago.domain.PaymentMethodType;
 import com.freestyleperu.aplicacion.producto.domain.Product;
+import com.freestyleperu.aplicacion.producto.domain.ProductImage;
 import com.freestyleperu.aplicacion.producto.domain.ProductAttribute;
 import com.freestyleperu.aplicacion.producto.domain.ProductVariant;
 import com.freestyleperu.aplicacion.producto.domain.VariantAttributeValue;
 import com.freestyleperu.aplicacion.producto.repository.ProductAttributeRepository;
 import com.freestyleperu.aplicacion.producto.repository.ProductRepository;
+import com.freestyleperu.aplicacion.producto.repository.ProductImageRepository;
 import com.freestyleperu.aplicacion.producto.repository.ProductVariantRepository;
 import com.freestyleperu.aplicacion.promocion.service.PromocionService;
 import com.freestyleperu.aplicacion.shared.dto.PageResponse;
@@ -23,8 +27,14 @@ import com.freestyleperu.aplicacion.tienda.dto.response.PublicMarcaResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicMetodoPagoResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicProductoDetalleResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicProductoResumenResponse;
+import com.freestyleperu.aplicacion.tienda.dto.response.PublicProductImageResponse;
+import com.freestyleperu.aplicacion.tienda.dto.response.PublicSearchSuggestionResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicShippingInfoResponse;
+import com.freestyleperu.aplicacion.tienda.dto.response.PublicStorefrontConfigResponse;
+import com.freestyleperu.aplicacion.tienda.dto.response.PublicStorefrontBannerResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicVarianteResponse;
+import com.freestyleperu.aplicacion.tienda.domain.StorefrontBanner;
+import com.freestyleperu.aplicacion.tienda.repository.StorefrontBannerRepository;
 import java.math.BigDecimal;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -33,6 +43,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,28 +62,41 @@ import org.springframework.transaction.annotation.Transactional;
 public class TiendaCatalogoService {
 
     private final ProductRepository productRepository;
+    private final ProductImageRepository productImageRepository;
     private final ProductVariantRepository variantRepository;
     private final ProductAttributeRepository productAttributeRepository;
     private final CategoryRepository categoryRepository;
     private final BrandRepository brandRepository;
     private final PaymentMethodRepository paymentMethodRepository;
+    private final PaymentProviderConfigurationService paymentProviderConfigurationService;
     private final ConfiguracionService configuracionService;
     private final PromocionService promocionService;
+    private final StorefrontBannerRepository storefrontBannerRepository;
 
     private static final String DISTRITO_ENVIO_GRATIS = "Huacho";
 
-    public TiendaCatalogoService(ProductRepository productRepository, ProductVariantRepository variantRepository,
+    public TiendaCatalogoService(ProductRepository productRepository, ProductImageRepository productImageRepository,
+            ProductVariantRepository variantRepository,
             ProductAttributeRepository productAttributeRepository, CategoryRepository categoryRepository,
             BrandRepository brandRepository, PaymentMethodRepository paymentMethodRepository,
-            ConfiguracionService configuracionService, PromocionService promocionService) {
+            PaymentProviderConfigurationService paymentProviderConfigurationService,
+            ConfiguracionService configuracionService, PromocionService promocionService,
+            StorefrontBannerRepository storefrontBannerRepository) {
         this.productRepository = productRepository;
+        this.productImageRepository = productImageRepository;
         this.variantRepository = variantRepository;
         this.productAttributeRepository = productAttributeRepository;
         this.categoryRepository = categoryRepository;
         this.brandRepository = brandRepository;
         this.paymentMethodRepository = paymentMethodRepository;
+        this.paymentProviderConfigurationService = paymentProviderConfigurationService;
         this.configuracionService = configuracionService;
         this.promocionService = promocionService;
+        this.storefrontBannerRepository = storefrontBannerRepository;
+    }
+
+    public PublicStorefrontConfigResponse obtenerConfiguracionTienda() {
+        return configuracionService.obtenerConfiguracionTienda();
     }
 
     @Cacheable(cacheNames = "storeCatalogProducts", keyGenerator = "tenantAwareKeyGenerator")
@@ -98,7 +122,8 @@ public class TiendaCatalogoService {
         return new PublicProductoDetalleResponse(
                 product.getId(), product.getName(), product.getDescription(), product.getMaterial(), product.getFit(),
                 product.getPrice(), promoPriceParaMostrar(product), product.getImageUrl(), product.getSizeGuideImageUrl(),
-                product.getCategory().getName(), product.getBrand() != null ? product.getBrand().getName() : null, variantes);
+                product.getCategory().getName(), product.getBrand() != null ? product.getBrand().getName() : null, variantes,
+                imagenesDe(product));
     }
 
     /**
@@ -118,7 +143,7 @@ public class TiendaCatalogoService {
     public List<PublicCategoriaResponse> listarCategorias() {
         return categoryRepository.findAllByOrderByNameAsc().stream()
                 .filter(c -> c.getStatus() == EstadoGeneral.ACTIVE)
-                .map(c -> new PublicCategoriaResponse(c.getId(), c.getName(), c.getSlug()))
+                .map(c -> new PublicCategoriaResponse(c.getId(), c.getName(), c.getSlug(), c.getImageUrl()))
                 .toList();
     }
 
@@ -130,6 +155,29 @@ public class TiendaCatalogoService {
                 .toList();
     }
 
+    public List<PublicStorefrontBannerResponse> listarBanners() {
+        return storefrontBannerRepository.findAllByStatusOrderBySortOrderAscIdAsc(EstadoGeneral.ACTIVE).stream()
+                .filter(b -> b.getImageUrl() != null && !b.getImageUrl().isBlank())
+                .map(this::toPublicBanner)
+                .toList();
+    }
+
+    public List<PublicSearchSuggestionResponse> sugerencias(String query) {
+        String q = query == null ? "" : query.trim();
+        if (q.length() < 2) return List.of();
+
+        List<PublicSearchSuggestionResponse> categorias = categoryRepository
+                .findTop5ByStatusAndNameContainingIgnoreCaseOrderByNameAsc(EstadoGeneral.ACTIVE, q).stream()
+                .map(c -> new PublicSearchSuggestionResponse("CATEGORY", c.getId(), c.getName(), "Categoría", null))
+                .toList();
+        List<PublicSearchSuggestionResponse> productos = productRepository
+                .sugerencias(q, EstadoGeneral.ACTIVE, PageRequest.of(0, 8)).stream()
+                .map(p -> new PublicSearchSuggestionResponse("PRODUCT", p.getId(), p.getName(),
+                        p.getBrand() != null ? p.getBrand().getName() : p.getCategory().getName(), p.getImageUrl()))
+                .toList();
+        return java.util.stream.Stream.concat(productos.stream(), categorias.stream()).limit(10).toList();
+    }
+
     @Cacheable(cacheNames = "storeCatalogShipping", keyGenerator = "tenantAwareKeyGenerator")
     public PublicShippingInfoResponse obtenerInfoEnvio() {
         return new PublicShippingInfoResponse(configuracionService.obtenerTarifaEnvio(), DISTRITO_ENVIO_GRATIS);
@@ -139,8 +187,12 @@ public class TiendaCatalogoService {
     public List<PublicMetodoPagoResponse> listarMetodosPago() {
         // affectsCash = true (ej. EFECTIVO) no tiene sentido en un checkout online sin cajero
         // presente — mismo criterio que ya usa la seña de separaciones (RN-27).
+        // La tarjeta representa el cobro online con una pasarela: no se publica si la empresa
+        // no activó pagos online o no tiene ningún proveedor configurado y habilitado.
+        boolean hayPasarelaOnline = !paymentProviderConfigurationService.listarPublicos().isEmpty();
         return paymentMethodRepository.findAllByOrderBySortOrderAsc().stream()
-                .filter(m -> m.getStatus() == EstadoGeneral.ACTIVE && !m.isAffectsCash())
+                .filter(m -> m.getStatus() == EstadoGeneral.ACTIVE && !m.isAffectsCash()
+                        && (m.getType() != PaymentMethodType.CARD || hayPasarelaOnline))
                 .map(m -> new PublicMetodoPagoResponse(
                         m.getId(), m.getCode(), m.getName(), m.getType(), m.isRequiresReference(),
                         m.getAccountHolder(), m.getAccountNumber(), m.getQrImageUrl()))
@@ -171,7 +223,27 @@ public class TiendaCatalogoService {
         return new PublicProductoResumenResponse(
                 product.getId(), product.getName(), product.getPrice(), promoPriceParaMostrar(product), product.getImageUrl(),
                 product.getCategory().getName(), product.getBrand() != null ? product.getBrand().getName() : null,
-                colores, inStock);
+                colores, inStock, imagenesDe(product));
+    }
+
+    private List<PublicProductImageResponse> imagenesDe(Product product) {
+        List<PublicProductImageResponse> images = productImageRepository
+                .findAllByProductIdOrderBySortOrderAscIdAsc(product.getId()).stream()
+                .filter(image -> image.getImageUrl() != null && !image.getImageUrl().isBlank())
+                .map(this::toPublicImage)
+                .toList();
+        if (!images.isEmpty() || product.getImageUrl() == null || product.getImageUrl().isBlank()) return images;
+        return List.of(new PublicProductImageResponse(null, product.getImageUrl(), product.getName(), 0, true));
+    }
+
+    private PublicProductImageResponse toPublicImage(ProductImage image) {
+        return new PublicProductImageResponse(image.getId(), image.getImageUrl(), image.getAltText(),
+                image.getSortOrder(), image.isPrimaryImage());
+    }
+
+    private PublicStorefrontBannerResponse toPublicBanner(StorefrontBanner banner) {
+        return new PublicStorefrontBannerResponse(banner.getId(), banner.getImageUrl(), banner.getHeadline(),
+                banner.getDescription(), banner.getCtaLabel(), banner.getCtaUrl());
     }
 
     private Map<Long, Short> posicionesDelProducto(Long productId) {

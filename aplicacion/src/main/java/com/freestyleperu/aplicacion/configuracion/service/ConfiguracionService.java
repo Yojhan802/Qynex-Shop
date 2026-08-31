@@ -2,8 +2,11 @@ package com.freestyleperu.aplicacion.configuracion.service;
 
 import com.freestyleperu.aplicacion.configuracion.domain.BusinessVertical;
 import com.freestyleperu.aplicacion.configuracion.domain.CompanySettings;
+import com.freestyleperu.aplicacion.configuracion.domain.StoreTemplate;
+import com.freestyleperu.aplicacion.configuracion.PlanGate;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarCompanySettingsRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarIdentidadEmpresaRequest;
+import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarStorefrontRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarSuscripcionRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.response.BrandingResponse;
 import com.freestyleperu.aplicacion.configuracion.dto.response.CompanySettingsResponse;
@@ -12,6 +15,7 @@ import com.freestyleperu.aplicacion.configuracion.dto.response.SystemInfoRespons
 import com.freestyleperu.aplicacion.configuracion.repository.CompanySettingsRepository;
 import com.freestyleperu.aplicacion.shared.audit.AuditResult;
 import com.freestyleperu.aplicacion.shared.audit.AuditService;
+import com.freestyleperu.aplicacion.shared.exception.OperacionNoPermitidaException;
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
 import com.freestyleperu.aplicacion.shared.security.TenantContext;
 import com.freestyleperu.aplicacion.shared.util.ImageUploadService;
@@ -20,6 +24,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.info.BuildProperties;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,18 +39,21 @@ public class ConfiguracionService {
     private final AuditService auditService;
     private final ImageUploadService imageUploadService;
     private final ObjectProvider<BuildProperties> buildPropertiesProvider;
+    private final PlanGate planGate;
 
     public ConfiguracionService(
             CompanySettingsRepository companySettingsRepository,
             UsuarioRepository usuarioRepository,
             AuditService auditService,
             ImageUploadService imageUploadService,
-            ObjectProvider<BuildProperties> buildPropertiesProvider) {
+            ObjectProvider<BuildProperties> buildPropertiesProvider,
+            PlanGate planGate) {
         this.companySettingsRepository = companySettingsRepository;
         this.usuarioRepository = usuarioRepository;
         this.auditService = auditService;
         this.imageUploadService = imageUploadService;
         this.buildPropertiesProvider = buildPropertiesProvider;
+        this.planGate = planGate;
     }
 
     public CompanySettingsResponse obtener() {
@@ -54,6 +62,7 @@ public class ConfiguracionService {
 
     /** Solo datos operativos — ver RN-26. La identidad de empresa se actualiza con {@link #actualizarIdentidad}. */
     @Transactional
+    @CacheEvict(cacheNames = "storeCatalogPaymentMethods", keyGenerator = "tenantAwareKeyGenerator")
     public CompanySettingsResponse actualizar(ActualizarCompanySettingsRequest request, Long userId) {
         CompanySettings settings = buscarOFallar();
         settings.setCurrencyCode(request.currencyCode());
@@ -63,6 +72,12 @@ public class ConfiguracionService {
         settings.setShippingFlatRate(request.shippingFlatRate());
         settings.setReservationDepositAmount(request.reservationDepositAmount());
         settings.setReservationExpirationDays(request.reservationExpirationDays());
+        if (request.onlinePaymentsEnabled() != null) {
+            settings.setOnlinePaymentsEnabled(request.onlinePaymentsEnabled());
+        }
+        if (request.electronicInvoicingEnabled() != null) {
+            settings.setElectronicInvoicingEnabled(request.electronicInvoicingEnabled());
+        }
         settings.setUpdatedAt(LocalDateTime.now());
         settings.setUpdatedBy(userId);
         auditService.log("CONFIGURACION_ACTUALIZADA", "COMPANY_SETTINGS", settings.getId(), null, request, AuditResult.SUCCESS);
@@ -124,6 +139,38 @@ public class ConfiguracionService {
         return new BrandingResponse(settings.getName(), settings.getLogoUrl());
     }
 
+    /** Configuracion visual minima que puede consumir la tienda publica. */
+    public StoreTemplate obtenerPlantillaTienda() {
+        CompanySettings settings = buscarOFallar();
+        return settings.getStoreTemplate() == null ? StoreTemplate.CLASSIC : settings.getStoreTemplate();
+    }
+
+    /** Configuracion publica de apariencia, saneada por columnas tipadas y colores hex. */
+    public com.freestyleperu.aplicacion.tienda.dto.response.PublicStorefrontConfigResponse obtenerConfiguracionTienda() {
+        CompanySettings settings = buscarOFallar();
+        return new com.freestyleperu.aplicacion.tienda.dto.response.PublicStorefrontConfigResponse(
+                settings.getStoreTemplate() == null ? StoreTemplate.CLASSIC : settings.getStoreTemplate(),
+                colorOrDefault(settings.getStorePrimaryColor(), "#17324D"),
+                colorOrDefault(settings.getStoreAccentColor(), "#17324D"),
+                colorOrDefault(settings.getStoreBackgroundColor(), "#F5F7FA"));
+    }
+
+    @Transactional
+    public CompanySettingsResponse publicarTienda(ActualizarStorefrontRequest request, Long userId) {
+        if (!planGate.tienePlan("ECOMMERCE")) {
+            throw new OperacionNoPermitidaException("La personalizacion de la tienda requiere el plan Ecommerce");
+        }
+        CompanySettings settings = buscarOFallar();
+        settings.setStoreTemplate(request.template());
+        settings.setStorePrimaryColor(normalizeColor(request.primaryColor(), settings.getStorePrimaryColor(), "#17324D"));
+        settings.setStoreAccentColor(normalizeColor(request.accentColor(), settings.getStoreAccentColor(), "#17324D"));
+        settings.setStoreBackgroundColor(normalizeColor(request.backgroundColor(), settings.getStoreBackgroundColor(), "#F5F7FA"));
+        settings.setUpdatedAt(LocalDateTime.now());
+        settings.setUpdatedBy(userId);
+        auditService.log("TIENDA_APARIENCIA_PUBLICADA", "COMPANY_SETTINGS", settings.getId(), null, request, AuditResult.SUCCESS);
+        return toResponse(settings);
+    }
+
     /** Ver Javadoc de {@link ContextoNegocioIAResponse}. */
     public ContextoNegocioIAResponse obtenerContextoIA() {
         CompanySettings settings = buscarOFallar();
@@ -179,6 +226,17 @@ public class ConfiguracionService {
                 settings.getCurrencyCode(), settings.getCurrencySymbol(), settings.getIgvRate(),
                 settings.getTicketFooter(), settings.getShippingFlatRate(), settings.getReservationDepositAmount(),
                 settings.getReservationExpirationDays(), settings.getPlan(), settings.getSubscriptionStatus(),
-                settings.getNextPaymentDue(), settings.getUpdatedAt(), updatedByUsername);
+                settings.getNextPaymentDue(), settings.isOnlinePaymentsEnabled(), settings.isElectronicInvoicingEnabled(),
+                settings.getUpdatedAt(), updatedByUsername, settings.getStoreTemplate(), settings.getStorePrimaryColor(),
+                settings.getStoreAccentColor(), settings.getStoreBackgroundColor());
+    }
+
+    private String normalizeColor(String value, String current, String fallback) {
+        if (value == null || value.isBlank()) return colorOrDefault(current, fallback);
+        return value.trim().toUpperCase();
+    }
+
+    private String colorOrDefault(String value, String fallback) {
+        return value != null && value.matches("^#[0-9A-Fa-f]{6}$") ? value.toUpperCase() : fallback;
     }
 }

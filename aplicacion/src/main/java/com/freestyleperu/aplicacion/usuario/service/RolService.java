@@ -5,6 +5,7 @@ import com.freestyleperu.aplicacion.shared.audit.AuditService;
 import com.freestyleperu.aplicacion.shared.exception.OperacionNoPermitidaException;
 import com.freestyleperu.aplicacion.shared.exception.RecursoDuplicadoException;
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
+import com.freestyleperu.aplicacion.shared.security.Permisos;
 import com.freestyleperu.aplicacion.usuario.domain.Permiso;
 import com.freestyleperu.aplicacion.usuario.domain.Rol;
 import com.freestyleperu.aplicacion.usuario.dto.request.ActualizarRolRequest;
@@ -62,6 +63,8 @@ public class RolService {
         rol.setDescription(request.description());
         rol.setSystem(false);
         rol.setHierarchyLevel(hierarchyLevel);
+        permisoRepository.findByCode(Permisos.USUARIOS_CAMBIAR_CONTRASENA)
+                .ifPresent(permiso -> rol.setPermisos(new HashSet<>(Set.of(permiso))));
         Rol guardado = rolRepository.save(rol);
         auditService.log("ROL_CREADO", "ROL", guardado.getId(), null, request, AuditResult.SUCCESS);
         return rolMapper.toResponse(guardado);
@@ -102,6 +105,16 @@ public class RolService {
         if (permisos.size() != request.permissionIds().size()) {
             throw new RecursoNoEncontradoException("Uno o más permisos no existen");
         }
+        if (permisos.stream().anyMatch(permiso -> Permisos.USUARIOS_RESETEAR_CONTRASENA.equals(permiso.getCode()))
+                && !"ADMINISTRADOR".equals(rol.getCode())) {
+            throw new OperacionNoPermitidaException(
+                    "El permiso para resetear contrasenas esta reservado al rol Administrador");
+        }
+        permisoRepository.findByCode(Permisos.USUARIOS_CAMBIAR_CONTRASENA).ifPresent(permiso -> {
+            if (permisos.stream().noneMatch(actual -> actual.getCode().equals(permiso.getCode()))) {
+                permisos.add(permiso);
+            }
+        });
         rol.setPermisos(new HashSet<>(permisos));
         auditService.log("ROL_PERMISOS_ACTUALIZADOS", "ROL", rol.getId(), null,
                 Set.copyOf(request.permissionIds()), AuditResult.SUCCESS);

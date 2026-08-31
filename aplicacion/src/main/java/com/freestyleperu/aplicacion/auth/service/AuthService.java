@@ -19,6 +19,7 @@ import com.freestyleperu.aplicacion.usuario.domain.UsuarioEstado;
 import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
 import java.time.LocalDateTime;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -94,7 +95,7 @@ public class AuthService {
         usuario.setLockedUntil(null);
         usuario.setLastLoginAt(LocalDateTime.now());
 
-        Set<String> authorities = usuario.permisosEfectivos();
+        Set<String> authorities = authoritiesOf(usuario);
         String accessToken = jwtService.generateAccessToken(usuario.getId(), usuario.getUsername(), authorities, usuario.getTenantId());
         String rawRefreshToken = crearRefreshToken(usuario);
 
@@ -120,7 +121,7 @@ public class AuthService {
 
         token.setRevokedAt(LocalDateTime.now());
         String nuevoRawRefreshToken = crearRefreshToken(usuario);
-        String accessToken = jwtService.generateAccessToken(usuario.getId(), usuario.getUsername(), usuario.permisosEfectivos(), usuario.getTenantId());
+        String accessToken = jwtService.generateAccessToken(usuario.getId(), usuario.getUsername(), authoritiesOf(usuario), usuario.getTenantId());
 
         return new TokenResponse(accessToken, nuevoRawRefreshToken, TOKEN_TYPE, jwtService.getAccessTokenSeconds());
     }
@@ -138,13 +139,28 @@ public class AuthService {
     public UsuarioActualResponse me(Long usuarioId) {
         Usuario usuario = usuarioRepository.findWithRolesById(usuarioId)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Usuario", usuarioId));
-        return aRespuestaActual(usuario, usuario.permisosEfectivos());
+        return aRespuestaActual(usuario, authoritiesOf(usuario));
     }
 
     public void changePassword(Long usuarioId, String currentPassword, String newPassword) {
         Usuario usuario = usuarioRepository.findById(usuarioId)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Usuario", usuarioId));
 
+        validarYActualizarPassword(usuario, currentPassword, newPassword);
+    }
+
+    public void completeForcedPasswordChange(Long usuarioId, String currentPassword, String newPassword) {
+        Usuario usuario = usuarioRepository.findById(usuarioId)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Usuario", usuarioId));
+
+        if (!usuario.isMustChangePassword()) {
+            throw new ReglaDeNegocioException("No hay un cambio obligatorio de contraseña pendiente");
+        }
+
+        validarYActualizarPassword(usuario, currentPassword, newPassword);
+    }
+
+    private void validarYActualizarPassword(Usuario usuario, String currentPassword, String newPassword) {
         if (!passwordEncoder.matches(currentPassword, usuario.getPasswordHash())) {
             throw new AutenticacionException("La contraseña actual es incorrecta");
         }
@@ -165,6 +181,14 @@ public class AuthService {
                 ? LocalDateTime.now().plusMinutes(lockProperties.getLockDurationMinutes())
                 : null;
         self.persistirIntentoFallido(usuario.getId(), intentos, lockedUntil);
+    }
+
+    private Set<String> authoritiesOf(Usuario usuario) {
+        Set<String> authorities = new HashSet<>(usuario.permisosEfectivos());
+        if (usuario.isPlatformOperator()) {
+            authorities.add(com.freestyleperu.aplicacion.shared.security.Permisos.PLATAFORMA_EMPRESAS_GESTIONAR);
+        }
+        return Set.copyOf(authorities);
     }
 
     /**

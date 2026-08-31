@@ -45,6 +45,10 @@ public class Usuario extends BaseEntity {
     @Column(name = "email", length = 120)
     private String email;
 
+    /** Solo el operador interno de la plataforma puede administrar empresas/tenants. */
+    @Column(name = "platform_operator", nullable = false)
+    private boolean platformOperator;
+
     @Column(name = "password_hash", nullable = false, length = 100)
     private String passwordHash;
 

@@ -1,10 +1,11 @@
 import { requireSession } from '../core/auth.js';
-import { api, ApiError } from '../core/api.js';
+import { api, ApiError, API_ORIGIN } from '../core/api.js';
 import { renderShell } from '../components/shell.js';
 import { openModal, closeModal } from '../components/modal.js';
 import { statusBadge } from '../components/status-badge.js';
 import { showToast } from '../components/toast.js';
 import { loadCatalog, activeOnly } from '../core/catalog.js';
+import { escapeHtml } from '../core/format.js';
 
 let catalog = null;
 let activeTab = 'categorias';
@@ -14,8 +15,14 @@ const TABS_FIJAS = {
     label: 'Categoría',
     endpoint: '/categories',
     items: () => catalog.categories,
-    headers: ['Nombre', 'Estado', ''],
-    row: (item) => [item.name, statusBadge(item.status)],
+    headers: ['Nombre', 'Imagen', 'Estado', ''],
+    row: (item) => [
+      item.name,
+      item.imageUrl
+        ? `<img src="${API_ORIGIN}${escapeHtml(item.imageUrl)}" alt="" style="width:56px;height:42px;object-fit:cover;border-radius:var(--radius-sm);border:1px solid var(--color-border);" />`
+        : '<span class="table-cell-muted">Sin imagen</span>',
+      statusBadge(item.status),
+    ],
     fields: [{ id: 'name', label: 'Nombre', type: 'text', maxlength: 80 }],
     toRequest: (v) => ({ name: v.name }),
   },
@@ -146,6 +153,7 @@ function renderTabla() {
         ${config.row(item).map((cell) => `<td>${cell}</td>`).join('')}
         <td>
           <div class="table-actions">
+            ${activeTab === 'categorias' ? '<button class="btn btn-ghost btn-sm" type="button" data-action="category-image">Imagen</button>' : ''}
             <button class="btn btn-ghost btn-sm" type="button" data-editar="${item.id}">Editar</button>
             <button class="btn btn-ghost btn-sm" type="button" data-toggle="${item.id}" data-status="${item.status}">
               ${item.status === 'ACTIVE' ? 'Desactivar' : 'Activar'}
@@ -167,6 +175,88 @@ function renderTabla() {
   body.querySelectorAll('[data-toggle]').forEach((btn) => {
     btn.addEventListener('click', () => cambiarEstado(btn.dataset.toggle, btn.dataset.status));
   });
+  body.querySelectorAll('[data-action="category-image"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const item = items.find((i) => String(i.id) === btn.closest('tr')?.dataset.id);
+      if (item) abrirImagenCategoria(item);
+    });
+  });
+}
+
+function abrirImagenCategoria(item) {
+  const src = item.imageUrl ? `${API_ORIGIN}${item.imageUrl}` : '';
+  const modal = openModal({
+    title: `Imagen de ${item.name}`,
+    maxWidth: '460px',
+    body: `
+      <form id="category-image-form" novalidate>
+        <div class="alert alert-danger" id="category-image-error" role="alert" hidden>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="8"/><path d="M10 6v5M10 14h.01" stroke-linecap="round"/></svg>
+          <span class="alert-message"></span>
+        </div>
+        <div class="field">
+          <label class="field-label" for="category-image-file">Imagen de categoría</label>
+          <input class="input" id="category-image-file" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" required />
+          <span class="field-hint">Usa una imagen horizontal o cuadrada.</span>
+        </div>
+        <div id="category-image-preview" style="margin-top:16px; min-height:120px; display:grid; place-items:center; border:1px dashed var(--color-border); border-radius:var(--radius-md); overflow:hidden;">
+          ${src ? `<img src="${escapeHtml(src)}" alt="Vista previa de ${escapeHtml(item.name)}" style="display:block; width:100%; max-height:220px; object-fit:cover;" />` : '<span class="table-cell-muted">Todavía no hay imagen</span>'}
+        </div>
+      </form>
+    `,
+    footer: `
+      ${item.imageUrl ? '<button class="btn btn-ghost" type="button" data-delete-category-image>Quitar imagen</button>' : ''}
+      <button class="btn btn-secondary" type="button" data-cancel>Cancelar</button>
+      <button class="btn btn-primary" type="submit" form="category-image-form">Guardar imagen</button>
+    `,
+  });
+
+  const fileInput = modal.body.querySelector('#category-image-file');
+  const preview = modal.body.querySelector('#category-image-preview');
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    preview.innerHTML = '';
+    const image = document.createElement('img');
+    image.alt = `Vista previa de ${item.name}`;
+    image.style.cssText = 'display:block;width:100%;max-height:220px;object-fit:cover;';
+    image.src = URL.createObjectURL(file);
+    preview.appendChild(image);
+  });
+  modal.footer.querySelector('[data-cancel]').addEventListener('click', () => closeModal());
+  modal.footer.querySelector('[data-delete-category-image]')?.addEventListener('click', async () => {
+    try {
+      await api.delete(`/categories/${item.id}/image`);
+      closeModal();
+      showToast({ type: 'success', title: 'Imagen eliminada' });
+      await cargarCatalogo();
+      renderTabla();
+    } catch (error) {
+      mostrarErrorImagenCategoria(modal, error);
+    }
+  });
+  modal.body.querySelector('#category-image-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      await api.post(`/categories/${item.id}/image`, formData);
+      closeModal();
+      showToast({ type: 'success', title: 'Imagen de categoría actualizada' });
+      await cargarCatalogo();
+      renderTabla();
+    } catch (error) {
+      mostrarErrorImagenCategoria(modal, error);
+    }
+  });
+}
+
+function mostrarErrorImagenCategoria(modal, error) {
+  const alert = modal.body.querySelector('#category-image-error');
+  alert.querySelector('.alert-message').textContent = error instanceof ApiError ? error.message : 'No se pudo actualizar la imagen';
+  alert.hidden = false;
 }
 
 function abrirFormulario(item) {

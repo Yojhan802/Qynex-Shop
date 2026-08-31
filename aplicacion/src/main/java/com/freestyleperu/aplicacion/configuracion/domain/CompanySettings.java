@@ -65,6 +65,20 @@ public class CompanySettings {
     @Column(name = "logo_url", length = 255)
     private String logoUrl;
 
+    /** Plantilla visual de la tienda publica; la logica de catalogo y checkout es compartida. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "store_template", nullable = false, length = 30)
+    private StoreTemplate storeTemplate = StoreTemplate.CLASSIC;
+
+    @Column(name = "store_primary_color", length = 7)
+    private String storePrimaryColor = "#17324D";
+
+    @Column(name = "store_accent_color", length = 7)
+    private String storeAccentColor = "#17324D";
+
+    @Column(name = "store_background_color", length = 7)
+    private String storeBackgroundColor = "#F5F7FA";
+
     @Column(name = "currency_code", nullable = false, length = 3)
     private String currencyCode;
 
@@ -100,6 +114,14 @@ public class CompanySettings {
 
     @Column(name = "next_payment_due")
     private LocalDate nextPaymentDue;
+
+    /** Interruptor maestro por tenant para las pasarelas de pago online. */
+    @Column(name = "online_payments_enabled", nullable = false)
+    private boolean onlinePaymentsEnabled;
+
+    /** Interruptor maestro por tenant para la facturación electrónica. */
+    @Column(name = "electronic_invoicing_enabled", nullable = false)
+    private boolean electronicInvoicingEnabled;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;

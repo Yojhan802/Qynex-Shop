@@ -18,12 +18,13 @@
   <header class="store-header" id="store-header"></header>
 
   <main class="store-main" id="store-main">
-    <section class="store-hero">
+    <section class="store-hero" id="store-hero" hidden>
+      <img class="store-hero-media" id="store-hero-image" alt="" loading="eager" />
       <div class="store-hero-content">
-        <span class="store-hero-badge">Nueva colección · 2026</span>
-        <h1>Ropa y estilo urbano</h1>
-        <p>Compra online y recíbelo donde estés — pago por Yape, Plin, transferencia o contraentrega en Huacho.</p>
-        <a class="btn btn-primary" href="#catalog-sections">Explorar catálogo →</a>
+        <span class="store-hero-badge" id="store-hero-badge"></span>
+        <h1 id="store-hero-title"></h1>
+        <p id="store-hero-description"></p>
+        <a class="btn btn-primary" id="store-hero-link" href="#catalog-sections">Explorar catálogo →</a>
       </div>
     </section>
 
@@ -40,7 +41,8 @@
     <div class="store-filters">
       <label class="topbar-search">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
-        <input type="search" id="filter-search" placeholder="Buscar producto…" aria-label="Buscar productos" />
+        <input type="search" id="filter-search" list="filter-search-suggestions" placeholder="Buscar producto…" aria-label="Buscar productos" />
+        <datalist id="filter-search-suggestions"></datalist>
       </label>
       <select class="select" id="filter-category" aria-label="Filtrar por categoría">
         <option value="">Todas las categorías</option>

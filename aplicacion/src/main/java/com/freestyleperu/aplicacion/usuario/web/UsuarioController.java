@@ -71,7 +71,7 @@ public class UsuarioController {
     }
 
     @PostMapping("/api/users/{id}/reset-password")
-    @PreAuthorize("hasAuthority('" + Permisos.USUARIOS_EDITAR + "')")
+    @PreAuthorize("hasAuthority('" + Permisos.USUARIOS_RESETEAR_CONTRASENA + "')")
     public PasswordTemporalResponse resetearPassword(@PathVariable Long id) {
         return usuarioService.resetPassword(id);
     }

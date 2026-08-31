@@ -1,4 +1,4 @@
-import { requireSession, getSession } from '../core/auth.js';
+import { requireSession, getSession, hasPermission } from '../core/auth.js';
 import { api, ApiError } from '../core/api.js';
 import { renderShell } from '../components/shell.js';
 import { renderPagination } from '../components/pagination.js';
@@ -63,7 +63,7 @@ async function cargarUsuarios() {
           <td>
             <div class="table-actions">
               <button class="btn btn-ghost btn-sm" type="button" data-action="editar" data-id="${u.id}">Editar</button>
-              <button class="btn btn-ghost btn-sm" type="button" data-action="reset" data-id="${u.id}">Resetear contraseña</button>
+              ${hasPermission('USUARIOS_RESETEAR_CONTRASENA') ? `<button class="btn btn-ghost btn-sm" type="button" data-action="reset" data-id="${u.id}">Resetear contraseña</button>` : ''}
               <button class="btn btn-ghost btn-sm" type="button" data-action="toggle" data-id="${u.id}" data-status="${u.status}" ${esUsuarioActual ? 'disabled title="No puedes cambiar tu propio estado"' : ''}>
                 ${siguiente.label}
               </button>

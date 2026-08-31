@@ -41,7 +41,7 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
 
     /** Nunca requieren un tenant resuelto: infraestructura, y el endpoint de operador — ese ya
      * recibe el tenantId explícito en el body (ver ActualizarSuscripcionRequest), no por subdominio. */
-    private static final Set<String> RUTAS_EXENTAS = Set.of("/actuator/health", "/api/system/subscription");
+    private static final Set<String> RUTAS_EXACTAS_EXENTAS = Set.of("/actuator/health", "/api/system/subscription");
 
     private static final String HEADER_DEV_SLUG = "X-Tenant-Slug";
 
@@ -61,7 +61,8 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        if (RUTAS_EXENTAS.contains(request.getRequestURI())) {
+        if (RUTAS_EXACTAS_EXENTAS.contains(request.getRequestURI())
+                || request.getRequestURI().startsWith("/api/platform/")) {
             chain.doFilter(request, response);
             return;
         }

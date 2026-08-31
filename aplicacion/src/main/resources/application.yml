@@ -69,6 +69,8 @@ app:
   security:
     max-failed-attempts: 5
     lock-duration-minutes: 15
+    # Llave privada para cifrar credenciales de pasarelas y facturación en la BD.
+    credentials-encryption-key: ${CREDENTIALS_ENCRYPTION_KEY:}
   openrouter:
     api-key: ${OPENROUTER_API_KEY:}
     base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}

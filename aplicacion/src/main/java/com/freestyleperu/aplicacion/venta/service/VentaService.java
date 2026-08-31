@@ -9,6 +9,7 @@ import com.freestyleperu.aplicacion.cliente.repository.CustomerRepository;
 import com.freestyleperu.aplicacion.combo.domain.Combo;
 import com.freestyleperu.aplicacion.combo.service.ComboService;
 import com.freestyleperu.aplicacion.inventario.service.InventarioService;
+import com.freestyleperu.aplicacion.facturacion.service.ElectronicDocumentService;
 import com.freestyleperu.aplicacion.pago.domain.PaymentMethod;
 import com.freestyleperu.aplicacion.pago.service.PagoService;
 import com.freestyleperu.aplicacion.producto.domain.Product;
@@ -83,13 +84,15 @@ public class VentaService {
     private final PromocionService promocionService;
     private final SequenceService sequenceService;
     private final AuditService auditService;
+    private final ElectronicDocumentService electronicDocumentService;
 
     public VentaService(SaleRepository saleRepository, SaleDetailRepository saleDetailRepository,
             PaymentRepository paymentRepository, ProductVariantRepository variantRepository,
             CustomerRepository customerRepository, CashSessionRepository cashSessionRepository,
             UsuarioRepository usuarioRepository, InventarioService inventarioService, CajaService cajaService,
             PagoService pagoService, PromoterService promoterService, ComboService comboService,
-            PromocionService promocionService, SequenceService sequenceService, AuditService auditService) {
+            PromocionService promocionService, SequenceService sequenceService, AuditService auditService,
+            ElectronicDocumentService electronicDocumentService) {
         this.saleRepository = saleRepository;
         this.saleDetailRepository = saleDetailRepository;
         this.paymentRepository = paymentRepository;
@@ -105,6 +108,7 @@ public class VentaService {
         this.promoterService = promoterService;
         this.sequenceService = sequenceService;
         this.auditService = auditService;
+        this.electronicDocumentService = electronicDocumentService;
     }
 
     public PageResponse<VentaResumenResponse> listar(Long userId, boolean verTodas, SaleStatus status,
@@ -244,13 +248,13 @@ public class VentaService {
         }
 
         List<SaleDetail> detalles = saleDetailRepository.findAllBySaleId(saleId);
+        List<Payment> pagos = paymentRepository.findAllBySaleId(saleId);
         // Mismo criterio de orden global por variant_id que registrarVenta() — evita deadlocks
         // entre anulaciones/ventas concurrentes que comparten variantes.
         for (SaleDetail detail : detalles.stream().sorted(Comparator.comparing(d -> d.getVariant().getId())).toList()) {
             inventarioService.registrarPorDevolucion(detail.getVariant().getId(), detail.getQuantity(), saleId, userId);
         }
 
-        List<Payment> pagos = paymentRepository.findAllBySaleId(saleId);
         for (Payment payment : pagos) {
             if (payment.getPaymentMethod().isAffectsCash()) {
                 if (sale.getCashSession() == null) {
@@ -261,6 +265,12 @@ public class VentaService {
                 cajaService.registrarReversion(sale.getCashSession().getId(), payment.getAmount(), saleId, userId);
             }
         }
+
+        // Si ya existe una factura o boleta aceptada, primero se debe neutralizar
+        // fiscalmente mediante una nota de credito aceptada por el proveedor configurado. Si la nota
+        // queda pendiente o es rechazada, la excepcion provoca rollback de las
+        // reversiones locales y la venta sigue COMPLETED para poder reintentarse.
+        electronicDocumentService.asegurarNotaCreditoAnulacion(saleId, request.reason(), userId);
 
         sale.setStatus(SaleStatus.CANCELLED);
         sale.setCancelledAt(LocalDateTime.now());

@@ -27,6 +27,9 @@ public class Category extends BaseEntity {
     @Column(name = "slug", nullable = false, length = 90)
     private String slug;
 
+    @Column(name = "image_url", length = 255)
+    private String imageUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private EstadoGeneral status = EstadoGeneral.ACTIVE;

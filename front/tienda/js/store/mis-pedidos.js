@@ -12,8 +12,8 @@ const STATUS_CLASSES = { PENDING_PAYMENT: 'badge-warning', CONFIRMED: 'badge-suc
 
 function pedidoCard(p) {
   return `
-    <div class="card" style="margin-bottom: var(--space-4); cursor:pointer;" data-id="${p.id}">
-      <div class="card-header" style="display:flex; justify-content:space-between; align-items:center;">
+    <div class="card store-order-card" data-id="${p.id}">
+      <div class="card-header store-order-card-header">
         <div>
           <h3>${escapeHtml(p.orderNumber)}</h3>
           <p>${formatDateTime(p.createdAt)}</p>
@@ -50,7 +50,7 @@ function abrirModalDetalle(pedido) {
 
   const body = document.createElement('div');
   body.innerHTML = `
-    <div style="margin-bottom: var(--space-4);">
+    <div class="store-order-detail-meta">
       <div><strong>Entrega:</strong> ${escapeHtml(pedido.address)}, ${escapeHtml(pedido.district)}, ${escapeHtml(pedido.province)}, ${escapeHtml(pedido.department)}</div>
       <div><strong>Método de pago:</strong> ${escapeHtml(pedido.paymentMethodName)}</div>
       ${pedido.confirmedAt ? `<div><strong>Confirmado:</strong> ${formatDateTime(pedido.confirmedAt)}</div>` : ''}
@@ -62,7 +62,7 @@ function abrirModalDetalle(pedido) {
     <div class="store-summary-row"><span>Envío</span><span>${pedido.shippingCost > 0 ? formatCurrency(pedido.shippingCost) : 'Gratis'}</span></div>
     <div class="store-summary-total"><span>Total</span><span>${formatCurrency(pedido.total)}</span></div>
 
-    <div id="proof-section" style="margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--color-border);"></div>
+    <div id="proof-section" class="store-order-proof-section"></div>
   `;
 
   const modal = openModal({ title: pedido.orderNumber, body, maxWidth: '520px' });
@@ -72,9 +72,9 @@ function abrirModalDetalle(pedido) {
 function renderSeccionComprobante(container, pedido) {
   if (pedido.paymentProofUrl) {
     container.innerHTML = `
-      <div class="field-label" style="margin-bottom: var(--space-2);">Comprobante de pago</div>
+      <div class="field-label store-proof-label">Comprobante de pago</div>
       <a href="${API_ORIGIN}${pedido.paymentProofUrl}" target="_blank" rel="noopener">
-        <img src="${API_ORIGIN}${pedido.paymentProofUrl}" alt="Comprobante de pago" style="max-width:100%; border-radius: var(--radius-md); border:1px solid var(--color-border);" />
+        <img class="store-proof-image" src="${API_ORIGIN}${pedido.paymentProofUrl}" alt="Comprobante de pago" />
       </a>
     `;
     return;
@@ -83,8 +83,8 @@ function renderSeccionComprobante(container, pedido) {
   if (pedido.status !== 'PENDING_PAYMENT') return;
 
   container.innerHTML = `
-    <div class="field-label" style="margin-bottom: var(--space-2);">Comprobante de pago (opcional)</div>
-    <input type="file" class="input" id="proof-input" accept="image/png,image/jpeg,image/webp" style="margin-bottom: var(--space-3);" />
+    <div class="field-label store-proof-label">Comprobante de pago (opcional)</div>
+    <input type="file" class="input store-proof-input" id="proof-input" accept="image/png,image/jpeg,image/webp" />
     <button class="btn btn-secondary" type="button" id="btn-upload-proof">Subir comprobante</button>
   `;
 

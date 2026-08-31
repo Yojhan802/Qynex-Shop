@@ -59,12 +59,15 @@ const NAV_SECTIONS = [
     label: 'Administración',
     items: [
       { id: 'usuarios', label: 'Usuarios', href: 'usuarios.html', icon: 'users', enabled: true },
+      { id: 'cambiar-contrasena', label: 'Cambiar contraseña', href: 'cambiar-contrasena.html', icon: 'settings', permission: 'USUARIOS_CAMBIAR_CONTRASENA', enabled: true },
       { id: 'configuracion', label: 'Configuración', href: 'configuracion.html', icon: 'settings', enabled: true },
+      { id: 'empresas', label: 'Empresas', href: 'empresas.html', icon: 'users', permission: 'PLATAFORMA_EMPRESAS_GESTIONAR', enabled: true },
     ],
   },
 ];
 
 function navItemHtml(item, activePage) {
+  if (item.permission && !hasPermission(item.permission)) return '';
   const isActive = item.id === activePage;
   const commonAttrs = `class="nav-item" ${isActive ? "aria-current='page'" : ''}`;
   if (!item.enabled) {

@@ -220,6 +220,16 @@ public class PedidoService {
 
     @Transactional
     public PedidoResponse confirmarPago(Long id, Long staffUserId) {
+        return confirmarPagoConUsuario(id, staffUserId);
+    }
+
+    /** Confirma un pedido desde un cobro online aprobado usando el usuario tÃ©cnico de la tienda. */
+    @Transactional
+    public PedidoResponse confirmarPagoOnline(Long id) {
+        return confirmarPagoConUsuario(id, resolverUsuarioSistema());
+    }
+
+    private PedidoResponse confirmarPagoConUsuario(Long id, Long staffUserId) {
         Pedido pedido = buscarOFallar(id);
         if (pedido.getStatus() != PedidoStatus.PENDING_PAYMENT) {
             throw new ReglaDeNegocioException("Solo se puede confirmar un pedido pendiente de pago");

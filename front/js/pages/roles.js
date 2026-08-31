@@ -88,7 +88,7 @@ function renderDetalleRol() {
               .map(
                 (p) => `
               <label class="checkbox-field">
-                <input type="checkbox" name="permiso" value="${p.id}" ${asignados.has(p.id) ? 'checked' : ''} />
+                <input type="checkbox" name="permiso" value="${p.id}" ${asignados.has(p.id) ? 'checked' : ''} ${p.code === 'USUARIOS_CAMBIAR_CONTRASENA' ? 'disabled title="Habilitado para todos los roles"' : ''} ${p.code === 'USUARIOS_RESETEAR_CONTRASENA' ? 'disabled title="Reservado al rol Administrador"' : ''} />
                 ${p.description || p.code}
               </label>
             `

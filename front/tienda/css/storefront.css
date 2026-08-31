@@ -29,6 +29,71 @@
   --shadow-lg: 0 20px 50px rgba(15, 23, 42, 0.12);
 
   background: var(--color-background);
+  overflow-x: hidden;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Evita el destello de CLASSIC mientras se resuelve la plantilla del tenant y
+   se carga su hoja visual. El fallback se muestra si la hoja tarda demasiado. */
+.store-body:not(.store-status-body):not([data-store-template-ready='true']) {
+  visibility: hidden;
+}
+
+.store-body[data-store-template-ready='true'],
+.store-body.store-status-body {
+  visibility: visible;
+}
+
+/* Variantes iniciales: cada plantilla conserva el mismo HTML y contrato de datos. */
+.store-body[data-store-template='MINIMAL'] {
+  --brand-black: #f8fafc;
+  --brand-accent: #0f172a;
+  --brand-accent-hover: #1e293b;
+  --brand-accent-soft: #e2e8f0;
+  --color-background: #ffffff;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --shadow-sm: none;
+  --shadow-md: 0 4px 18px rgba(15, 23, 42, 0.06);
+}
+
+.store-body[data-store-template='FASHION'] {
+  --brand-black: #1f1720;
+  --brand-accent: #8b3a62;
+  --brand-accent-hover: #6f2e4e;
+  --brand-accent-soft: #f5e8ee;
+  --color-background: #fcf8fa;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+}
+
+.store-body[data-store-template='SPORT'] {
+  --brand-black: #0b1f33;
+  --brand-accent: #0e7490;
+  --brand-accent-hover: #155e75;
+  --brand-accent-soft: #cffafe;
+  --color-background: #f0f9ff;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+.store-body[data-store-template='LUXURY'] {
+  --brand-black: #181512;
+  --brand-accent: #9a7735;
+  --brand-accent-hover: #765a27;
+  --brand-accent-soft: #f5efdf;
+  --color-background: #faf9f5;
+  --radius-sm: 0;
+  --radius-md: 2px;
+  --radius-lg: 4px;
+  --shadow-sm: 0 2px 8px rgba(24, 21, 18, 0.08);
+  --shadow-md: 0 12px 30px rgba(24, 21, 18, 0.11);
 }
 
 /* ============ PROMO BAR ============ */
@@ -41,6 +106,7 @@
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
 }
 
 /* ============ HEADER ============ */
@@ -169,6 +235,10 @@
 
 #catalog-sections,
 #catalog-flat {
+  scroll-margin-top: 96px;
+}
+
+#category-banners {
   scroll-margin-top: 96px;
 }
 
@@ -411,6 +481,17 @@
   overflow: hidden;
 }
 
+.store-product-image-secondary {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+}
+
+.store-product-card:hover .store-product-image-secondary,
+.store-product-card:focus-visible .store-product-image-secondary {
+  opacity: 1;
+}
+
 .store-product-image img {
   width: 100%;
   height: 100%;
@@ -610,6 +691,44 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-8);
+}
+
+.store-detail-gallery {
+  min-width: 0;
+}
+
+.store-detail-main-image {
+  aspect-ratio: 1 / 1;
+}
+
+.store-detail-thumbnails {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  overflow-x: auto;
+}
+
+.store-detail-thumbnail {
+  width: 72px;
+  height: 72px;
+  flex: 0 0 72px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface-sunken);
+  cursor: pointer;
+}
+
+.store-detail-thumbnail.is-selected,
+.store-detail-thumbnail:focus-visible {
+  border-color: var(--brand-accent);
+}
+
+.store-detail-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .store-steps {
@@ -883,6 +1002,52 @@
   font-weight: 600;
 }
 
+/* Estado de tienda suspendida/no disponible. Esta vista no resuelve tenant ni
+   plantilla, por lo que mantiene una presentación segura y coherente con el
+   storefront incluso cuando el resto de la configuración no está disponible. */
+.store-status-body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 15% 10%, rgba(37, 99, 235, .08), transparent 30rem),
+    var(--color-background, #f8fafc);
+}
+
+.store-status-body .store-main {
+  width: min(100%, 760px);
+  min-height: 80vh;
+  margin: 0 auto;
+  padding: clamp(1.25rem, 5vw, 4rem);
+}
+
+.store-status-body .store-main > div {
+  width: min(100%, 520px);
+  padding: clamp(1.5rem, 6vw, 3.5rem) !important;
+  border: 1px solid var(--color-border);
+  border-radius: 24px;
+  background: var(--color-surface);
+  box-shadow: 0 22px 60px rgba(15, 23, 42, .1);
+}
+
+.store-status-body h1 {
+  font-size: clamp(1.75rem, 5vw, 3rem);
+  letter-spacing: -.05em;
+}
+
+.store-status-body #reintentar {
+  min-width: 150px;
+}
+
+@media (max-width: 480px) {
+  .store-status-body .store-main {
+    min-height: 78vh;
+    padding: .85rem;
+  }
+
+  .store-status-body .store-main > div {
+    border-radius: 18px;
+  }
+}
+
 @media (max-width: 1050px) {
   .store-benefits {
     grid-template-columns: repeat(2, 1fr);
@@ -908,6 +1073,11 @@
 }
 
 @media (max-width: 767px) {
+  .store-promo-bar {
+    white-space: normal;
+    line-height: 1.35;
+  }
+
   .store-detail {
     grid-template-columns: 1fr;
   }

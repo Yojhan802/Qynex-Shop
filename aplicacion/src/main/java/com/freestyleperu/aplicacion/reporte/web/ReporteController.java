@@ -4,6 +4,7 @@ import com.freestyleperu.aplicacion.reporte.dto.request.AsistenteReporteRequest;
 import com.freestyleperu.aplicacion.reporte.dto.response.AsistenteReporteResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.CajaSesionResumenResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.DashboardResponse;
+import com.freestyleperu.aplicacion.reporte.dto.response.IntegracionEstadoResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.ProductoTopResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.PromotorReporteResponse;
 import com.freestyleperu.aplicacion.reporte.dto.response.ResumenPeriodoResponse;
@@ -81,6 +82,20 @@ public class ReporteController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         return reporteService.distribucionPagosDigitales(from, to);
+    }
+
+    @GetMapping("/api/reports/payments/online")
+    public List<IntegracionEstadoResponse> pagosOnline(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return reporteService.pagosOnline(from, to);
+    }
+
+    @GetMapping("/api/reports/billing/documents")
+    public List<IntegracionEstadoResponse> comprobantesElectronicos(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return reporteService.comprobantesElectronicos(from, to);
     }
 
     /** Cantidad y monto total de ventas en el período — "cuántas ventas se hicieron". */

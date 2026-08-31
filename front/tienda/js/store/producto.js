@@ -16,6 +16,12 @@ function placeholderImage() {
   )}`;
 }
 
+function galeriaDelProducto() {
+  const imagenes = producto.images?.filter((image) => image?.imageUrl) ?? [];
+  if (imagenes.length) return imagenes;
+  return producto.imageUrl ? [{ imageUrl: producto.imageUrl, altText: producto.name, primary: true }] : [];
+}
+
 /** Todas las variantes de un producto comparten el mismo conjunto de atributos, en el mismo
  * orden (ver ProductAttribute) — la primera variante ya nos dice cuántos niveles de selección
  * mostrar y en qué orden (antes esto era Color y Talla fijos; ahora es cualquier lista). */
@@ -32,7 +38,8 @@ function valorDeAtributo(variante, attributeId) {
 }
 
 function render() {
-  const imageUrl = producto.imageUrl ? `${API_ORIGIN}${producto.imageUrl}` : placeholderImage();
+  const galeria = galeriaDelProducto();
+  const imageInicial = galeria[0]?.imageUrl ? `${API_ORIGIN}${galeria[0].imageUrl}` : placeholderImage();
   const tieneDescuento = producto.promoPrice != null;
   const listaNiveles = niveles();
   seleccion = {};
@@ -40,8 +47,17 @@ function render() {
 
   document.querySelector('#product-detail').innerHTML = `
     <div class="store-detail">
-      <div class="store-product-image" style="border-radius: var(--radius-lg);">
-        <img src="${imageUrl}" alt="${escapeHtml(producto.name)}" style="width:100%; height:100%; object-fit:cover;" />
+      <div class="store-detail-gallery">
+        <div class="store-product-image store-detail-main-image">
+          <img id="product-main-image" src="${escapeHtml(imageInicial)}" alt="${escapeHtml(galeria[0]?.altText || producto.name)}" />
+        </div>
+        ${galeria.length > 1 ? `<div class="store-detail-thumbnails" role="list" aria-label="Imágenes del producto">
+          ${galeria.map((image, index) => `
+            <button class="store-detail-thumbnail${index === 0 ? ' is-selected' : ''}" type="button" data-gallery-index="${index}" aria-label="Ver imagen ${index + 1}">
+              <img src="${escapeHtml(API_ORIGIN + image.imageUrl)}" alt="" loading="lazy" />
+            </button>
+          `).join('')}
+        </div>` : ''}
       </div>
       <div>
         <span class="store-product-meta">${escapeHtml(producto.brandName ?? producto.categoryName)}</span>
@@ -88,6 +104,16 @@ function render() {
   `;
 
   if (listaNiveles.length > 0) renderNivel(0);
+  document.querySelectorAll('[data-gallery-index]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const image = galeria[Number(button.dataset.galleryIndex)];
+      if (!image) return;
+      const main = document.querySelector('#product-main-image');
+      main.src = `${API_ORIGIN}${image.imageUrl}`;
+      main.alt = image.altText || producto.name;
+      document.querySelectorAll('[data-gallery-index]').forEach((item) => item.classList.toggle('is-selected', item === button));
+    });
+  });
   document.querySelector('#btn-add-cart').addEventListener('click', agregarAlCarrito);
 }
 

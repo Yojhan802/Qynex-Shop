@@ -29,6 +29,8 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Agrupa categorías, subcategorías, marcas y atributos genéricos (color, talla, u otros — ver
@@ -83,6 +85,18 @@ public class CatalogoController {
     @PreAuthorize("hasAuthority('" + Permisos.CONFIGURACION_EDITAR + "')")
     public CategoryResponse cambiarEstadoCategoria(@PathVariable Long id, @Valid @RequestBody CambiarEstadoRequest request) {
         return categoryService.cambiarEstado(id, request.status());
+    }
+
+    @PostMapping("/api/categories/{id}/image")
+    @PreAuthorize("hasAuthority('" + Permisos.CONFIGURACION_EDITAR + "')")
+    public CategoryResponse actualizarImagenCategoria(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
+        return categoryService.actualizarImagen(id, file);
+    }
+
+    @DeleteMapping("/api/categories/{id}/image")
+    @PreAuthorize("hasAuthority('" + Permisos.CONFIGURACION_EDITAR + "')")
+    public CategoryResponse eliminarImagenCategoria(@PathVariable Long id) {
+        return categoryService.eliminarImagen(id);
     }
 
     // ---------- Subcategorías ----------
