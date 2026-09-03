@@ -1341,3 +1341,28 @@ html {
 .ai-widget-send:hover {
   background: var(--brand-accent-hover);
 }
+
+/* Aceptación de Términos y Condiciones en el checkout. */
+.store-terms-accept {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.store-terms-accept input {
+  flex: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  margin-top: 0.1rem;
+  accent-color: var(--brand-accent);
+}
+
+.store-terms-accept:focus-within {
+  border-color: var(--brand-accent);
+}

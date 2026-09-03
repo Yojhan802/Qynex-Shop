@@ -3,11 +3,13 @@ package com.freestyleperu.aplicacion.pedido.service;
 import com.freestyleperu.aplicacion.cliente.domain.Customer;
 import com.freestyleperu.aplicacion.cliente.repository.CustomerRepository;
 import com.freestyleperu.aplicacion.configuracion.service.ConfiguracionService;
+import com.freestyleperu.aplicacion.facturacion.service.BillingConfigurationService;
 import com.freestyleperu.aplicacion.inventario.service.InventarioService;
 import com.freestyleperu.aplicacion.notificacion.service.NotificacionService;
 import com.freestyleperu.aplicacion.pago.domain.PaymentMethod;
 import com.freestyleperu.aplicacion.pago.service.PagoService;
 import com.freestyleperu.aplicacion.pedido.domain.Pedido;
+import com.freestyleperu.aplicacion.pedido.domain.PedidoBillingDocumentType;
 import com.freestyleperu.aplicacion.pedido.domain.PedidoDetail;
 import com.freestyleperu.aplicacion.pedido.domain.PedidoStatus;
 import com.freestyleperu.aplicacion.pedido.dto.request.CancelarPedidoRequest;
@@ -29,6 +31,7 @@ import com.freestyleperu.aplicacion.shared.exception.ReglaDeNegocioException;
 import com.freestyleperu.aplicacion.shared.exception.StockInsuficienteException;
 import com.freestyleperu.aplicacion.shared.util.ImageUploadService;
 import com.freestyleperu.aplicacion.shared.util.SequenceService;
+import com.freestyleperu.aplicacion.shared.validation.RucValidator;
 import com.freestyleperu.aplicacion.usuario.domain.Usuario;
 import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
 import com.freestyleperu.aplicacion.venta.domain.Payment;
@@ -75,6 +78,7 @@ public class PedidoService {
     private final InventarioService inventarioService;
     private final PagoService pagoService;
     private final ConfiguracionService configuracionService;
+    private final BillingConfigurationService billingConfigurationService;
     private final PromocionService promocionService;
     private final SequenceService sequenceService;
     private final AuditService auditService;
@@ -94,7 +98,7 @@ public class PedidoService {
             ConfiguracionService configuracionService, PromocionService promocionService, SequenceService sequenceService,
             AuditService auditService, ImageUploadService imageUploadService, SaleRepository saleRepository,
             SaleDetailRepository saleDetailRepository, PaymentRepository paymentRepository,
-            NotificacionService notificacionService) {
+            NotificacionService notificacionService, BillingConfigurationService billingConfigurationService) {
         this.pedidoRepository = pedidoRepository;
         this.pedidoDetailRepository = pedidoDetailRepository;
         this.variantRepository = variantRepository;
@@ -104,6 +108,7 @@ public class PedidoService {
         this.pagoService = pagoService;
         this.promocionService = promocionService;
         this.configuracionService = configuracionService;
+        this.billingConfigurationService = billingConfigurationService;
         this.sequenceService = sequenceService;
         this.auditService = auditService;
         this.imageUploadService = imageUploadService;
@@ -164,12 +169,16 @@ public class PedidoService {
 
         BigDecimal subtotal = detalles.stream().map(DetalleCalculado::subtotal).reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal shippingCost = resolverCostoEnvio(paymentMethod, request.district());
+        DatosComprobante datosComprobante = normalizarComprobante(request, subtotal.add(shippingCost));
 
         Pedido pedido = new Pedido();
         pedido.setOrderNumber(sequenceService.next("PEDIDO", "PED", 8));
         pedido.setCustomer(customer);
         pedido.setPaymentMethod(paymentMethod);
         pedido.setPaymentReference(request.paymentReference());
+        pedido.setBillingDocumentType(datosComprobante.type());
+        pedido.setBillingDocumentNumber(datosComprobante.number());
+        pedido.setBillingName(datosComprobante.name());
         pedido.setSubtotal(subtotal);
         pedido.setShippingCost(shippingCost);
         pedido.setTotal(subtotal.add(shippingCost));
@@ -185,6 +194,10 @@ public class PedidoService {
         pedido.setDistrict(request.district());
         pedido.setNotes(request.notes());
         pedido.setCreatedAt(LocalDateTime.now());
+        // Se sella junto al pedido: la aceptación vale para las condiciones vigentes al
+        // comprar, no para las que estén publicadas cuando alguien revise el pedido.
+        pedido.setTermsAcceptedAt(LocalDateTime.now());
+        pedido.setTermsVersion(request.termsVersion());
         Pedido guardado = pedidoRepository.save(pedido);
 
         List<PedidoDetail> detallesGuardados = new ArrayList<>();
@@ -249,6 +262,9 @@ public class PedidoService {
         sale.setSubtotal(pedido.getSubtotal());
         sale.setDiscountAmount(BigDecimal.ZERO);
         sale.setShippingAmount(pedido.getShippingCost());
+        sale.setBillingDocumentType(pedido.getBillingDocumentType());
+        sale.setBillingDocumentNumber(pedido.getBillingDocumentNumber());
+        sale.setBillingName(pedido.getBillingName());
         sale.setTotal(pedido.getTotal());
         sale.setStatus(SaleStatus.COMPLETED);
         sale.setNotes("Pedido online " + pedido.getOrderNumber()
@@ -433,9 +449,87 @@ public class PedidoService {
                 pedido.getCancelledAt(),
                 pedido.getCancellationReason(),
                 pedido.getSale() != null ? pedido.getSale().getId() : null,
-                items);
+                items,
+                pedido.getBillingDocumentType() == null ? PedidoBillingDocumentType.TICKET : pedido.getBillingDocumentType(),
+                pedido.getBillingDocumentNumber(),
+                pedido.getBillingName(),
+                pedido.getTermsAcceptedAt(),
+                pedido.getTermsVersion());
+    }
+
+    private DatosComprobante normalizarComprobante(CrearPedidoRequest request, BigDecimal total) {
+        PedidoBillingDocumentType type = request.billingDocumentType() == null
+                ? PedidoBillingDocumentType.TICKET : request.billingDocumentType();
+        String number = blankToNull(request.billingDocumentNumber());
+        String name = blankToNull(request.billingName());
+
+        if (type == PedidoBillingDocumentType.TICKET) {
+            if (number != null || name != null) {
+                throw new ReglaDeNegocioException("El ticket interno no requiere datos de facturaciÃ³n");
+            }
+            return new DatosComprobante(type, null, null);
+        }
+        var company = configuracionService.obtener();
+        if (!company.electronicInvoicingEnabled() || !RucValidator.isValid(company.ruc())) {
+            throw new ReglaDeNegocioException(
+                    "La facturaciÃ³n electrÃ³nica no estÃ¡ habilitada para esta tienda");
+        }
+
+        var billing = billingConfigurationService.obtener();
+        if (!billing.enabled() || !billing.configured()) {
+            throw new ReglaDeNegocioException(
+                    "La facturacion electronica no esta lista: configura el proveedor antes de solicitar un comprobante");
+        }
+
+        if (type == PedidoBillingDocumentType.FACTURA) {
+            if (!esRucValido(number)) {
+                throw new ReglaDeNegocioException(
+                        "La factura requiere un RUC vÃ¡lido de 11 dÃ­gitos y dÃ­gito verificador correcto");
+            }
+            if (name == null || !name.matches("[\\p{L}\\p{N} .,'&()\\-/]+")) {
+                throw new ReglaDeNegocioException(
+                        "La factura requiere una razÃ³n social vÃ¡lida");
+            }
+            if (billing.invoiceSeries() == null || billing.invoiceSeries().isBlank()) {
+                throw new ReglaDeNegocioException("Configura la serie de factura antes de solicitarla");
+            }
+            return new DatosComprobante(type, number, name);
+        }
+
+        if (number != null && !number.matches("[A-Za-z0-9]{1,15}")) {
+            throw new ReglaDeNegocioException(
+                    "El documento de la boleta solo admite hasta 15 caracteres alfanumÃ©ricos");
+        }
+        // La regla SUNAT para importes mayores exige identificar al adquirente.
+        // El DNI del destinatario ya es obligatorio para registrar el envÃ­o, por
+        // eso se reutiliza como dato de boleta solo en ese caso.
+        if (total.compareTo(BigDecimal.valueOf(700)) > 0 && number == null) {
+            number = request.recipientDni();
+        }
+        if (billing.receiptSeries() == null || billing.receiptSeries().isBlank()) {
+            throw new ReglaDeNegocioException("Configura la serie de boleta antes de solicitarla");
+        }
+        return new DatosComprobante(type, number, name);
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private boolean esRucValido(String value) {
+        if (value == null || !value.matches("\\d{11}")) return false;
+        int[] weights = {5, 4, 3, 2, 7, 6, 5, 4, 3, 2};
+        int sum = 0;
+        for (int index = 0; index < weights.length; index++) {
+            sum += Character.digit(value.charAt(index), 10) * weights[index];
+        }
+        int expected = (11 - (sum % 11)) % 10;
+        return expected == Character.digit(value.charAt(10), 10);
     }
 
     private record DetalleCalculado(ProductVariant variant, int quantity, BigDecimal unitPrice, BigDecimal subtotal) {
+    }
+
+    private record DatosComprobante(PedidoBillingDocumentType type, String number, String name) {
     }
 }

@@ -85,6 +85,7 @@ class PedidoFlujoIntegrationTest {
     @Autowired private SaleDetailRepository saleDetailRepository;
     @Autowired private PaymentRepository paymentRepository;
     @Autowired private NotificacionService notificacionService;
+    @Autowired private jakarta.validation.Validator validator;
 
     /** PedidoService.resolverCostoEnvio exige una tarifa plana configurada (salvo contraentrega). */
     private void aseguraConfiguracionEmpresa() {
@@ -193,6 +194,40 @@ class PedidoFlujoIntegrationTest {
         // No se puede confirmar dos veces.
         assertThatThrownBy(() -> pedidoService.confirmarPago(pedido.id(), staffUserId))
                 .isInstanceOf(ReglaDeNegocioException.class);
+    }
+
+    /**
+     * La contratación a distancia exige el consentimiento informado del comprador: el
+     * pedido guarda cuándo aceptó y qué versión del texto regía, y el borde HTTP no
+     * admite un cuerpo que no acepte (validado sobre el DTO, no sobre el servicio).
+     */
+    @Test
+    void elPedidoSellaLaAceptacionDeTerminosYElBordeRechazaAQuienNoAcepta() {
+        aseguraConfiguracionEmpresa();
+        aseguraAlmacenActivo("terminos");
+        aseguraUsuarioSistema();
+        VarianteResponse variante = crearVarianteConStock("Polo Básico", "Negro", "S", new BigDecimal("49.90"), 3);
+        PaymentMethod yape = metodoPago("YAPE");
+        Long customerId = nuevoCliente("cliente.terminos@test.com").getId();
+
+        PedidoResponse pedido = pedidoService.crear(
+                new CrearPedidoRequest(
+                        List.of(new ItemPedidoRequest(variante.id(), 1)),
+                        yape.getId(), "OP-100", "45678914", "Lucía", "Ramos", "Vega", "922333444",
+                        "Av. Bolognesi 890", "Lima", "Lima", "Surco", null, null, null, null,
+                        Boolean.TRUE, "2026-09"),
+                customerId);
+
+        assertThat(pedido.termsAcceptedAt()).isNotNull();
+        assertThat(pedido.termsVersion()).isEqualTo("2026-09");
+
+        CrearPedidoRequest sinAceptar = new CrearPedidoRequest(
+                List.of(new ItemPedidoRequest(variante.id(), 1)),
+                yape.getId(), "OP-101", "45678915", "Diego", "Salas", "Ruiz", "933444555",
+                "Av. Bolognesi 891", "Lima", "Lima", "Surco", null, null, null, null,
+                Boolean.FALSE, "2026-09");
+        assertThat(validator.validate(sinAceptar))
+                .anyMatch(violation -> violation.getPropertyPath().toString().equals("acceptedTerms"));
     }
 
     @Test

@@ -9,6 +9,9 @@ import { showToast } from '../../../js/components/toast.js';
 
 const CODIGO_CONTRAENTREGA = 'CONTRAENTREGA';
 
+/** Debe coincidir con TERMS_VERSION de la tienda React: identifica qué texto se aceptó. */
+const TERMS_VERSION = '2026-09';
+
 let metodosPagoTodos = [];
 let proveedoresPago = [];
 let metodoSeleccionado = null;
@@ -104,6 +107,16 @@ function render(session) {
         <label class="field-label" for="proofInput">Comprobante de pago</label>
         <input type="file" class="input" id="proofInput" accept="image/png,image/jpeg,image/webp" />
         <span class="field-hint">Opcional — si ya pagaste, súbelo para agilizar la confirmación. También puedes hacerlo después desde "Mis pedidos".</span>
+      </div>
+
+      <!-- Aceptación expresa de las condiciones: sin ella el backend rechaza el pedido,
+           porque la contratación a distancia exige consentimiento informado. Los textos
+           legales viven en la tienda React; aquí solo se recoge la aceptación. -->
+      <div class="field store-checkout-field store-terms-field">
+        <label class="store-terms-accept" for="acceptedTerms">
+          <input type="checkbox" id="acceptedTerms" name="acceptedTerms" required />
+          <span>He le&iacute;do y acepto los T&eacute;rminos y Condiciones, la Pol&iacute;tica de Privacidad y la Pol&iacute;tica de Cambios y Devoluciones.</span>
+        </label>
       </div>
 
       <button class="btn btn-primary btn-lg btn-block" type="submit">Confirmar pedido</button>
@@ -322,6 +335,8 @@ async function enviarPedido(event) {
         province: provSelect.options[provSelect.selectedIndex].text,
         district: distSelect.value,
         notes: form.notes.value.trim() || null,
+        acceptedTerms: form.acceptedTerms.checked,
+        termsVersion: TERMS_VERSION,
       },
       { auth: true }
     );

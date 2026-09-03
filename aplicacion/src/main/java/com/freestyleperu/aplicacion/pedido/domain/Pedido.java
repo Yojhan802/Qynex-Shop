@@ -81,6 +81,24 @@ public class Pedido {
     @Column(name = "payment_proof_url", length = 255)
     private String paymentProofUrl;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "billing_document_type", nullable = false, length = 20)
+    private PedidoBillingDocumentType billingDocumentType = PedidoBillingDocumentType.TICKET;
+
+    @Column(name = "billing_document_number", length = 15)
+    private String billingDocumentNumber;
+
+    @Column(name = "billing_name", length = 150)
+    private String billingName;
+
+    /** Cuándo el comprador aceptó los Términos y Condiciones al confirmar el pedido. */
+    @Column(name = "terms_accepted_at")
+    private LocalDateTime termsAcceptedAt;
+
+    /** Versión del texto aceptado, para poder probar qué condiciones regían esa compra. */
+    @Column(name = "terms_version", length = 20)
+    private String termsVersion;
+
     @Column(name = "recipient_dni", nullable = false, length = 15)
     private String recipientDni;
 
