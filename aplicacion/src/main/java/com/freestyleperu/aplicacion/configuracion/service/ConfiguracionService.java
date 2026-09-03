@@ -3,7 +3,7 @@ package com.freestyleperu.aplicacion.configuracion.service;
 import com.freestyleperu.aplicacion.configuracion.domain.BusinessVertical;
 import com.freestyleperu.aplicacion.configuracion.domain.CompanySettings;
 import com.freestyleperu.aplicacion.configuracion.domain.StoreTemplate;
-import com.freestyleperu.aplicacion.configuracion.PlanGate;
+import com.freestyleperu.aplicacion.plataforma.service.ModuloGate;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarCompanySettingsRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarIdentidadEmpresaRequest;
 import com.freestyleperu.aplicacion.configuracion.dto.request.ActualizarStorefrontRequest;
@@ -19,7 +19,9 @@ import com.freestyleperu.aplicacion.shared.exception.OperacionNoPermitidaExcepti
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
 import com.freestyleperu.aplicacion.shared.security.TenantContext;
 import com.freestyleperu.aplicacion.shared.util.ImageUploadService;
+import com.freestyleperu.aplicacion.shared.validation.RucValidator;
 import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
+import com.freestyleperu.aplicacion.tienda.service.StoreCatalogSyncService;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import org.springframework.beans.factory.ObjectProvider;
@@ -39,7 +41,8 @@ public class ConfiguracionService {
     private final AuditService auditService;
     private final ImageUploadService imageUploadService;
     private final ObjectProvider<BuildProperties> buildPropertiesProvider;
-    private final PlanGate planGate;
+    private final ModuloGate moduloGate;
+    private final StoreCatalogSyncService storeCatalogSyncService;
 
     public ConfiguracionService(
             CompanySettingsRepository companySettingsRepository,
@@ -47,13 +50,15 @@ public class ConfiguracionService {
             AuditService auditService,
             ImageUploadService imageUploadService,
             ObjectProvider<BuildProperties> buildPropertiesProvider,
-            PlanGate planGate) {
+            ModuloGate moduloGate,
+            StoreCatalogSyncService storeCatalogSyncService) {
         this.companySettingsRepository = companySettingsRepository;
         this.usuarioRepository = usuarioRepository;
         this.auditService = auditService;
         this.imageUploadService = imageUploadService;
         this.buildPropertiesProvider = buildPropertiesProvider;
-        this.planGate = planGate;
+        this.moduloGate = moduloGate;
+        this.storeCatalogSyncService = storeCatalogSyncService;
     }
 
     public CompanySettingsResponse obtener() {
@@ -76,11 +81,16 @@ public class ConfiguracionService {
             settings.setOnlinePaymentsEnabled(request.onlinePaymentsEnabled());
         }
         if (request.electronicInvoicingEnabled() != null) {
+            if (request.electronicInvoicingEnabled() && !RucValidator.isValid(settings.getRuc())) {
+                throw new OperacionNoPermitidaException(
+                        "La facturacion electronica requiere configurar un RUC valido de 11 digitos");
+            }
             settings.setElectronicInvoicingEnabled(request.electronicInvoicingEnabled());
         }
         settings.setUpdatedAt(LocalDateTime.now());
         settings.setUpdatedBy(userId);
         auditService.log("CONFIGURACION_ACTUALIZADA", "COMPANY_SETTINGS", settings.getId(), null, request, AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return toResponse(settings);
     }
 
@@ -88,6 +98,10 @@ public class ConfiguracionService {
     @Transactional
     public CompanySettingsResponse actualizarIdentidad(ActualizarIdentidadEmpresaRequest request, Long userId) {
         CompanySettings settings = buscarOFallar();
+        if (settings.isElectronicInvoicingEnabled() && !RucValidator.isValid(request.ruc())) {
+            throw new OperacionNoPermitidaException(
+                    "No puedes quitar o cambiar el RUC por uno invalido mientras la facturacion electronica esta activa");
+        }
         settings.setName(request.name());
         settings.setRuc(request.ruc());
         settings.setAddress(request.address());
@@ -98,6 +112,7 @@ public class ConfiguracionService {
         settings.setUpdatedAt(LocalDateTime.now());
         settings.setUpdatedBy(userId);
         auditService.log("CONFIGURACION_IDENTIDAD_ACTUALIZADA", "COMPANY_SETTINGS", settings.getId(), null, request, AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return toResponse(settings);
     }
 
@@ -108,6 +123,7 @@ public class ConfiguracionService {
         settings.setUpdatedAt(LocalDateTime.now());
         settings.setUpdatedBy(userId);
         auditService.log("CONFIGURACION_LOGO_ACTUALIZADO", "COMPANY_SETTINGS", settings.getId(), null, settings.getLogoUrl(), AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return toResponse(settings);
     }
 
@@ -145,20 +161,32 @@ public class ConfiguracionService {
         return settings.getStoreTemplate() == null ? StoreTemplate.CLASSIC : settings.getStoreTemplate();
     }
 
-    /** Configuracion publica de apariencia, saneada por columnas tipadas y colores hex. */
+    /**
+     * Configuracion publica de la tienda: apariencia saneada por columnas tipadas y
+     * colores hex, mas la identificacion del proveedor y el IGV que la tienda debe
+     * declarar al comprador. Nunca incluye credenciales ni datos de suscripcion.
+     */
     public com.freestyleperu.aplicacion.tienda.dto.response.PublicStorefrontConfigResponse obtenerConfiguracionTienda() {
         CompanySettings settings = buscarOFallar();
         return new com.freestyleperu.aplicacion.tienda.dto.response.PublicStorefrontConfigResponse(
                 settings.getStoreTemplate() == null ? StoreTemplate.CLASSIC : settings.getStoreTemplate(),
                 colorOrDefault(settings.getStorePrimaryColor(), "#17324D"),
                 colorOrDefault(settings.getStoreAccentColor(), "#17324D"),
-                colorOrDefault(settings.getStoreBackgroundColor(), "#F5F7FA"));
+                colorOrDefault(settings.getStoreBackgroundColor(), "#F5F7FA"),
+                settings.getName(),
+                settings.getRuc(),
+                settings.getAddress(),
+                settings.getPhone(),
+                settings.getEmail(),
+                settings.getIgvRate(),
+                settings.getCurrencyCode(),
+                settings.getCurrencySymbol());
     }
 
     @Transactional
     public CompanySettingsResponse publicarTienda(ActualizarStorefrontRequest request, Long userId) {
-        if (!planGate.tienePlan("ECOMMERCE")) {
-            throw new OperacionNoPermitidaException("La personalizacion de la tienda requiere el plan Ecommerce");
+        if (!moduloGate.activo("TIENDA")) {
+            throw new OperacionNoPermitidaException("La personalizacion de la tienda requiere el modulo Tienda virtual");
         }
         CompanySettings settings = buscarOFallar();
         settings.setStoreTemplate(request.template());
@@ -168,6 +196,7 @@ public class ConfiguracionService {
         settings.setUpdatedAt(LocalDateTime.now());
         settings.setUpdatedBy(userId);
         auditService.log("TIENDA_APARIENCIA_PUBLICADA", "COMPANY_SETTINGS", settings.getId(), null, request, AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return toResponse(settings);
     }
 

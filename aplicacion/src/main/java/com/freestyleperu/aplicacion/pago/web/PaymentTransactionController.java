@@ -26,7 +26,7 @@ public class PaymentTransactionController {
     }
 
     @PostMapping("/api/store/orders/{orderId}/payment-transactions")
-    @PreAuthorize("hasAuthority('" + Permisos.ROLE_CUSTOMER + "') and @planGate.tienePlan('ECOMMERCE')")
+    @PreAuthorize("hasAuthority('" + Permisos.ROLE_CUSTOMER + "') and @modulos.activo('TIENDA')")
     public PaymentTransactionResponse crear(
             @PathVariable Long orderId,
             @AuthenticationPrincipal AuthenticatedUser currentUser,
@@ -36,14 +36,14 @@ public class PaymentTransactionController {
     }
 
     @GetMapping("/api/store/payment-transactions/{id}")
-    @PreAuthorize("hasAuthority('" + Permisos.ROLE_CUSTOMER + "') and @planGate.tienePlan('ECOMMERCE')")
+    @PreAuthorize("hasAuthority('" + Permisos.ROLE_CUSTOMER + "') and @modulos.activo('TIENDA')")
     public PaymentTransactionResponse obtener(
             @PathVariable Long id, @AuthenticationPrincipal AuthenticatedUser currentUser) {
         return service.obtenerPropia(id, currentUser.id());
     }
 
     @PostMapping("/api/store/payment-transactions/{id}/charge")
-    @PreAuthorize("hasAuthority('" + Permisos.ROLE_CUSTOMER + "') and @planGate.tienePlan('ECOMMERCE')")
+    @PreAuthorize("hasAuthority('" + Permisos.ROLE_CUSTOMER + "') and @modulos.activo('TIENDA')")
     public PaymentTransactionResponse procesar(
             @PathVariable Long id,
             @AuthenticationPrincipal AuthenticatedUser currentUser,
@@ -52,7 +52,7 @@ public class PaymentTransactionController {
     }
 
     @GetMapping("/api/store/payment-transactions/{id}/checkout")
-    @PreAuthorize("hasAuthority('" + Permisos.ROLE_CUSTOMER + "') and @planGate.tienePlan('ECOMMERCE')")
+    @PreAuthorize("hasAuthority('" + Permisos.ROLE_CUSTOMER + "') and @modulos.activo('TIENDA')")
     public com.freestyleperu.aplicacion.pago.dto.response.PaymentProviderCheckoutResponse inicializarCheckout(
             @PathVariable Long id, @AuthenticationPrincipal AuthenticatedUser currentUser) {
         return service.inicializarCheckout(id, currentUser.id());

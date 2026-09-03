@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
  * el plan IA (superset del plan ECOMMERCE, ver {@code Plan}).
  */
 @RestController
-@PreAuthorize("@planGate.tienePlan('IA')")
+@PreAuthorize("@modulos.activo('IA')")
 public class AsistenteController {
 
     private final AsistenteTiendaService asistenteTiendaService;

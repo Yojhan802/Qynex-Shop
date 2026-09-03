@@ -25,7 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
  * endpoint público: no exige estar autenticado, solo evalúa la expresión.
  */
 @RestController
-@PreAuthorize("@planGate.tienePlan('ECOMMERCE')")
+@PreAuthorize("@modulos.activo('TIENDA')")
 public class TiendaCatalogoController {
 
     private final TiendaCatalogoService catalogoService;
@@ -66,6 +66,11 @@ public class TiendaCatalogoController {
     @GetMapping("/api/store/catalog/shipping-info")
     public PublicShippingInfoResponse obtenerInfoEnvio() {
         return catalogoService.obtenerInfoEnvio();
+    }
+
+    @GetMapping("/api/store/catalog/billing-options")
+    public com.freestyleperu.aplicacion.tienda.dto.response.PublicBillingOptionsResponse obtenerOpcionesFacturacion() {
+        return catalogoService.obtenerOpcionesFacturacion();
     }
 
     @GetMapping("/api/store/catalog/config")

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 @RestController
-@PreAuthorize("hasAuthority('" + Permisos.CONFIGURACION_EDITAR + "') and @planGate.tienePlan('ECOMMERCE')")
+@PreAuthorize("hasAuthority('" + Permisos.CONFIGURACION_EDITAR + "') and @modulos.activo('TIENDA')")
 public class StorefrontBannerController {
 
     private final StorefrontBannerService service;

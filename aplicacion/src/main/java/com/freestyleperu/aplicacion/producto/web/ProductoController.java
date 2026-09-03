@@ -136,7 +136,7 @@ public class ProductoController {
 
     /** "Generar con IA" en el formulario de producto (plan IA) — funciona tanto al crear como al editar. */
     @PostMapping("/api/products/assistant/description")
-    @PreAuthorize("hasAnyAuthority('" + Permisos.PRODUCTOS_CREAR + "', '" + Permisos.PRODUCTOS_EDITAR + "') and @planGate.tienePlan('IA')")
+    @PreAuthorize("hasAnyAuthority('" + Permisos.PRODUCTOS_CREAR + "', '" + Permisos.PRODUCTOS_EDITAR + "') and @modulos.activo('IA')")
     public GenerarDescripcionResponse generarDescripcion(@Valid @RequestBody GenerarDescripcionRequest request) {
         return new GenerarDescripcionResponse(productoAsistenteService.generarDescripcion(request));
     }

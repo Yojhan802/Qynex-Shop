@@ -123,7 +123,7 @@ public class ReporteController {
 
     /** "Pregúntale a tus datos" (plan IA) — el frontend manda la pregunta y el reporte que ya tiene en pantalla. */
     @PostMapping("/api/reports/assistant/ask")
-    @PreAuthorize("hasAuthority('" + Permisos.REPORTES_CONSULTAR + "') and @planGate.tienePlan('IA')")
+    @PreAuthorize("hasAuthority('" + Permisos.REPORTES_CONSULTAR + "') and @modulos.activo('IA')")
     public AsistenteReporteResponse preguntarAsistente(@Valid @RequestBody AsistenteReporteRequest request) {
         return new AsistenteReporteResponse(reporteAsistenteService.responder(request));
     }

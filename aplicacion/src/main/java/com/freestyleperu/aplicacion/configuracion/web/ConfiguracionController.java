@@ -62,7 +62,7 @@ public class ConfiguracionController {
     }
 
     @PutMapping("/api/settings/company/storefront")
-    @PreAuthorize("hasAuthority('" + Permisos.CONFIGURACION_EDITAR + "') and @planGate.tienePlan('ECOMMERCE')")
+    @PreAuthorize("hasAuthority('" + Permisos.CONFIGURACION_EDITAR + "') and @modulos.activo('TIENDA')")
     public CompanySettingsResponse publicarTienda(
             @Valid @RequestBody ActualizarStorefrontRequest request,
             @AuthenticationPrincipal AuthenticatedUser currentUser) {
