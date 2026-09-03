@@ -9,6 +9,16 @@ aplicacion/uploads/
 aplicacion/.env
 aplicacion/.env.local
 
+# Volcados de la base de datos: contienen datos reales de clientes y hashes de
+# contraseñas. Se guardan fuera del repositorio.
+backups/
+*.sql.gz
+*.dump
+
+# Basura de herramientas locales (perfil de navegador de pruebas, logs del GPU).
+.browser-profile/
+debug.log
+
 # Editor / SO
 .idea/
 .vscode/

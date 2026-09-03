@@ -102,8 +102,12 @@ clave hash configurada.
 ## Facturación Verifac y NubeFact
 
 Una venta completada puede generar un borrador idempotente de boleta o factura.
-La factura exige cliente con RUC válido de 11 dígitos. El correlativo no se
-inventa localmente: lo asigna Verifac al procesar la serie configurada.
+La emisión es una decisión posterior a la venta: el operador elige un único tipo
+para esa venta y luego confirma el envío al proveedor. La factura exige cliente
+con RUC válido de 11 dígitos y dígito verificador correcto. La boleta puede ser
+para consumidor final sin documento; si el cliente lo solicita o el total supera
+S/ 700, el sistema exige identificarlo con DNI, RUC o CE válido. El correlativo
+no se inventa localmente: lo asigna Verifac al procesar la serie configurada.
 
 El adaptador de Verifac usa la API con `X-API-Key` y soporta:
 
@@ -126,8 +130,16 @@ notas de débito. Para notas utiliza la serie del comprobante de origen. La
 ruta, el token y el ambiente deben pertenecer a la misma cuenta/RUC del tenant.
 
 Los estados son `DRAFT`, `PENDING`, `SENT`, `ACCEPTED`, `REJECTED`, `ERROR` y
-`CANCELLED`. Un documento aceptado por Verifac no se confunde con un pago
-aprobado: son procesos independientes.
+`CANCELLED`. El envío al proveedor puede responder de inmediato o dejar el
+documento en cola; mientras esté `PENDING`/`SENT`, la interfaz consulta su estado
+sin crear otro documento. Solo `ACCEPTED` habilita PDF/XML/CDR y sirve como
+origen de una nota fiscal. Un documento aceptado por Verifac o NubeFact no se
+confunde con un pago aprobado: son procesos independientes.
+
+Si la empresa no tiene activada la facturación electrónica, no se muestran las
+acciones de comprobante ni se llama a ningún proveedor: la venta conserva su
+ticket interno imprimible. Activar la opción exige además proveedor, credenciales
+y series configuradas.
 
 Las notas se crean desde una venta que ya tiene una boleta o factura aceptada.
 El backend exige `sourceDocumentId`, `reasonCode` y `reasonDescription`, valida
@@ -170,6 +182,8 @@ transacción local se revierte y la venta queda disponible para reintentar.
 - [Verifac: Swagger/OpenAPI](https://api.verifac.pe/swagger-ui/index.html)
 - [Verifac: desarrolladores](https://verifac.pe/desarrolladores/)
 - [NubeFact: integración API](https://www.nubefact.com/integracion)
+- [SUNAT: Sistema de Emisión del Contribuyente](https://cpe.sunat.gob.pe/sistema_emision/see_contribuyente)
+- [SUNAT: Boleta de Venta Electrónica](https://cpe.sunat.gob.pe/tipos_de_comprobantes/boleta)
 - [NubeFact: descargas y manuales](https://ayuda.nubefact.com/descargas)
 - [Izipay: inicio rápido web](https://developers.izipay.pe/web-core/quickstart/)
 - [Izipay: credenciales](https://developers.izipay.pe/credentials/)
