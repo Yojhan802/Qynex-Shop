@@ -57,15 +57,15 @@ El `Dockerfile` está preparado para construirse desde la raíz del repositorio:
 docker build -f front-react/Dockerfile -t qynex-front-react .
 ```
 
-El servicio React se puede levantar de forma aislada con el perfil opcional,
-sin desplazar al frontend legado:
+Este es el frontend en uso. Arranca con un `docker compose up` normal:
 
 ```text
-docker compose --profile react up --build frontend-react
+docker compose up -d --build frontend-react
 ```
 
-Por defecto queda en `http://localhost:8093` (`REACT_HTTP_PORT` permite cambiar
-el puerto). El servicio legado en `8092` sigue siendo el frontend operativo
-hasta completar la migración del panel. Los módulos administrativos que aún no
-tienen pantalla React abren explícitamente su página legado para conservar sus
-formularios, permisos y operaciones.
+Queda en `http://localhost:8093` (`REACT_HTTP_PORT` permite cambiar el puerto).
+
+El frontend legado (`front/`) está abandonado y ya no arranca solo: quedó tras el
+perfil `legacy` para que levantarlo sin querer no dé la impresión de que sigue en
+uso. Si algún módulo administrativo todavía enlaza a una pantalla legada, esa
+pantalla es lo que falta por migrar, no un servicio que haya que mantener vivo.
