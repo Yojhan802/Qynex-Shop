@@ -28,7 +28,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class SuscripcionScheduler {
 
-    private static final int DIAS_GRACIA = 5;
+    /**
+     * Días de cortesía después de que se acaba el mes pagado. Va en cero porque el cobro
+     * es anticipado: pasada la fecha, el servicio ya no está pagado, y regalar días sería
+     * dar servicio gratis. El aviso de vencimiento del panel avisa con antelación, así que
+     * nadie se queda fuera por sorpresa.
+     */
+    private static final int DIAS_GRACIA = 0;
 
     private final CompanySettingsRepository companySettingsRepository;
     private final AuditService auditService;
@@ -55,9 +61,13 @@ public class SuscripcionScheduler {
         });
     }
 
+    /**
+     * {@code nextPaymentDue} es el primer día NO cubierto: un periodo del 3 de setiembre al
+     * 3 de octubre cubre hasta el 2. Por eso se suspende al llegar la fecha, no al pasarla.
+     */
     private boolean debeSuspenderse(CompanySettings settings) {
         return settings.getSubscriptionStatus() == SubscriptionStatus.ACTIVA
                 && settings.getNextPaymentDue() != null
-                && LocalDate.now().isAfter(settings.getNextPaymentDue().plusDays(DIAS_GRACIA));
+                && !LocalDate.now().isBefore(settings.getNextPaymentDue().plusDays(DIAS_GRACIA));
     }
 }

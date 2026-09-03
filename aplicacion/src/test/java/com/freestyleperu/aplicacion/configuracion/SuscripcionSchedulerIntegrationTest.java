@@ -36,17 +36,30 @@ class SuscripcionSchedulerIntegrationTest {
     @Autowired private SuscripcionScheduler suscripcionScheduler;
     @Autowired private CompanySettingsRepository companySettingsRepository;
 
+    /** El cobro es anticipado: pasada la fecha, el servicio ya no está pagado. */
     @Test
-    void suspendeSoloCuandoSePasaLaFechaMasElMargenDeGracia() {
+    void suspendeCuandoSeAcabaElMesPagado() {
         Long id = sembrar(LocalDate.now().minusDays(10));
         suscripcionScheduler.revisarVencimiento();
         assertThat(companySettingsRepository.findById(id).orElseThrow().getSubscriptionStatus())
                 .isEqualTo(SubscriptionStatus.SUSPENDIDA);
     }
 
+    /**
+     * Sin días de cortesía: {@code nextPaymentDue} es el primer día no cubierto, así que
+     * ese mismo día ya no hay servicio pagado.
+     */
     @Test
-    void noSuspendeDentroDelMargenDeGracia() {
-        Long id = sembrar(LocalDate.now().minusDays(2));
+    void suspendeElMismoDiaDelVencimientoSinRegalarDias() {
+        Long id = sembrar(LocalDate.now());
+        suscripcionScheduler.revisarVencimiento();
+        assertThat(companySettingsRepository.findById(id).orElseThrow().getSubscriptionStatus())
+                .isEqualTo(SubscriptionStatus.SUSPENDIDA);
+    }
+
+    @Test
+    void noSuspendeMientrasElMesSigaPagado() {
+        Long id = sembrar(LocalDate.now().plusDays(1));
         suscripcionScheduler.revisarVencimiento();
         assertThat(companySettingsRepository.findById(id).orElseThrow().getSubscriptionStatus())
                 .isEqualTo(SubscriptionStatus.ACTIVA);

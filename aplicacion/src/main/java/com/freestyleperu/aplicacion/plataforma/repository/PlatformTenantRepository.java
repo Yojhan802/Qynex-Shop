@@ -4,6 +4,7 @@ import com.freestyleperu.aplicacion.configuracion.domain.BusinessVertical;
 import com.freestyleperu.aplicacion.configuracion.domain.Plan;
 import com.freestyleperu.aplicacion.configuracion.domain.SubscriptionStatus;
 import com.freestyleperu.aplicacion.plataforma.dto.response.TenantResponse;
+import com.freestyleperu.aplicacion.plataforma.dto.response.UsuarioEmpresaResponse;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
@@ -18,6 +19,10 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class PlatformTenantRepository {
 
+    /** Hash de una contraseña inutilizable para la cuenta técnica, que además queda INACTIVE. */
+    private static final String SYSTEM_USER_PASSWORD_HASH =
+            "$2b$12$Ydly3s85ZGukAICzprfmPeqXUuXykKybCuMP15VwnLZfQHQxcBARG";
+
     private final JdbcTemplate jdbc;
 
     public PlatformTenantRepository(JdbcTemplate jdbc) {
@@ -27,14 +32,18 @@ public class PlatformTenantRepository {
     public List<TenantResponse> findAll(String search, SubscriptionStatus status) {
         StringBuilder sql = new StringBuilder("""
                 SELECT cs.id, cs.slug, cs.name, cs.ruc, cs.address, cs.phone, cs.email, cs.business_vertical, cs.plan,
-                       cs.subscription_status, cs.next_payment_due, cs.updated_at,
+                       cs.subscription_status, cs.billable, cs.next_payment_due, cs.updated_at,
                        (SELECT u.username FROM users u
                           JOIN user_roles ur ON ur.user_id = u.id
                           JOIN roles r ON r.id = ur.role_id
                          WHERE u.tenant_id = cs.id AND r.code = 'ADMINISTRADOR'
                          ORDER BY u.id LIMIT 1) AS owner_username,
                        (SELECT COUNT(*) FROM users au
-                         WHERE au.tenant_id = cs.id AND au.status = 'ACTIVE') AS active_users
+                         WHERE au.tenant_id = cs.id AND au.status = 'ACTIVE') AS active_users,
+                       (SELECT COALESCE(SUM(tm.monthly_price), 0) FROM tenant_modules tm
+                         WHERE tm.tenant_id = cs.id) AS monthly_total,
+                       (SELECT COUNT(*) FROM tenant_modules tm2
+                         WHERE tm2.tenant_id = cs.id) AS module_count
                   FROM company_settings cs
                  WHERE 1 = 1
                 """);
@@ -70,7 +79,8 @@ public class PlatformTenantRepository {
     }
 
     public Long insertTenant(String name, String slug, String ruc, String address, String phone, String email,
-            BusinessVertical businessVertical, Plan plan, java.time.LocalDate nextPaymentDue, Long actorId, LocalDateTime now) {
+            BusinessVertical businessVertical, Plan plan, java.time.LocalDate nextPaymentDue, boolean billable,
+            Long actorId, LocalDateTime now) {
         KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbc.update(connection -> {
             var statement = connection.prepareStatement("""
@@ -78,9 +88,11 @@ public class PlatformTenantRepository {
                         slug, name, business_vertical, business_description, ruc, address, phone, email, logo_url,
                         currency_code, currency_symbol, igv_rate, ticket_footer, shipping_flat_rate,
                         reservation_deposit_amount, reservation_expiration_days, plan, subscription_status,
-                        next_payment_due, online_payments_enabled, electronic_invoicing_enabled, updated_at, updated_by)
+                        next_payment_due, online_payments_enabled, electronic_invoicing_enabled,
+                        billable, store_template, updated_at, updated_by)
                     VALUES (?, ?, ?, NULL, ?, ?, ?, ?, NULL, 'PEN', 'S/', 0.1800,
-                            'Gracias por su compra', 15.00, 20.00, 3, ?, 'ACTIVA', ?, FALSE, FALSE, ?, ?)
+                            'Gracias por su compra', 15.00, 20.00, 3, ?, 'ACTIVA', ?, FALSE, FALSE,
+                            ?, 'CLASSIC', ?, ?)
                     """, java.sql.Statement.RETURN_GENERATED_KEYS);
             int i = 1;
             statement.setString(i++, slug);
@@ -92,6 +104,7 @@ public class PlatformTenantRepository {
             statement.setString(i++, email);
             statement.setString(i++, plan.name());
             statement.setObject(i++, nextPaymentDue);
+            statement.setBoolean(i++, billable);
             statement.setObject(i++, now);
             statement.setObject(i, actorId);
             return statement;
@@ -102,27 +115,31 @@ public class PlatformTenantRepository {
     }
 
     public void updateTenant(Long tenantId, String name, String ruc, String address, String phone, String email,
-            BusinessVertical businessVertical, Plan plan, SubscriptionStatus status, java.time.LocalDate nextPaymentDue,
-            Long actorId, LocalDateTime now) {
+            BusinessVertical businessVertical, Plan plan, SubscriptionStatus status, boolean billable,
+            java.time.LocalDate nextPaymentDue, Long actorId, LocalDateTime now) {
         jdbc.update("""
                 UPDATE company_settings
                    SET name = ?, ruc = ?, address = ?, phone = ?, email = ?, business_vertical = ?, plan = ?,
-                       subscription_status = ?, next_payment_due = ?, updated_at = ?, updated_by = ?
+                       subscription_status = ?, billable = ?, next_payment_due = ?, updated_at = ?, updated_by = ?
                  WHERE id = ?
-                """, name, ruc, address, phone, email, businessVertical.name(), plan.name(), status.name(), nextPaymentDue,
-                now, actorId, tenantId);
+                """, name, ruc, address, phone, email, businessVertical.name(), plan.name(), status.name(), billable,
+                nextPaymentDue, now, actorId, tenantId);
     }
 
     public TenantResponse findById(Long tenantId) {
         return jdbc.query("""
                 SELECT cs.id, cs.slug, cs.name, cs.ruc, cs.address, cs.phone, cs.email, cs.business_vertical, cs.plan,
-                       cs.subscription_status, cs.next_payment_due, cs.updated_at,
+                       cs.subscription_status, cs.billable, cs.next_payment_due, cs.updated_at,
                        (SELECT u.username FROM users u JOIN user_roles ur ON ur.user_id = u.id
                           JOIN roles r ON r.id = ur.role_id
                          WHERE u.tenant_id = cs.id AND r.code = 'ADMINISTRADOR'
                          ORDER BY u.id LIMIT 1) AS owner_username,
                        (SELECT COUNT(*) FROM users au
-                         WHERE au.tenant_id = cs.id AND au.status = 'ACTIVE') AS active_users
+                         WHERE au.tenant_id = cs.id AND au.status = 'ACTIVE') AS active_users,
+                       (SELECT COALESCE(SUM(tm.monthly_price), 0) FROM tenant_modules tm
+                         WHERE tm.tenant_id = cs.id) AS monthly_total,
+                       (SELECT COUNT(*) FROM tenant_modules tm2
+                         WHERE tm2.tenant_id = cs.id) AS module_count
                   FROM company_settings cs WHERE cs.id = ?
                 """, (rs, rowNum) -> map(rs), tenantId).stream().findFirst().orElse(null);
     }
@@ -167,6 +184,16 @@ public class PlatformTenantRepository {
                 INSERT INTO user_roles (user_id, role_id)
                 SELECT ?, id FROM roles WHERE tenant_id = ? AND code = 'ADMINISTRADOR'
                 """, ownerId, tenantId);
+
+        // La tienda online registra movimientos de inventario sin un cajero
+        // autenticado. La cuenta es propia del tenant y no puede iniciar sesión.
+        jdbc.update("""
+                INSERT INTO users (tenant_id, username, email, password_hash, full_name, status,
+                                   failed_attempts, locked_until, must_change_password, last_login_at,
+                                   platform_operator, created_at, updated_at)
+                VALUES (?, 'sistema_tienda', NULL, ?, 'Sistema (Tienda Online)', 'INACTIVE',
+                        0, NULL, FALSE, NULL, FALSE, ?, ?)
+                """, tenantId, SYSTEM_USER_PASSWORD_HASH, now, now);
 
         jdbc.update("""
                 INSERT INTO payment_methods (tenant_id, code, name, type, affects_cash, requires_reference,
@@ -214,8 +241,49 @@ public class PlatformTenantRepository {
                 rs.getLong("id"), rs.getString("slug"), rs.getString("name"), rs.getString("ruc"),
                 rs.getString("address"), rs.getString("phone"), rs.getString("email"),
                 BusinessVertical.valueOf(rs.getString("business_vertical")), Plan.valueOf(rs.getString("plan")),
-                SubscriptionStatus.valueOf(rs.getString("subscription_status")),
+                SubscriptionStatus.valueOf(rs.getString("subscription_status")), rs.getBoolean("billable"),
                 rs.getObject("next_payment_due", java.time.LocalDate.class), rs.getString("owner_username"),
-                rs.getInt("active_users"), rs.getObject("updated_at", LocalDateTime.class));
+                rs.getInt("active_users"), rs.getBigDecimal("monthly_total"), rs.getInt("module_count"),
+                rs.getObject("updated_at", LocalDateTime.class));
+    }
+
+    /** Usuarios de una empresa con su condición de operador, para el panel del operador. */
+    public List<UsuarioEmpresaResponse> listarUsuariosDe(Long tenantId) {
+        return jdbc.query("""
+                SELECT id, username, full_name, status, platform_operator
+                FROM users
+                WHERE tenant_id = ?
+                ORDER BY platform_operator DESC, username
+                """, (ResultSet rs, int row) -> new UsuarioEmpresaResponse(
+                        rs.getLong("id"), rs.getString("username"), rs.getString("full_name"),
+                        rs.getString("status"), rs.getBoolean("platform_operator")),
+                tenantId);
+    }
+
+    /** Fija hasta cuándo queda cubierta la empresa tras el alta. */
+    public void actualizarVencimiento(Long tenantId, java.time.LocalDate hasta, LocalDateTime now) {
+        jdbc.update("UPDATE company_settings SET next_payment_due = ?, updated_at = ? WHERE id = ?",
+                hasta, now, tenantId);
+    }
+
+    public int contarOperadores() {
+        Integer total = jdbc.queryForObject(
+                "SELECT COUNT(*) FROM users WHERE platform_operator = TRUE", Integer.class);
+        return total == null ? 0 : total;
+    }
+
+    public boolean esOperador(Long usuarioId) {
+        Boolean valor = jdbc.query("SELECT platform_operator FROM users WHERE id = ?",
+                rs -> rs.next() ? rs.getBoolean(1) : null, usuarioId);
+        return Boolean.TRUE.equals(valor);
+    }
+
+    public boolean existeUsuario(Long usuarioId) {
+        Integer total = jdbc.queryForObject("SELECT COUNT(*) FROM users WHERE id = ?", Integer.class, usuarioId);
+        return total != null && total > 0;
+    }
+
+    public void actualizarOperador(Long usuarioId, boolean operador) {
+        jdbc.update("UPDATE users SET platform_operator = ? WHERE id = ?", operador, usuarioId);
     }
 }
