@@ -997,12 +997,26 @@
 .template-payment-account { margin: 1rem 0; padding: .85rem; overflow-wrap: anywhere; }
 .template-provider-field { margin-top: 1rem; padding-top: 1rem; }
 .template-error { margin: 1rem 0; padding: .9rem; }
+.template-billing-block { min-width: 0; margin: 1.5rem 0 0; padding: 1.25rem 0 0; border: 0; border-top: 1px solid var(--template-line); color: var(--template-ink); }
+.template-billing-block legend { padding: 0; font: inherit; font-weight: 800; }
+.template-billing-hint { margin: .55rem 0 .8rem; color: var(--template-muted); font-size: .85rem; line-height: 1.5; }
+.template-billing-options { display: grid; gap: .65rem; }
+.template-billing-selector { margin: .85rem 0 1rem; }
+.template-billing-selector select { width: 100%; }
+.template-billing-selector small { display: block; margin-top: .4rem; color: var(--template-muted); font-size: .8rem; line-height: 1.4; }
+.template-billing-option { min-width: 0; display: flex; align-items: flex-start; gap: .75rem; padding: .85rem; border: 1px solid var(--template-line); border-radius: var(--template-card-radius); background: var(--template-surface); cursor: pointer; }
+.template-billing-option.is-selected { border-color: var(--brand-accent); background: color-mix(in srgb, var(--brand-accent) 10%, var(--template-surface)); }
+.template-billing-option input { flex: 0 0 auto; margin-top: .25rem; accent-color: var(--brand-accent); }
+.template-billing-option span { min-width: 0; display: grid; gap: .2rem; overflow-wrap: anywhere; }
+.template-billing-option small { color: var(--template-muted); font-weight: 400; }
+.template-billing-invoice-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .template-submit { width: 100%; min-height: 52px; margin-top: 1rem; padding: .9rem 1.2rem; border: 0; font: inherit; font-weight: 800; cursor: pointer; }
 @media (max-width: 760px) {
   .template-checkout-layout { grid-template-columns: 1fr; }
   .template-checkout-order { position: static; }
   .template-form-grid { grid-template-columns: 1fr; gap: 0; }
   .template-field-wide { grid-column: auto; }
+  .template-billing-invoice-fields { grid-template-columns: 1fr; gap: 0; }
 }
 
 /* El carrito también es una superficie de plantilla. Solo se define aquí
@@ -1120,10 +1134,24 @@ body.store-body[data-store-template][data-store-page='cart'] #cart-summary.templ
 .template-order-proof .template-field { margin: 0; }
 .template-order-proof input { width: 100%; min-width: 0; box-sizing: border-box; padding: .75rem; border: 1px solid var(--template-line); border-radius: var(--template-card-radius); background: var(--template-surface); color: var(--template-ink); font: inherit; }
 .template-proof-image { display: block; max-width: 100%; max-height: 360px; object-fit: contain; border: 1px solid var(--template-line); border-radius: var(--template-card-radius); }
+.template-order-documents { display: grid; gap: .7rem; min-width: 0; margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--template-line); }
+.template-order-document { display: grid; gap: .35rem; min-width: 0; padding: .85rem; border: 1px solid var(--template-line); border-radius: var(--template-card-radius); background: var(--template-surface-alt); }
+.template-order-document-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; min-width: 0; }
+.template-order-document-heading strong { min-width: 0; overflow-wrap: anywhere; }
+.template-document-status { flex: 0 0 auto; padding: .25rem .5rem; border-radius: 999px; font-size: .7rem; font-weight: 750; text-align: right; }
+.template-document-status.is-accepted { color: #166534; background: #dcfce7; }
+.template-document-status.is-pending, .template-document-status.is-sent { color: #854d0e; background: #fef9c3; }
+.template-document-status.is-rejected, .template-document-status.is-error { color: #991b1b; background: #fee2e2; }
+.template-document-actions { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .25rem; }
+.template-document-actions button { min-height: 34px; padding: .35rem .65rem; border: 1px solid var(--template-line); border-radius: var(--template-card-radius); background: var(--template-surface); color: var(--template-ink); font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; }
+.template-document-actions button:hover { border-color: var(--brand-accent); color: var(--brand-accent); }
+.template-document-message { overflow-wrap: anywhere; color: var(--template-muted); line-height: 1.45; }
 @media (max-width: 640px) {
   .template-order-card { grid-template-columns: minmax(0, 1fr) auto; }
   .template-order-status { justify-self: end; }
   .template-order-card-total { grid-column: 2; }
+  .template-order-document-heading { flex-direction: column; }
+  .template-document-status { text-align: left; }
   .template-order-drawer { align-items: end; padding: 0; }
   .template-order-drawer-panel { width: 100%; max-height: 92vh; border-right: 0; border-bottom: 0; border-left: 0; border-radius: var(--template-radius) var(--template-radius) 0 0; }
 }

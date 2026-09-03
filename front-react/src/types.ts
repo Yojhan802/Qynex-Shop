@@ -49,11 +49,26 @@ export interface Product {
 
 export interface StoreConfig {
   name?: string | null;
+  electronicInvoicingEnabled?: boolean;
+  /** Suscripción de la empresa: alimenta el aviso de vencimiento del panel. */
+  plan?: string | null;
+  subscriptionStatus?: 'ACTIVA' | 'SUSPENDIDA' | string | null;
+  nextPaymentDue?: string | null;
   template?: StoreTemplate | string;
   primaryColor?: string | null;
   accentColor?: string | null;
   backgroundColor?: string | null;
   logoUrl?: string | null;
+  /** Identificación del proveedor que la tienda debe mostrar al comprador. */
+  legalName?: string | null;
+  ruc?: string | null;
+  address?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  /** Tasa de IGV vigente (0.18 = 18%), para declarar que los precios ya la incluyen. */
+  igvRate?: number | null;
+  currencyCode?: string | null;
+  currencySymbol?: string | null;
 }
 
 export interface CustomerSession {
@@ -65,7 +80,7 @@ export interface CustomerSession {
 export interface StaffSession {
   accessToken: string;
   refreshToken: string;
-  user: { id: number; username: string; fullName: string; permissions: string[]; mustChangePassword?: boolean };
+  user: { id: number; username: string; fullName: string; roles?: string[]; permissions: string[]; mustChangePassword?: boolean };
 }
 
 export interface CartItem {
@@ -89,8 +104,17 @@ export interface PaymentMethod {
   qrImageUrl?: string | null;
   instructions?: string | null;
   enabled?: boolean;
+  status?: string;
 }
 export interface PaymentProvider { provider: string; displayName?: string; publicKey?: string | null; enabled?: boolean; }
+export type OrderBillingDocumentType = 'TICKET' | 'BOLETA' | 'FACTURA';
+export interface BillingOptions {
+  electronicInvoicingEnabled: boolean;
+  available: boolean;
+  receiptAvailable: boolean;
+  invoiceAvailable: boolean;
+  provider?: string | null;
+}
 export interface Order {
   id: number;
   orderNumber: string;
@@ -106,6 +130,29 @@ export interface Order {
   province?: string;
   department?: string;
   cancellationReason?: string | null;
+  billingDocumentType?: OrderBillingDocumentType;
+  billingDocumentNumber?: string | null;
+  billingName?: string | null;
   confirmedAt?: string | null;
   items?: Array<{ productName: string; variantLabel?: string; quantity: number; subtotal: number }>;
+}
+
+export interface ElectronicDocument {
+  id: number;
+  saleId: number;
+  saleNumber: string;
+  provider?: 'VERIFACT' | 'NUBEFACT' | string;
+  documentType: 'BOLETA' | 'FACTURA' | 'NOTA_CREDITO' | 'NOTA_DEBITO' | string;
+  status: 'DRAFT' | 'GENERATED' | 'PENDING' | 'SENT' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED' | 'ERROR' | string;
+  series?: string | null;
+  documentNumber?: string | null;
+  amount: number;
+  currencyCode?: string;
+  providerStatus?: string | null;
+  cdrCode?: string | null;
+  cdrMessage?: string | null;
+  submittedAt?: string | null;
+  acceptedAt?: string | null;
+  rejectedAt?: string | null;
+  createdAt: string;
 }

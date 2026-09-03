@@ -4,8 +4,11 @@ export function formatCurrency(value: number | null | undefined) {
   return new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(Number(value ?? 0));
 }
 
-export function formatDate(value: string) {
-  return new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+export function formatDate(value: string | null | undefined) {
+  if (!value) return 'Sin fecha';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Fecha no disponible';
+  return new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
 export function isValidColor(value?: string | null): value is string {

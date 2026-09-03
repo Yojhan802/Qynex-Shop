@@ -1,6 +1,9 @@
-import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { getCustomerSession, clearCustomerSession, storeApi } from '../services/api';
 import { cartCount } from '../services/cart';
+import { igvNotice, legalDocuments } from '../services/legal';
+import { useStoreConfig } from './TemplateProvider';
+import { CookieBanner } from './CookieBanner';
 import type { StoreConfig } from '../types';
 
 function navigate(path: string) {
@@ -14,6 +17,8 @@ export function StoreShell({ children, active }: { children: ReactNode; active?:
   const [brand, setBrand] = useState<StoreConfig>({});
   const [logoFailed, setLogoFailed] = useState(false);
   const customer = getCustomerSession()?.customer;
+  const config = useStoreConfig();
+  const legalLinks = useMemo(() => legalDocuments(config), [config]);
 
   useEffect(() => {
     const onCart = (event: Event) => setCount(((event as CustomEvent).detail ?? []).reduce((sum: number, item: { quantity: number }) => sum + item.quantity, 0));
@@ -70,6 +75,47 @@ export function StoreShell({ children, active }: { children: ReactNode; active?:
       </div>
     </header>
     <main className="store-main" id="store-main">{children}</main>
-    <footer className="store-footer" id="store-footer"><div className="store-footer-top"><div><div className="store-footer-brand" id="store-footer-name">{brand.name || 'Qynex Shop'}</div><p>Envíos a todo el Perú. Compra segura y atención al cliente.</p></div><div><h3>TIENDA</h3><div className="store-footer-links"><a href="/" onClick={(event) => go(event, '/')}>Inicio</a><a href="/#catalog-sections" onClick={(event) => go(event, '/#catalog-sections')}>Catálogo</a><a href="/#category-banners" onClick={goCategories}>Categorías</a></div></div></div><div className="store-footer-copy">© {new Date().getFullYear()} {brand.name || 'Qynex Shop'}. Todos los derechos reservados.</div></footer>
+    <footer className="store-footer" id="store-footer">
+      <div className="store-footer-top">
+        <div>
+          <div className="store-footer-brand" id="store-footer-name">{brand.name || 'Qynex Shop'}</div>
+          <p>Envíos a todo el Perú. Compra segura y atención al cliente.</p>
+          {/* El Código de Consumo obliga a identificar al proveedor ante el comprador. */}
+          <address className="store-footer-legal-id">
+            {config.legalName && <span>{config.legalName}</span>}
+            {config.ruc && <span>RUC {config.ruc}</span>}
+            {config.address && <span>{config.address}</span>}
+          </address>
+        </div>
+        <div>
+          <h3>TIENDA</h3>
+          <div className="store-footer-links">
+            <a href="/" onClick={(event) => go(event, '/')}>Inicio</a>
+            <a href="/#catalog-sections" onClick={(event) => go(event, '/#catalog-sections')}>Catálogo</a>
+            <a href="/#category-banners" onClick={goCategories}>Categorías</a>
+            {customer && <a href="/cuenta/pedidos" onClick={(event) => go(event, '/cuenta/pedidos')}>Mis pedidos</a>}
+          </div>
+        </div>
+        <div>
+          <h3>LEGAL</h3>
+          <div className="store-footer-links">
+            <a className="store-footer-complaint" href="/libro-reclamaciones" onClick={(event) => go(event, '/libro-reclamaciones')}>Libro de Reclamaciones</a>
+            {legalLinks.map((document) => <a href={document.path} key={document.path} onClick={(event) => go(event, document.path)}>{document.title}</a>)}
+          </div>
+        </div>
+        {(config.phone || config.email) && <div>
+          <h3>CONTACTO</h3>
+          <div className="store-footer-links">
+            {config.phone && <a href={`tel:${config.phone.replace(/[^0-9+]/g, '')}`}>{config.phone}</a>}
+            {config.email && <a href={`mailto:${config.email}`}>{config.email}</a>}
+          </div>
+        </div>}
+      </div>
+      <div className="store-footer-copy">
+        <span>© {new Date().getFullYear()} {config.legalName || brand.name || 'Qynex Shop'}. Todos los derechos reservados.</span>
+        {igvNotice(config) && <span className="store-footer-tax">{igvNotice(config)}</span>}
+      </div>
+    </footer>
+    <CookieBanner />
   </>;
 }

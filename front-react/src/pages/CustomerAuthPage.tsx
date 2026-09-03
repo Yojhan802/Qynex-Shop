@@ -3,6 +3,8 @@ import { ApiError, setCustomerSession, storeApi } from '../services/api';
 import { StoreShell } from '../components/StoreShell';
 import { useStoreTemplate } from '../components/TemplateProvider';
 import { AuthSurface } from '../templates/AuthSurface';
+import { firstError, validateContactPhone, validateEmail, validatePassword, validatePersonName } from '../services/validation';
+import { showToast } from '../components/ToastHost';
 
 export function CustomerAuthPage({ register = false }: { register?: boolean }) {
   const [email, setEmail] = useState('');
@@ -15,6 +17,13 @@ export function CustomerAuthPage({ register = false }: { register?: boolean }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const validation = firstError(
+      validateEmail(email, true),
+      register ? validatePassword(password) : password.trim() ? null : 'Ingresa la contraseña.',
+      register ? validatePersonName(fullName, 'el nombre completo', 150) : null,
+      register ? validateContactPhone(phone) : null,
+    );
+    if (validation) { setError(validation); return; }
     setLoading(true);
     setError('');
     try {
@@ -22,6 +31,7 @@ export function CustomerAuthPage({ register = false }: { register?: boolean }) {
         ? await storeApi.post<{ accessToken: string; refreshToken: string; customer: { id: number; email: string; fullName: string } }>('/store/auth/register', { email, password, fullName, phone })
         : await storeApi.post<{ accessToken: string; refreshToken: string; customer: { id: number; email: string; fullName: string } }>('/store/auth/login', { email, password });
       setCustomerSession(data);
+      showToast(register ? 'Cuenta creada correctamente.' : 'Sesión iniciada correctamente.');
       const params = new URLSearchParams(window.location.search);
       const destination = params.get('volver') ? `/checkout${params.has('previewTemplate') ? `?previewTemplate=${encodeURIComponent(params.get('previewTemplate') || '')}` : ''}` : '/';
       window.history.pushState({}, '', destination);

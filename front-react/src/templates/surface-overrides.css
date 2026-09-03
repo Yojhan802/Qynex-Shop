@@ -406,6 +406,36 @@ body[data-store-template] .store-mobile-menu-toggle span {
   min-height: 2px;
 }
 
+/* Una opciÃ³n sin ninguna combinaciÃ³n disponible se mantiene visible para
+   orientar al cliente: el valor se tacha y se identifica como agotado. */
+body[data-store-template] .store-swatch.is-sold-out,
+body[data-store-template] .store-swatch.is-sold-out:disabled {
+  opacity: .58;
+  cursor: not-allowed;
+  text-decoration: none;
+  border-style: dashed;
+}
+
+body[data-store-template] .store-swatch.is-sold-out .store-swatch-label {
+  text-decoration: line-through;
+}
+
+body[data-store-template] .store-swatch-status {
+  margin-left: .15rem;
+  color: var(--color-text-muted);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+body[data-store-template] .store-stock-message {
+  margin: -.5rem 0 1rem;
+  color: var(--color-text-muted);
+  font-size: .88rem;
+}
+
 @media (max-width: 760px) {
   body[data-store-template] .store-product-detail { padding-inline: .75rem; }
   body[data-store-template] .store-product-info { padding-inline: .25rem; }

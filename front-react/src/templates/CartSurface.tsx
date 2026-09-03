@@ -8,9 +8,10 @@ export interface CartSurfaceProps {
   onDecrease: (item: CartItem) => void;
   onIncrease: (item: CartItem) => void;
   onRemove: (item: CartItem) => void;
+  taxNotice: string | null;
 }
 
-export function CartSurface({ template, items, formatCurrency, imageUrl, onDecrease, onIncrease, onRemove }: CartSurfaceProps) {
+export function CartSurface({ template, items, formatCurrency, imageUrl, onDecrease, onIncrease, onRemove, taxNotice }: CartSurfaceProps) {
   const subtotal = items.reduce((total, item) => total + item.unitPrice * item.quantity, 0);
   return <div className={`template-cart template-cart-${template.toLowerCase()}`} data-template-surface="cart">
     <section className="template-cart-items" id="cart-items" aria-label="Productos del carrito">
@@ -20,6 +21,6 @@ export function CartSurface({ template, items, formatCurrency, imageUrl, onDecre
         <strong className="template-cart-line-total">{formatCurrency(item.unitPrice * item.quantity)}</strong>
       </article>)}
     </section>
-    <aside className="template-cart-summary" id="cart-summary"><div className="template-total-line"><span>Subtotal</span><strong>{formatCurrency(subtotal)}</strong></div><p className="template-summary-note">El costo de envío se calcula en el siguiente paso.</p><div className="template-grand-total"><span>Total</span><strong>{formatCurrency(subtotal)}</strong></div><a className="template-submit" href="/checkout">Continuar al pago</a></aside>
+    <aside className="template-cart-summary" id="cart-summary"><div className="template-total-line"><span>Subtotal</span><strong>{formatCurrency(subtotal)}</strong></div><p className="template-summary-note">El costo de envío se calcula en el siguiente paso.</p><div className="template-grand-total"><span>Total</span><strong>{formatCurrency(subtotal)}</strong></div>{taxNotice && <p className="template-tax-notice">{taxNotice}</p>}<a className="template-submit" href="/checkout">Continuar al pago</a></aside>
   </div>;
 }

@@ -1,21 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ApiError, getCustomerSession, imageUrl, refreshCustomerAccessToken, storeApi } from '../services/api';
-import { connectCustomerNotifications } from '../services/live';
-import type { Order } from '../types';
+import { connectCustomerNotifications, type LiveElectronicDocument } from '../services/live';
+import type { ElectronicDocument, Order } from '../types';
 import { formatCurrency, formatDate } from '../utils';
 import { EmptyState, ErrorState, LoadingState } from '../components/States';
 import { StoreShell } from '../components/StoreShell';
 import { useStoreTemplate } from '../components/TemplateProvider';
 import { OrdersSurface } from '../templates/OrdersSurface';
+import { showToast } from '../components/ToastHost';
 
 const labels: Record<string, string> = { PENDING_PAYMENT: 'Pendiente de pago', CONFIRMED: 'Confirmado', CANCELLED: 'Anulado' };
 
 export function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [selected, setSelected] = useState<Order | null>(null);
+  const [documents, setDocuments] = useState<ElectronicDocument[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const selectedOrderId = useRef<number | null>(null);
   const session = getCustomerSession();
   const template = useStoreTemplate();
 
@@ -33,15 +37,58 @@ export function OrdersPage() {
     void loadOrders();
     const stream = connectCustomerNotifications((updated) => {
       setOrders((current) => current.map((order) => order.id === updated.id ? { ...order, status: updated.status, orderNumber: updated.orderNumber || order.orderNumber } : order));
-    }, () => getCustomerSession()?.accessToken, refreshCustomerAccessToken);
+    }, () => getCustomerSession()?.accessToken, refreshCustomerAccessToken, (document: LiveElectronicDocument) => {
+      if (selectedOrderId.current === null) return;
+      void storeApi.get<ElectronicDocument[]>(`/store/orders/${selectedOrderId.current}/electronic-documents`, { auth: true })
+        .then(setDocuments)
+        .catch(() => undefined);
+      showToast(`Comprobante actualizado: ${document.status.toLowerCase()}.`, 'Facturación electrónica', 'info');
+    });
     return () => stream.close();
   }, []);
 
   if (!session) return <StoreShell><LoadingState label="Redirigiendo al inicio de sesi&oacute;n..." /></StoreShell>;
 
-  const openOrder = (order: Order) => storeApi.get<Order>(`/store/orders/${order.id}`, { auth: true })
-    .then(setSelected)
-    .catch((reason) => setError(reason instanceof ApiError ? reason.message : 'No se pudo cargar el pedido'));
+  const openOrder = async (order: Order) => {
+    setDocuments([]);
+    setDocumentsLoading(true);
+    try {
+      const detail = await storeApi.get<Order>(`/store/orders/${order.id}`, { auth: true });
+      setSelected(detail);
+      selectedOrderId.current = detail.id;
+      try {
+        setDocuments(await storeApi.get<ElectronicDocument[]>(`/store/orders/${order.id}/electronic-documents`, { auth: true }));
+      } catch {
+        // El detalle del pedido sigue disponible aunque el proveedor no responda.
+        setDocuments([]);
+      }
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : 'No se pudo cargar el pedido');
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
+  const closeOrder = () => {
+    selectedOrderId.current = null;
+    setSelected(null);
+    setDocuments([]);
+  };
+
+  const downloadDocument = async (document: ElectronicDocument, resource: 'pdf' | 'xml' | 'cdr') => {
+    if (!selected || document.status !== 'ACCEPTED') return;
+    try {
+      const result = await storeApi.download(`/store/orders/${selected.id}/electronic-documents/${document.id}/${resource}`, { auth: true });
+      const url = URL.createObjectURL(result.blob);
+      const link = window.document.createElement('a');
+      link.href = url;
+      link.download = result.filename;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : 'No se pudo descargar el comprobante');
+    }
+  };
 
   const uploadProof = async (file: File) => {
     if (!selected) return;
@@ -52,6 +99,7 @@ export function OrdersPage() {
       const updated = await storeApi.post<Order>(`/store/orders/${selected.id}/payment-proof`, data, { auth: true });
       setSelected(updated);
       setOrders((current) => current.map((order) => order.id === updated.id ? updated : order));
+      showToast('Comprobante de pago subido correctamente.');
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : 'No se pudo subir el comprobante');
     } finally {
@@ -75,9 +123,12 @@ export function OrdersPage() {
       formatDate={formatDate}
       imageUrl={imageUrl}
       onOpen={openOrder}
-      onClose={() => setSelected(null)}
+      onClose={closeOrder}
       uploading={uploading}
       onUploadProof={(file) => void uploadProof(file)}
+      documents={documents}
+      documentsLoading={documentsLoading}
+      onDownloadDocument={(document, resource) => void downloadDocument(document, resource)}
     />}
   </StoreShell>;
 }

@@ -6,6 +6,7 @@ import { useRevealSections } from '../components/RevealSection';
 import { EmptyState, ErrorState, LoadingState } from '../components/States';
 import { StoreShell } from '../components/StoreShell';
 import { resolveProductImage } from '../utils';
+import { connectCatalogUpdates } from '../services/live';
 
 const PAGE_SIZE = 24;
 
@@ -23,7 +24,13 @@ export function StoreHomePage() {
   const [currentPage, setCurrentPage] = useState(Number(params.get('page') || 0));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [catalogRevision, setCatalogRevision] = useState(0);
   const filtered = Boolean(search || categoryId || brandId);
+
+  useEffect(() => {
+    const stream = connectCatalogUpdates(() => setCatalogRevision((value) => value + 1));
+    return () => stream.close();
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -31,7 +38,7 @@ export function StoreHomePage() {
       storeApi.get<Brand[]>('/store/catalog/brands'),
       storeApi.get<StorefrontBanner[]>('/store/catalog/banners').catch(() => []),
     ]).then(([cats, brandList, bannerList]) => { setCategories(cats ?? []); setBrands(brandList ?? []); setBanners(bannerList ?? []); }).catch(() => undefined);
-  }, []);
+  }, [catalogRevision]);
 
   useEffect(() => {
     if (!search.trim()) { setSuggestions([]); return; }
@@ -48,7 +55,7 @@ export function StoreHomePage() {
       Promise.all(categories.map(async (category) => ({ category, page: await storeApi.get<Page<Product>>('/store/catalog/products', { query: { categoryId: category.id, size: 8 } }) }))).then((value) => alive && setSections(value.filter(({ page: result }) => result.totalElements > 0))).catch((reason) => alive && setError(reason.message)).finally(() => alive && setLoading(false));
     } else { setLoading(false); }
     return () => { alive = false; };
-  }, [categories, search, categoryId, brandId, currentPage, filtered]);
+  }, [categories, search, categoryId, brandId, currentPage, filtered, catalogRevision]);
 
   const updateUrl = (next: { search?: string; categoryId?: string; brandId?: string; page?: number }) => {
     const query = new URLSearchParams();
