@@ -26,7 +26,7 @@ prompt-maestro-*.md
 prueba.html
 
 # Material de trabajo (logos sueltos, fotos de muestra). Los assets que la
-# aplicación sirve viven en front/assets.
+# aplicación sirve viven en front-react/public/assets.
 recursos/
 
 # Capturas para la landing: pertenecen al proyecto qynex-landing.
@@ -43,9 +43,12 @@ Thumbs.db
 # Configuración local de Claude Code — específica de la máquina, no del proyecto.
 .claude/settings.local.json
 
-# Artefactos de verificación temporal del frontend (capturas de Playwright)
-front/_shot-*.png
-front/_debug-*.png
+# Frontend legado, dado de baja: front-react lo reemplaza por completo. Se
+# conserva en disco como referencia histórica, pero fuera del repositorio.
+front/
+
+# Plantillas de prompts: material de trabajo, no parte del producto.
+prompt plantillas/
 
 # QR de pago personal con datos reales (nombre, cuenta) — no va a un repo público.
 # El logo y demás imágenes de recursos/ sí se versionan.

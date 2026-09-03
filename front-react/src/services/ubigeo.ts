@@ -1,4 +1,4 @@
-import data from '../../../front/tienda/js/store/data/peru-ubigeo.json';
+import data from '../data/peru-ubigeo.json';
 
 interface UbigeoItem { id: string; nombre: string; }
 interface UbigeoData {

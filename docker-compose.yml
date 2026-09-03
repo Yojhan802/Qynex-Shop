@@ -60,11 +60,10 @@ services:
     networks:
       - freestyle
 
-  # Frontend en uso. Arranca con un `docker compose up` normal.
+  # Único frontend. Arranca con un `docker compose up` normal.
   frontend-react:
     build:
-      context: .
-      dockerfile: front-react/Dockerfile
+      context: ./front-react
     restart: unless-stopped
     depends_on:
       backend:
@@ -74,21 +73,6 @@ services:
     networks:
       - freestyle
 
-  # Frontend legado, abandonado. Queda tras un perfil para que no arranque solo: ya no
-  # recibe funcionalidad y levantarlo sin querer da la impresión de que sigue en uso.
-  # Solo para consultar el comportamiento anterior:
-  #   docker compose --profile legacy up -d frontend
-  frontend:
-    profiles: ["legacy"]
-    build: ./front
-    restart: unless-stopped
-    depends_on:
-      backend:
-        condition: service_healthy
-    ports:
-      - "${HTTP_PORT:-80}:80"
-    networks:
-      - freestyle
 
 networks:
   freestyle:

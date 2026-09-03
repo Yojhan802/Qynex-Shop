@@ -22,11 +22,11 @@ frontend (nginx, puerto público)
                                         mysql (red interna)
 ```
 
-Solo `frontend` publica un puerto al host. `backend` y `mysql` quedan en la
-red interna de Docker, sin exponerse — el navegador nunca les habla
+Solo `frontend-react` publica un puerto al host. `backend` y `mysql` quedan en
+la red interna de Docker, sin exponerse — el navegador nunca les habla
 directamente. Esto es deliberado: el frontend usa rutas relativas (`/api`,
-`/uploads`, ver `front/js/core/api.js`) precisamente para poder vivir detrás
-de este proxy sin configuración adicional.
+`/uploads`, ver `API_BASE` en `front-react/src/services/api.ts`) precisamente
+para poder vivir detrás de este proxy sin configuración adicional.
 
 ## 2. Servicios (`docker-compose.yml`)
 
@@ -34,7 +34,7 @@ de este proxy sin configuración adicional.
 |---|---|---|
 | `mysql` | `mysql:8.4` | Base de datos, volumen persistente `mysql_data` |
 | `backend` | build de `aplicacion/Dockerfile` | API Spring Boot; migra el esquema (Flyway) al arrancar |
-| `frontend` | build de `front/Dockerfile` | nginx: estático + reverse proxy |
+| `frontend-react` | build de `front-react/Dockerfile` | nginx: estático + reverse proxy |
 
 `backend` espera a que `mysql` pase su healthcheck (`mysqladmin ping`) antes
 de arrancar — sin esto, Spring Boot podría intentar conectarse antes de que
@@ -42,7 +42,7 @@ MySQL esté listo para aceptar conexiones. `backend` a su vez expone su propio
 healthcheck contra `GET /actuator/health` (Spring Boot Actuator, solo el
 endpoint `health` expuesto, sin detalle — `management.endpoint.health.show-details: never`
 en `application.yml` — para no filtrar datos de conexión a un llamador
-anónimo), y `frontend` espera a que `backend` esté saludable antes de
+anónimo), y `frontend-react` espera a que `backend` esté saludable antes de
 arrancar. Este mismo endpoint es el punto de apoyo para un futuro monitoreo
 centralizado de todas las instalaciones (una por cliente, ver
 docs/03-modelo-datos.md §15) — cada una puede reportar su estado con la misma
@@ -62,7 +62,7 @@ Variables obligatorias en `.env` (ver `.env.example` para la lista completa):
 | `DB_PASSWORD`, `DB_ROOT_PASSWORD` | Credenciales de MySQL |
 | `JWT_SECRET` | Firma de los access tokens — generar con `openssl rand -base64 48` |
 | `CORS_ALLOWED_ORIGINS` | Solo relevante si el frontend se sirve desde otro origen que el proxy |
-| `HTTP_PORT` | Puerto público del `frontend` (por defecto 80) |
+| `REACT_HTTP_PORT` | Puerto público del `frontend-react` (por defecto 8093) |
 
 Ninguna de estas tiene un valor real por defecto: si falta alguna, el
 contenedor correspondiente falla al arrancar en vez de arrancar con un
@@ -155,7 +155,8 @@ viven en `deploy/`:
    credenciales que `.env`).
 3. `./mvnw package -DskipTests` en `aplicacion/` y copiar
    `target/*.jar` a `/opt/freestyleperu/app.jar` en el servidor (o hacer el
-   build directo ahí). Copiar también `front/` a `/opt/freestyleperu/front`.
+   build directo ahí). Para el frontend, `npm run build` en `front-react/` y
+   copiar `front-react/dist/` a `/opt/freestyleperu/front`.
 4. Crear `/opt/freestyleperu/.env` con las mismas variables de
    `aplicacion/.env.example`, agregando `SPRING_PROFILES_ACTIVE=prod` (activa
    el perfil con el HikariCP/Tomcat ya dimensionados para este VPS — ver
