@@ -6,6 +6,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
@@ -80,7 +81,10 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
             tenantId = resuelto.get();
         } else if (permiteOverrideDeDesarrollo) {
             // dev/test sin header explícito: comportamiento de la Fase 1, tenant por defecto.
-            tenantId = TenantContext.DEFAULT_TENANT_ID;
+            String slugLocal = extraerSubdominio(request.getServerName());
+            tenantId = slugLocal != null
+                    ? tenantSlugResolver.resolver(slugLocal).orElse(TenantContext.DEFAULT_TENANT_ID)
+                    : TenantContext.DEFAULT_TENANT_ID;
         } else {
             String slug = extraerSubdominio(request.getServerName());
             Optional<Long> resuelto = slug != null ? tenantSlugResolver.resolver(slug) : Optional.empty();
@@ -101,7 +105,12 @@ public class TenantResolutionFilter extends OncePerRequestFilter {
 
     /** {@code tiendax.qynex.pe} → {@code "tiendax"}; el apex ({@code qynex.pe}, 2 etiquetas) o un host sin puntos no es un subdominio de negocio válido. */
     private String extraerSubdominio(String host) {
-        String[] etiquetas = host.split("\\.");
+        String normalizado = host == null ? "" : host.trim().toLowerCase(Locale.ROOT);
+        if (normalizado.endsWith(".localhost")) {
+            String slugLocal = normalizado.substring(0, normalizado.length() - ".localhost".length());
+            return slugLocal.matches("[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?") ? slugLocal : null;
+        }
+        String[] etiquetas = normalizado.split("\\.");
         return etiquetas.length >= 3 ? etiquetas[0] : null;
     }
 

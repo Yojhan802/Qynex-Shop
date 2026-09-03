@@ -11,6 +11,7 @@ import com.freestyleperu.aplicacion.catalogo.repository.AttributeValueRepository
 import com.freestyleperu.aplicacion.shared.domain.EstadoGeneral;
 import com.freestyleperu.aplicacion.shared.exception.RecursoDuplicadoException;
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
+import com.freestyleperu.aplicacion.tienda.service.StoreCatalogSyncService;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,10 +28,13 @@ public class AtributoService {
 
     private final AttributeRepository attributeRepository;
     private final AttributeValueRepository attributeValueRepository;
+    private final StoreCatalogSyncService storeCatalogSyncService;
 
-    public AtributoService(AttributeRepository attributeRepository, AttributeValueRepository attributeValueRepository) {
+    public AtributoService(AttributeRepository attributeRepository, AttributeValueRepository attributeValueRepository,
+            StoreCatalogSyncService storeCatalogSyncService) {
         this.attributeRepository = attributeRepository;
         this.attributeValueRepository = attributeValueRepository;
+        this.storeCatalogSyncService = storeCatalogSyncService;
     }
 
     public List<AttributeResponse> listar() {
@@ -49,7 +53,9 @@ public class AtributoService {
         Attribute attribute = new Attribute();
         attribute.setName(request.name());
         attribute.setInputType(request.inputType());
-        return toResponse(attributeRepository.save(attribute));
+        AttributeResponse response = toResponse(attributeRepository.save(attribute));
+        storeCatalogSyncService.requestRefresh();
+        return response;
     }
 
     @Transactional
@@ -60,14 +66,18 @@ public class AtributoService {
         }
         attribute.setName(request.name());
         attribute.setInputType(request.inputType());
-        return toResponse(attribute);
+        AttributeResponse response = toResponse(attribute);
+        storeCatalogSyncService.requestRefresh();
+        return response;
     }
 
     @Transactional
     public AttributeResponse cambiarEstado(Long id, EstadoGeneral status) {
         Attribute attribute = buscarOFallar(id);
         attribute.setStatus(status);
-        return toResponse(attribute);
+        AttributeResponse response = toResponse(attribute);
+        storeCatalogSyncService.requestRefresh();
+        return response;
     }
 
     @Transactional
@@ -81,7 +91,9 @@ public class AtributoService {
         value.setValue(request.value());
         value.setHexCode(request.hexCode());
         value.setSortOrder(request.sortOrder());
-        return toValueResponse(attributeValueRepository.save(value));
+        AttributeValueResponse response = toValueResponse(attributeValueRepository.save(value));
+        storeCatalogSyncService.requestRefresh();
+        return response;
     }
 
     @Transactional
@@ -94,14 +106,18 @@ public class AtributoService {
         value.setValue(request.value());
         value.setHexCode(request.hexCode());
         value.setSortOrder(request.sortOrder());
-        return toValueResponse(value);
+        AttributeValueResponse response = toValueResponse(value);
+        storeCatalogSyncService.requestRefresh();
+        return response;
     }
 
     @Transactional
     public AttributeValueResponse cambiarEstadoValor(Long valueId, EstadoGeneral status) {
         AttributeValue value = buscarValorOFallar(valueId);
         value.setStatus(status);
-        return toValueResponse(value);
+        AttributeValueResponse response = toValueResponse(value);
+        storeCatalogSyncService.requestRefresh();
+        return response;
     }
 
     private Attribute buscarOFallar(Long id) {

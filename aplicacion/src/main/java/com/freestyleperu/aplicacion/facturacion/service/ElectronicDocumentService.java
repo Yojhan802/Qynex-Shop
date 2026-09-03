@@ -7,6 +7,7 @@ import com.freestyleperu.aplicacion.facturacion.domain.ElectronicDocument;
 import com.freestyleperu.aplicacion.facturacion.domain.ElectronicDocumentStatus;
 import com.freestyleperu.aplicacion.facturacion.domain.ElectronicDocumentType;
 import com.freestyleperu.aplicacion.facturacion.dto.request.CrearElectronicDocumentRequest;
+import com.freestyleperu.aplicacion.facturacion.dto.request.NotaItemRequest;
 import com.freestyleperu.aplicacion.facturacion.dto.response.ElectronicDocumentResponse;
 import com.freestyleperu.aplicacion.facturacion.exception.ProveedorFacturacionException;
 import com.freestyleperu.aplicacion.facturacion.port.BillingConfigurationData;
@@ -16,6 +17,7 @@ import com.freestyleperu.aplicacion.facturacion.port.ElectronicInvoicingResult;
 import com.freestyleperu.aplicacion.facturacion.port.ElectronicInvoicingResource;
 import com.freestyleperu.aplicacion.facturacion.repository.BillingConfigurationRepository;
 import com.freestyleperu.aplicacion.facturacion.repository.ElectronicDocumentRepository;
+import com.freestyleperu.aplicacion.notificacion.service.NotificacionService;
 import com.freestyleperu.aplicacion.shared.audit.AuditResult;
 import com.freestyleperu.aplicacion.shared.audit.AuditService;
 import com.freestyleperu.aplicacion.shared.security.CredentialEncryptionService;
@@ -23,6 +25,10 @@ import com.freestyleperu.aplicacion.shared.exception.OperacionNoPermitidaExcepti
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
 import com.freestyleperu.aplicacion.shared.exception.ReglaDeNegocioException;
 import com.freestyleperu.aplicacion.shared.security.TenantContext;
+import com.freestyleperu.aplicacion.shared.validation.RucValidator;
+import com.freestyleperu.aplicacion.pedido.domain.Pedido;
+import com.freestyleperu.aplicacion.pedido.domain.PedidoBillingDocumentType;
+import com.freestyleperu.aplicacion.pedido.repository.PedidoRepository;
 import com.freestyleperu.aplicacion.venta.domain.Sale;
 import com.freestyleperu.aplicacion.venta.domain.SaleDetail;
 import com.freestyleperu.aplicacion.venta.domain.SaleStatus;
@@ -30,11 +36,13 @@ import com.freestyleperu.aplicacion.venta.repository.SaleDetailRepository;
 import com.freestyleperu.aplicacion.venta.repository.SaleRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.function.Function;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -47,9 +55,11 @@ public class ElectronicDocumentService {
     private final ElectronicDocumentRepository documentRepository;
     private final BillingConfigurationRepository billingConfigurationRepository;
     private final CompanySettingsRepository companySettingsRepository;
+    private final PedidoRepository pedidoRepository;
     private final SaleRepository saleRepository;
     private final SaleDetailRepository saleDetailRepository;
     private final AuditService auditService;
+    private final NotificacionService notificacionService;
     private final ObjectMapper objectMapper;
     private final CredentialEncryptionService encryptionService;
     private final Map<com.freestyleperu.aplicacion.facturacion.domain.BillingProvider, ElectronicInvoicingProvider> invoicingProviders;
@@ -58,18 +68,22 @@ public class ElectronicDocumentService {
             ElectronicDocumentRepository documentRepository,
             BillingConfigurationRepository billingConfigurationRepository,
             CompanySettingsRepository companySettingsRepository,
+            PedidoRepository pedidoRepository,
             SaleRepository saleRepository,
             SaleDetailRepository saleDetailRepository,
             AuditService auditService,
+            NotificacionService notificacionService,
             ObjectMapper objectMapper,
             CredentialEncryptionService encryptionService,
             List<ElectronicInvoicingProvider> invoicingProviders) {
         this.documentRepository = documentRepository;
         this.billingConfigurationRepository = billingConfigurationRepository;
         this.companySettingsRepository = companySettingsRepository;
+        this.pedidoRepository = pedidoRepository;
         this.saleRepository = saleRepository;
         this.saleDetailRepository = saleDetailRepository;
         this.auditService = auditService;
+        this.notificacionService = notificacionService;
         this.objectMapper = objectMapper;
         this.encryptionService = encryptionService;
         this.invoicingProviders = invoicingProviders.stream()
@@ -78,6 +92,99 @@ public class ElectronicDocumentService {
 
     public List<ElectronicDocumentResponse> listarPorVenta(Long saleId) {
         return documentRepository.findAllBySaleIdOrderByCreatedAtDesc(saleId).stream().map(this::toResponse).toList();
+    }
+
+    /**
+     * Devuelve solo documentos que requieren conciliación externa. La consulta
+     * queda filtrada por el tenant actual mediante {@code @TenantId}; el job
+     * fija el tenant antes de invocarla.
+     */
+    public List<Long> idsPendientesDeConciliacion() {
+        LocalDateTime cutoff = LocalDateTime.now().minusSeconds(10);
+        return documentRepository.findPendingForStatusReconciliation(
+                Set.of(ElectronicDocumentStatus.PENDING, ElectronicDocumentStatus.SENT), cutoff)
+                .stream()
+                .limit(50)
+                .map(ElectronicDocument::getId)
+                .toList();
+    }
+
+    /**
+     * Emite el comprobante que el comprador solicito al aprobarse un pago
+     * online. Se ejecuta despues del commit de la venta y en una transaccion
+     * propia: un error del proveedor no revierte ni duplica el cobro.
+     *
+     * Las ventas POS y los pagos manuales no pasan por aqui; conservan su
+     * flujo de confirmacion y emision manual.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void emitirAutomaticamenteParaVenta(Long saleId) {
+        Sale sale = saleRepository.findById(saleId)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Venta", saleId));
+        PedidoBillingDocumentType requestedType = sale.getBillingDocumentType() == null
+                ? PedidoBillingDocumentType.TICKET : sale.getBillingDocumentType();
+        if (requestedType == PedidoBillingDocumentType.TICKET) {
+            return;
+        }
+
+        ElectronicDocumentType documentType = requestedType == PedidoBillingDocumentType.FACTURA
+                ? ElectronicDocumentType.FACTURA : ElectronicDocumentType.BOLETA;
+        try {
+            ElectronicDocumentResponse draft = crearBorrador(
+                    saleId,
+                    new CrearElectronicDocumentRequest(documentType, null, null, null, null),
+                    "online-sale-" + saleId + "-" + documentType.name(),
+                    null);
+            if (draft.status() == ElectronicDocumentStatus.DRAFT) {
+                enviar(draft.id(), null);
+            }
+        } catch (RuntimeException ex) {
+            auditService.log("COMPROBANTE_AUTO_ERROR", "ELECTRONIC_DOCUMENT", saleId, null,
+                    Map.of("saleId", saleId, "type", documentType.name(),
+                            "message", truncate(ex.getMessage() == null
+                                    ? "Error no especificado del proveedor" : ex.getMessage(), 1000)),
+                    AuditResult.FAILURE);
+        }
+    }
+
+    /** Documentos de una venta propia, sin exponer ventas de otro cliente. */
+    public List<ElectronicDocumentResponse> listarPorPedidoPropio(Long orderId, Long customerId) {
+        Pedido pedido = pedidoPropio(orderId, customerId);
+        if (pedido.getSale() == null) {
+            return List.of();
+        }
+        return listarPorVenta(pedido.getSale().getId());
+    }
+
+    /**
+     * Descarga un recurso solo si pertenece al pedido del cliente y el CPE fue
+     * aceptado. Un documento pendiente/rechazado se consulta como estado, pero
+     * no se presenta al comprador como si tuviera validez fiscal.
+     */
+    public ElectronicInvoicingResource descargarPorPedidoPropio(
+            Long orderId, Long documentId, Long customerId, String resource) {
+        Pedido pedido = pedidoPropio(orderId, customerId);
+        if (pedido.getSale() == null) {
+            throw RecursoNoEncontradoException.de("Comprobante electrÃ³nico", documentId);
+        }
+        ElectronicDocument document = documentRepository.findById(documentId)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Comprobante electrÃ³nico", documentId));
+        if (document.getSale() == null || !document.getSale().getId().equals(pedido.getSale().getId())) {
+            throw RecursoNoEncontradoException.de("Comprobante electrÃ³nico", documentId);
+        }
+        if (document.getStatus() != ElectronicDocumentStatus.ACCEPTED) {
+            throw new ReglaDeNegocioException("El comprobante todavÃ­a no esta aceptado por el proveedor");
+        }
+        return descargar(documentId, resource);
+    }
+
+    private Pedido pedidoPropio(Long orderId, Long customerId) {
+        Pedido pedido = pedidoRepository.findById(orderId)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Pedido", orderId));
+        if (pedido.getCustomer() == null || !pedido.getCustomer().getId().equals(customerId)) {
+            throw RecursoNoEncontradoException.de("Pedido", orderId);
+        }
+        return pedido;
     }
 
     /**
@@ -158,6 +265,67 @@ public class ElectronicDocumentService {
         }
     }
 
+    /**
+     * Vincula una devolucion con una nota de credito fiscal cuando la empresa
+     * tiene facturacion electronica habilitada y la venta tiene un CPE aceptado.
+     * Sin facturacion activa, la devolucion continua siendo solo operativa.
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW,
+            noRollbackFor = ReglaDeNegocioException.class)
+    public void asegurarNotaCreditoDevolucion(Long saleId, String reason, List<NotaItemRequest> items,
+            String idempotencyKey, Long userId) {
+        CompanySettings company = companySettingsRepository.findById(TenantContext.getOrDefault()).orElse(null);
+        if (company == null || !company.isElectronicInvoicingEnabled()) {
+            return;
+        }
+
+        List<ElectronicDocument> documents = documentRepository.findAllBySaleIdOrderByCreatedAtDesc(saleId);
+        List<ElectronicDocument> acceptedSources = documents.stream()
+                .filter(document -> document.getDocumentType() == ElectronicDocumentType.BOLETA
+                        || document.getDocumentType() == ElectronicDocumentType.FACTURA)
+                .filter(document -> document.getStatus() == ElectronicDocumentStatus.ACCEPTED)
+                .toList();
+        if (acceptedSources.isEmpty()) {
+            boolean inProgress = documents.stream()
+                    .anyMatch(document -> (document.getDocumentType() == ElectronicDocumentType.BOLETA
+                            || document.getDocumentType() == ElectronicDocumentType.FACTURA)
+                            && (document.getStatus() == ElectronicDocumentStatus.DRAFT
+                                    || document.getStatus() == ElectronicDocumentStatus.PENDING
+                                    || document.getStatus() == ElectronicDocumentStatus.SENT));
+            if (inProgress) {
+                throw new ReglaDeNegocioException(
+                        "No se puede completar la devolucion mientras el comprobante electronico esta en proceso");
+            }
+            return;
+        }
+        if (acceptedSources.size() > 1) {
+            throw new ReglaDeNegocioException(
+                    "La venta tiene mas de un comprobante aceptado; la devolucion fiscal requiere revision manual");
+        }
+
+        String description = reason == null || reason.isBlank() ? "Devolucion de productos" : reason.trim();
+        CrearElectronicDocumentRequest request = new CrearElectronicDocumentRequest(
+                ElectronicDocumentType.NOTA_CREDITO,
+                acceptedSources.get(0).getId(),
+                "07",
+                description,
+                items);
+        ElectronicDocumentResponse result = crearBorrador(saleId, request, idempotencyKey, userId);
+        if (result.status() == ElectronicDocumentStatus.DRAFT) {
+            result = enviar(result.id(), userId);
+        } else if (result.status() == ElectronicDocumentStatus.PENDING
+                || result.status() == ElectronicDocumentStatus.SENT) {
+            result = actualizarEstado(result.id());
+        }
+        if (result.status() != ElectronicDocumentStatus.ACCEPTED) {
+            String detail = result.cdrMessage() == null || result.cdrMessage().isBlank()
+                    ? "sin detalle del proveedor" : result.cdrMessage();
+            throw new ReglaDeNegocioException(
+                    "La nota de credito de la devolucion no fue aceptada por el proveedor ("
+                            + result.status().name() + "): " + detail);
+        }
+    }
+
     @Transactional
     public ElectronicDocumentResponse crearBorrador(
             Long saleId, CrearElectronicDocumentRequest request, String requestedIdempotencyKey, Long userId) {
@@ -173,9 +341,27 @@ public class ElectronicDocumentService {
             return toResponse(existingType);
         }
 
+        if (!esNota(request.documentType())) {
+            ElectronicDocument conflictingType = documentRepository.findAllBySaleIdOrderByCreatedAtDesc(saleId).stream()
+                    .filter(document -> document.getDocumentType() == ElectronicDocumentType.BOLETA
+                            || document.getDocumentType() == ElectronicDocumentType.FACTURA)
+                    .filter(document -> document.getDocumentType() != request.documentType())
+                    .filter(document -> document.getStatus() != ElectronicDocumentStatus.REJECTED
+                            && document.getStatus() != ElectronicDocumentStatus.ERROR
+                            && document.getStatus() != ElectronicDocumentStatus.CANCELLED)
+                    .findFirst()
+                    .orElse(null);
+            if (conflictingType != null) {
+                throw new ReglaDeNegocioException(
+                        "La venta ya tiene un comprobante " + conflictingType.getDocumentType().name().toLowerCase()
+                                + " en estado " + conflictingType.getStatus().name().toLowerCase()
+                                + ". Una venta solo puede tener boleta o factura.");
+            }
+        }
+
         CompanySettings company = companySettingsRepository.findById(TenantContext.getOrDefault())
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Configuración de empresa", TenantContext.getOrDefault()));
-        if (!company.isElectronicInvoicingEnabled()) {
+        if (!company.isElectronicInvoicingEnabled() || !RucValidator.isValid(company.getRuc())) {
             throw new OperacionNoPermitidaException("La facturación electrónica está desactivada para esta empresa");
         }
 
@@ -190,15 +376,23 @@ public class ElectronicDocumentService {
         if (sale.getStatus() != SaleStatus.COMPLETED) {
             throw new ReglaDeNegocioException("Solo se puede facturar una venta completada");
         }
-        if (sale.getCustomer() == null) {
-            throw new ReglaDeNegocioException("La venta necesita un cliente para generar un comprobante electrónico");
-        }
         if (request.documentType() == ElectronicDocumentType.FACTURA
-                && (sale.getCustomer().getDocType() == null
-                        || !"RUC".equals(sale.getCustomer().getDocType().name())
-                        || sale.getCustomer().getDocNumber() == null
-                        || !sale.getCustomer().getDocNumber().matches("\\d{11}"))) {
-            throw new ReglaDeNegocioException("La factura requiere un cliente con RUC válido de 11 dígitos");
+                && (!"RUC".equals(documentTypeFor(sale))
+                        || !esRucValido(documentNumberFor(sale)))) {
+            throw new ReglaDeNegocioException("La factura requiere un cliente con RUC válido de 11 dígitos y dígito verificador correcto");
+        }
+        if (request.documentType() == ElectronicDocumentType.BOLETA
+                && sale.getTotal().compareTo(BigDecimal.valueOf(700)) > 0
+                && !tieneDocumentoDeAdquirente(sale)) {
+            throw new ReglaDeNegocioException(
+                    "La boleta por importes mayores a S/ 700 requiere identificar al adquirente con su documento");
+        }
+        if (request.documentType() == ElectronicDocumentType.BOLETA
+                && sale.getCustomer() != null
+                && "RUC".equals(documentTypeFor(sale))
+                && documentNumberFor(sale) != null
+                && !esRucValido(documentNumberFor(sale))) {
+            throw new ReglaDeNegocioException("El RUC del cliente no supera la validación del dígito verificador");
         }
 
         ElectronicDocument sourceDocument = esNota(request.documentType())
@@ -245,7 +439,7 @@ public class ElectronicDocumentService {
 
         CompanySettings company = companySettingsRepository.findById(TenantContext.getOrDefault())
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Configuración de empresa", TenantContext.getOrDefault()));
-        if (!company.isElectronicInvoicingEnabled()) {
+        if (!company.isElectronicInvoicingEnabled() || !RucValidator.isValid(company.getRuc())) {
             throw new OperacionNoPermitidaException("La facturación electrónica está desactivada para esta empresa");
         }
         BillingConfiguration billing = billingConfigurationRepository.findFirstByOrderByIdAsc()
@@ -271,7 +465,9 @@ public class ElectronicDocumentService {
             document.setCdrMessage(ex.getMessage());
             auditService.log("COMPROBANTE_ERROR", "ELECTRONIC_DOCUMENT", document.getId(), null,
                     Map.of("message", ex.getMessage()), AuditResult.FAILURE);
-            return toResponse(documentRepository.save(document));
+            ElectronicDocumentResponse response = toResponse(documentRepository.save(document));
+            notificarComprobante(document, response);
+            return response;
         }
 
         applyResult(document, result);
@@ -281,7 +477,9 @@ public class ElectronicDocumentService {
                         result.providerDocumentId() == null ? "" : result.providerDocumentId()),
                 result.status() == ElectronicDocumentStatus.ERROR || result.status() == ElectronicDocumentStatus.REJECTED
                         ? AuditResult.FAILURE : AuditResult.SUCCESS);
-        return toResponse(saved);
+        ElectronicDocumentResponse response = toResponse(saved);
+        notificarComprobante(saved, response);
+        return response;
     }
 
     @Transactional
@@ -291,6 +489,9 @@ public class ElectronicDocumentService {
         if (document.getProviderDocumentId() == null || document.getProviderDocumentId().isBlank()) {
             throw new ReglaDeNegocioException("El comprobante todavía no tiene identificador externo");
         }
+        ElectronicDocumentStatus previousStatus = document.getStatus();
+        String previousProviderStatus = document.getProviderStatus();
+        String previousDocumentNumber = document.getDocumentNumber();
         ElectronicInvoicingProvider invoicingProvider = providerFor(document.getProvider());
         ElectronicInvoicingResult result = invoicingProvider.fetchStatus(
                 document.getProviderDocumentId(), configurationData());
@@ -300,7 +501,13 @@ public class ElectronicDocumentService {
                 Map.of("status", result.status().name(), "source", "STATUS_POLL"),
                 result.status() == ElectronicDocumentStatus.ERROR || result.status() == ElectronicDocumentStatus.REJECTED
                         ? AuditResult.FAILURE : AuditResult.SUCCESS);
-        return toResponse(saved);
+        ElectronicDocumentResponse response = toResponse(saved);
+        if (previousStatus != saved.getStatus()
+                || !java.util.Objects.equals(previousProviderStatus, saved.getProviderStatus())
+                || !java.util.Objects.equals(previousDocumentNumber, saved.getDocumentNumber())) {
+            notificarComprobante(saved, response);
+        }
+        return response;
     }
 
     @Transactional
@@ -325,14 +532,18 @@ public class ElectronicDocumentService {
             ElectronicDocument saved = documentRepository.save(document);
             auditService.log("COMPROBANTE_REINTENTADO", "ELECTRONIC_DOCUMENT", saved.getId(), null,
                     Map.of("status", result.status().name()), AuditResult.SUCCESS);
-            return toResponse(saved);
+            ElectronicDocumentResponse response = toResponse(saved);
+            notificarComprobante(saved, response);
+            return response;
         } catch (ProveedorFacturacionException ex) {
             document.setStatus(ElectronicDocumentStatus.ERROR);
             document.setCdrCode("RETRY_FAILED");
             document.setCdrMessage(ex.getMessage());
             auditService.log("COMPROBANTE_ERROR", "ELECTRONIC_DOCUMENT", document.getId(), null,
                     Map.of("message", ex.getMessage(), "source", "RETRY"), AuditResult.FAILURE);
-            return toResponse(documentRepository.save(document));
+            ElectronicDocumentResponse response = toResponse(documentRepository.save(document));
+            notificarComprobante(document, response);
+            return response;
         }
     }
 
@@ -391,6 +602,12 @@ public class ElectronicDocumentService {
             case ERROR -> "COMPROBANTE_ERROR";
             default -> "COMPROBANTE_ENVIADO";
         };
+    }
+
+    private void notificarComprobante(ElectronicDocument document, ElectronicDocumentResponse response) {
+        Long customerId = document.getSale() != null && document.getSale().getCustomer() != null
+                ? document.getSale().getCustomer().getId() : null;
+        notificacionService.notificarComprobanteActualizado(customerId, response);
     }
 
     private String seriesFor(BillingConfiguration config, ElectronicDocumentType type, ElectronicDocument sourceDocument) {
@@ -526,10 +743,17 @@ public class ElectronicDocumentService {
                 "name", valueOrEmpty(company.getName()),
                 "address", valueOrEmpty(company.getAddress())));
         Map<String, Object> customer = new LinkedHashMap<>();
-        customer.put("fullName", sale.getCustomer().getFullName());
-        customer.put("docType", sale.getCustomer().getDocType().name());
-        customer.put("docNumber", sale.getCustomer().getDocNumber());
-        customer.put("email", sale.getCustomer().getEmail());
+        if (sale.getCustomer() == null && sale.getBillingDocumentNumber() == null) {
+            customer.put("fullName", "CLIENTE");
+            customer.put("docType", "SIN_DOCUMENTO");
+            customer.put("docNumber", "-");
+            customer.put("email", "");
+        } else {
+            customer.put("fullName", nameFor(sale));
+            customer.put("docType", documentTypeFor(sale));
+            customer.put("docNumber", documentNumberFor(sale));
+            customer.put("email", sale.getCustomer() == null ? "" : sale.getCustomer().getEmail());
+        }
         root.put("customer", customer);
         root.put("subtotal", documentSubtotal);
         root.put("discountAmount", documentDiscount);
@@ -589,6 +813,66 @@ public class ElectronicDocumentService {
 
     private String valueOrEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private String truncate(String value, int maxLength) {
+        return value == null || value.length() <= maxLength ? value : value.substring(0, maxLength);
+    }
+
+    private boolean tieneDocumentoDeAdquirente(Sale sale) {
+        String type = documentTypeFor(sale);
+        String number = documentNumberFor(sale);
+        if (type == null || number == null || number.isBlank()) {
+            return false;
+        }
+        number = number.trim();
+        return switch (type) {
+            case "DNI" -> number.matches("\\d{8}");
+            case "RUC" -> esRucValido(number);
+            case "CE" -> number.matches("[A-Za-z0-9]{1,15}");
+            default -> false;
+        };
+    }
+
+    private String documentTypeFor(Sale sale) {
+        String billingNumber = sale.getBillingDocumentNumber();
+        if (billingNumber != null && !billingNumber.isBlank()) {
+            String normalized = billingNumber.trim();
+            if (sale.getBillingDocumentType() == PedidoBillingDocumentType.FACTURA
+                    || normalized.matches("\\d{11}")) return "RUC";
+            if (normalized.matches("\\d{8}")) return "DNI";
+            return "CE";
+        }
+        return sale.getCustomer() == null || sale.getCustomer().getDocType() == null
+                ? "SIN_DOCUMENTO" : sale.getCustomer().getDocType().name();
+    }
+
+    private String documentNumberFor(Sale sale) {
+        if (sale.getBillingDocumentNumber() != null && !sale.getBillingDocumentNumber().isBlank()) {
+            return sale.getBillingDocumentNumber().trim();
+        }
+        return sale.getCustomer() == null ? null : sale.getCustomer().getDocNumber();
+    }
+
+    private String nameFor(Sale sale) {
+        if (sale.getBillingName() != null && !sale.getBillingName().isBlank()) {
+            return sale.getBillingName().trim();
+        }
+        return sale.getCustomer() == null ? "CLIENTE" : sale.getCustomer().getFullName();
+    }
+
+    /** Valida el dígito verificador oficial del RUC peruano de 11 dígitos. */
+    private boolean esRucValido(String value) {
+        if (value == null || !value.matches("\\d{11}")) {
+            return false;
+        }
+        int[] weights = {5, 4, 3, 2, 7, 6, 5, 4, 3, 2};
+        int sum = 0;
+        for (int index = 0; index < weights.length; index++) {
+            sum += Character.digit(value.charAt(index), 10) * weights[index];
+        }
+        int expected = (11 - (sum % 11)) % 10;
+        return expected == Character.digit(value.charAt(10), 10);
     }
 
     private BigDecimal importeDocumento(

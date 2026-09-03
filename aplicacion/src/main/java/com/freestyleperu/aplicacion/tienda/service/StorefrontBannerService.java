@@ -23,12 +23,14 @@ public class StorefrontBannerService {
     private final StorefrontBannerRepository repository;
     private final ImageUploadService imageUploadService;
     private final AuditService auditService;
+    private final StoreCatalogSyncService storeCatalogSyncService;
 
     public StorefrontBannerService(StorefrontBannerRepository repository, ImageUploadService imageUploadService,
-            AuditService auditService) {
+            AuditService auditService, StoreCatalogSyncService storeCatalogSyncService) {
         this.repository = repository;
         this.imageUploadService = imageUploadService;
         this.auditService = auditService;
+        this.storeCatalogSyncService = storeCatalogSyncService;
     }
 
     public List<StorefrontBannerResponse> listar() {
@@ -42,6 +44,7 @@ public class StorefrontBannerService {
         aplicar(banner, request);
         StorefrontBanner saved = repository.save(banner);
         auditService.log("STOREFRONT_BANNER_CREADO", "STOREFRONT_BANNER", saved.getId(), null, saved.getHeadline(), AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return toResponse(saved);
     }
 
@@ -50,6 +53,7 @@ public class StorefrontBannerService {
         StorefrontBanner banner = buscar(id);
         aplicar(banner, request);
         auditService.log("STOREFRONT_BANNER_ACTUALIZADO", "STOREFRONT_BANNER", id, null, request, AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return toResponse(banner);
     }
 
@@ -58,6 +62,7 @@ public class StorefrontBannerService {
         StorefrontBanner banner = buscar(id);
         banner.setImageUrl(imageUploadService.guardar(file, "storefront-banners"));
         auditService.log("STOREFRONT_BANNER_IMAGEN_ACTUALIZADA", "STOREFRONT_BANNER", id, null, banner.getImageUrl(), AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return toResponse(banner);
     }
 
@@ -66,6 +71,7 @@ public class StorefrontBannerService {
         StorefrontBanner banner = buscar(id);
         banner.setStatus(status);
         auditService.log("STOREFRONT_BANNER_CAMBIO_ESTADO", "STOREFRONT_BANNER", id, null, status, AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return toResponse(banner);
     }
 

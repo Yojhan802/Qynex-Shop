@@ -66,11 +66,19 @@ app:
     refresh-token-days: ${JWT_REFRESH_DAYS:7}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5500,http://192.168.1.5:8321}
+    # El frontend multi-tenant puede vivir en cualquier subdominio de desarrollo
+    # o del dominio base. En producción los dominios propios se sirven por el
+    # mismo origen y no requieren CORS; si se separan, se agregan explícitamente.
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://*.localhost:[*],https://*.qynex.pe:[*]}
   security:
     max-failed-attempts: 5
     lock-duration-minutes: 15
     # Llave privada para cifrar credenciales de pasarelas y facturación en la BD.
     credentials-encryption-key: ${CREDENTIALS_ENCRYPTION_KEY:}
+  facturacion:
+    # Conciliación de comprobantes que Verifac/NubeFact dejaron en proceso.
+    status-poll-ms: ${BILLING_STATUS_POLL_MS:60000}
+    status-initial-delay-ms: ${BILLING_STATUS_INITIAL_DELAY_MS:30000}
   openrouter:
     api-key: ${OPENROUTER_API_KEY:}
     base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}

@@ -4,6 +4,7 @@ import com.freestyleperu.aplicacion.facturacion.domain.ElectronicDocument;
 import com.freestyleperu.aplicacion.facturacion.domain.ElectronicDocumentType;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.time.LocalDateTime;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -24,6 +25,20 @@ public interface ElectronicDocumentRepository extends JpaRepository<ElectronicDo
 
     @EntityGraph(attributePaths = { "sale" })
     Optional<ElectronicDocument> findByIdempotencyKey(String idempotencyKey);
+
+    @Query("""
+            select d
+            from ElectronicDocument d
+            where d.status in :statuses
+              and d.providerDocumentId is not null
+              and d.providerDocumentId <> ''
+              and (d.submittedAt is null or d.submittedAt <= :cutoff)
+            order by d.submittedAt asc, d.id asc
+            """)
+    @EntityGraph(attributePaths = { "sale", "sale.customer" })
+    List<ElectronicDocument> findPendingForStatusReconciliation(
+            @Param("statuses") Set<com.freestyleperu.aplicacion.facturacion.domain.ElectronicDocumentStatus> statuses,
+            @Param("cutoff") LocalDateTime cutoff);
 
     @Query("""
             select d.provider, d.status, count(d), coalesce(sum(d.amount), 0)

@@ -3,6 +3,7 @@ package com.freestyleperu.aplicacion.venta.domain;
 import com.freestyleperu.aplicacion.caja.domain.CashSession;
 import com.freestyleperu.aplicacion.cliente.domain.Customer;
 import com.freestyleperu.aplicacion.promotor.domain.Promoter;
+import com.freestyleperu.aplicacion.pedido.domain.PedidoBillingDocumentType;
 import com.freestyleperu.aplicacion.usuario.domain.Usuario;
 import jakarta.persistence.Column;
 import jakarta.persistence.EnumType;
@@ -68,6 +69,17 @@ public class Sale {
     /** Costo de envío cuando la venta viene de un pedido online (0 para ventas de POS/separaciones). */
     @Column(name = "shipping_amount", nullable = false, precision = 12, scale = 2)
     private BigDecimal shippingAmount = BigDecimal.ZERO;
+
+    /** Datos de facturación congelados al materializar un pedido online. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "billing_document_type", nullable = false, length = 20)
+    private PedidoBillingDocumentType billingDocumentType = PedidoBillingDocumentType.TICKET;
+
+    @Column(name = "billing_document_number", length = 15)
+    private String billingDocumentNumber;
+
+    @Column(name = "billing_name", length = 150)
+    private String billingName;
 
     @Column(name = "total", nullable = false, precision = 12, scale = 2)
     private BigDecimal total;

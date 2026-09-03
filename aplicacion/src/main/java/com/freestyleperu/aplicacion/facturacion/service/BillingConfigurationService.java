@@ -10,6 +10,7 @@ import com.freestyleperu.aplicacion.shared.audit.AuditResult;
 import com.freestyleperu.aplicacion.shared.audit.AuditService;
 import com.freestyleperu.aplicacion.shared.exception.OperacionNoPermitidaException;
 import com.freestyleperu.aplicacion.shared.security.CredentialEncryptionService;
+import com.freestyleperu.aplicacion.tienda.service.StoreCatalogSyncService;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,16 +27,19 @@ public class BillingConfigurationService {
     private final CredentialEncryptionService encryptionService;
     private final ObjectMapper objectMapper;
     private final AuditService auditService;
+    private final StoreCatalogSyncService storeCatalogSyncService;
 
     public BillingConfigurationService(
             BillingConfigurationRepository repository,
             CredentialEncryptionService encryptionService,
             ObjectMapper objectMapper,
-            AuditService auditService) {
+            AuditService auditService,
+            StoreCatalogSyncService storeCatalogSyncService) {
         this.repository = repository;
         this.encryptionService = encryptionService;
         this.objectMapper = objectMapper;
         this.auditService = auditService;
+        this.storeCatalogSyncService = storeCatalogSyncService;
     }
 
     public BillingConfigurationResponse obtener() {
@@ -85,6 +89,7 @@ public class BillingConfigurationService {
         auditService.log("CONFIGURACION_FACTURACION_ACTUALIZADA", "BILLING_CONFIGURATION", saved.getId(), null,
                 Map.of("provider", saved.getProvider().name(), "enabled", saved.isEnabled(),
                         "environment", saved.getEnvironment().name()), AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return toResponse(saved);
     }
 

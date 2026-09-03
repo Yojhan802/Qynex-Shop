@@ -63,6 +63,7 @@ public class VerifacProvider implements ElectronicInvoicingProvider {
             ResponseEntity<Map> response = client(configuration)
                     .post()
                     .uri(path)
+                    .header("Authorization", "Bearer " + apiKey)
                     .header("X-API-Key", apiKey)
                     .header("Content-Type", "application/json")
                     .body(request)
@@ -87,10 +88,10 @@ public class VerifacProvider implements ElectronicInvoicingProvider {
         try {
             ResponseEntity<Map> response = authorizedClient(configuration)
                     .get()
-                    .uri("/api/v1/comprobantes/{id}/estado", providerDocumentId)
+                    .uri("/api/v1/comprobantes/{id}/cdr", providerDocumentId)
                     .retrieve()
                     .toEntity(Map.class);
-            return parseSuccess(response.getBody(), response.getStatusCode().value());
+            return parseSuccess(response.getBody(), response.getStatusCode().value(), providerDocumentId);
         } catch (RestClientResponseException ex) {
             throw new ProveedorFacturacionException("Verifac no pudo consultar el estado del comprobante");
         } catch (RestClientException ex) {
@@ -245,20 +246,32 @@ public class VerifacProvider implements ElectronicInvoicingProvider {
 
     @SuppressWarnings("unchecked")
     private ElectronicInvoicingResult parseSuccess(Map<String, Object> body, int status) {
-        Map<String, Object> data = body == null ? Map.of() : map(body.get("data"));
-        String id = text(data.get("id"), null);
+        return parseSuccess(body, status, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private ElectronicInvoicingResult parseSuccess(
+            Map<String, Object> body, int status, String existingProviderDocumentId) {
+        Map<String, Object> data = body == null
+                ? Map.of()
+                : body.get("data") instanceof Map<?, ?> ? map(body.get("data")) : body;
+        String id = text(data.get("id"), text(data.get("comprobanteId"),
+                text(data.get("uuid"), text(data.get("documentId"), existingProviderDocumentId))));
+        String state = text(data.get("estado"), text(data.get("status"), null));
+        String cdrMessage = text(data.get("descripcionCdr"),
+                text(data.get("cdr"), text(body == null ? null : body.get("message"), null)));
+        String xmlPath = text(data.get("xmlPath"), text(data.get("xml"), null));
+        String cdrPath = text(data.get("cdrPath"), null);
         if (status != 202 || id == null) {
             return new ElectronicInvoicingResult(
-                    statusFrom(text(data.get("estado"), null)), id, text(data.get("estado"), null),
+                    statusFrom(state), id, state,
                     text(data.get("serie"), null), text(data.get("numero"), null),
-                    text(data.get("codigoCdr"), null), text(data.get("descripcionCdr"), text(body == null ? null : body.get("message"), null)),
-                    text(data.get("xmlPath"), null), text(data.get("cdrPath"), null));
+                    text(data.get("codigoCdr"), null), cdrMessage, xmlPath, cdrPath);
         }
         return new ElectronicInvoicingResult(
-                statusFrom(text(data.get("estado"), "PENDIENTE")), id, text(data.get("estado"), "PENDIENTE"),
+                statusFrom(text(state, "PENDIENTE")), id, text(state, "PENDIENTE"),
                 text(data.get("serie"), null), text(data.get("numero"), null),
-                text(data.get("codigoCdr"), null), text(data.get("descripcionCdr"), null),
-                text(data.get("xmlPath"), null), text(data.get("cdrPath"), null));
+                text(data.get("codigoCdr"), null), cdrMessage, xmlPath, cdrPath);
     }
 
     private RestClient client(BillingConfigurationData configuration) {
@@ -286,6 +299,7 @@ public class VerifacProvider implements ElectronicInvoicingProvider {
         }
         return RestClient.builder()
                 .baseUrl(apiUrl(configuration))
+                .defaultHeader("Authorization", "Bearer " + apiKey)
                 .defaultHeader("X-API-Key", apiKey)
                 .defaultHeader("Content-Type", "application/json")
                 .build();

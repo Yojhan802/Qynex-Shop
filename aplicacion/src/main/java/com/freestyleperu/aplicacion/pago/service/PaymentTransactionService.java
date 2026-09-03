@@ -9,6 +9,7 @@ import com.freestyleperu.aplicacion.pago.dto.request.CrearPaymentTransactionRequ
 import com.freestyleperu.aplicacion.pago.dto.response.PaymentProviderCheckoutResponse;
 import com.freestyleperu.aplicacion.pago.dto.response.PaymentTransactionResponse;
 import com.freestyleperu.aplicacion.pago.exception.ProveedorPagoException;
+import com.freestyleperu.aplicacion.facturacion.service.ElectronicDocumentService;
 import com.freestyleperu.aplicacion.pago.port.PaymentProviderChargeCommand;
 import com.freestyleperu.aplicacion.pago.port.PaymentProviderChargeResult;
 import com.freestyleperu.aplicacion.pago.port.PaymentProviderCheckoutCommand;
@@ -25,6 +26,8 @@ import com.freestyleperu.aplicacion.shared.exception.ReglaDeNegocioException;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * Orquesta el ciclo de vida interno de un cobro, separado del contrato de
@@ -41,6 +44,7 @@ public class PaymentTransactionService {
     private final AuditService auditService;
     private final List<PaymentProvider> providers;
     private final PedidoService pedidoService;
+    private final ElectronicDocumentService electronicDocumentService;
 
     public PaymentTransactionService(
             PaymentTransactionRepository transactionRepository,
@@ -48,13 +52,15 @@ public class PaymentTransactionService {
             PaymentProviderConfigurationService providerConfigurationService,
             AuditService auditService,
             List<PaymentProvider> providers,
-            PedidoService pedidoService) {
+            PedidoService pedidoService,
+            ElectronicDocumentService electronicDocumentService) {
         this.transactionRepository = transactionRepository;
         this.pedidoRepository = pedidoRepository;
         this.providerConfigurationService = providerConfigurationService;
         this.auditService = auditService;
         this.providers = providers;
         this.pedidoService = pedidoService;
+        this.electronicDocumentService = electronicDocumentService;
     }
 
     /**
@@ -300,16 +306,37 @@ public class PaymentTransactionService {
     }
 
     private void materializarVentaSiCorresponde(PaymentTransaction transaction) {
-        if (transaction.getOrder() == null || transaction.getSale() != null) {
+        if (transaction.getOrder() == null) {
             return;
         }
         Pedido pedido = transaction.getOrder();
-        if (pedido.getStatus() == PedidoStatus.PENDING_PAYMENT) {
+        if (transaction.getSale() == null && pedido.getStatus() == PedidoStatus.PENDING_PAYMENT) {
             pedidoService.confirmarPagoOnline(pedido.getId());
         }
         if (pedido.getSale() != null) {
             transaction.setSale(pedido.getSale());
             transactionRepository.save(transaction);
+            programarEmisionElectronica(pedido);
+        }
+    }
+
+    private void programarEmisionElectronica(Pedido pedido) {
+        if (pedido.getBillingDocumentType() == null
+                || pedido.getBillingDocumentType() == com.freestyleperu.aplicacion.pedido.domain.PedidoBillingDocumentType.TICKET
+                || pedido.getSale() == null) {
+            return;
+        }
+        Long saleId = pedido.getSale().getId();
+        Runnable emitir = () -> electronicDocumentService.emitirAutomaticamenteParaVenta(saleId);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    emitir.run();
+                }
+            });
+        } else {
+            emitir.run();
         }
     }
 

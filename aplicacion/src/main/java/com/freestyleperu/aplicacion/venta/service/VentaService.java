@@ -6,9 +6,11 @@ import com.freestyleperu.aplicacion.caja.repository.CashSessionRepository;
 import com.freestyleperu.aplicacion.caja.service.CajaService;
 import com.freestyleperu.aplicacion.cliente.domain.Customer;
 import com.freestyleperu.aplicacion.cliente.repository.CustomerRepository;
+import com.freestyleperu.aplicacion.configuracion.service.ConfiguracionService;
 import com.freestyleperu.aplicacion.combo.domain.Combo;
 import com.freestyleperu.aplicacion.combo.service.ComboService;
 import com.freestyleperu.aplicacion.inventario.service.InventarioService;
+import com.freestyleperu.aplicacion.facturacion.service.BillingConfigurationService;
 import com.freestyleperu.aplicacion.facturacion.service.ElectronicDocumentService;
 import com.freestyleperu.aplicacion.pago.domain.PaymentMethod;
 import com.freestyleperu.aplicacion.pago.service.PagoService;
@@ -19,6 +21,7 @@ import com.freestyleperu.aplicacion.promocion.service.PromocionService;
 import com.freestyleperu.aplicacion.promotor.domain.Promoter;
 import com.freestyleperu.aplicacion.promotor.service.PromoterService;
 import com.freestyleperu.aplicacion.producto.repository.ProductVariantRepository;
+import com.freestyleperu.aplicacion.pedido.domain.PedidoBillingDocumentType;
 import com.freestyleperu.aplicacion.shared.audit.AuditResult;
 import com.freestyleperu.aplicacion.shared.audit.AuditService;
 import com.freestyleperu.aplicacion.shared.exception.OperacionNoPermitidaException;
@@ -27,6 +30,7 @@ import com.freestyleperu.aplicacion.shared.exception.ReglaDeNegocioException;
 import com.freestyleperu.aplicacion.shared.dto.PageResponse;
 import com.freestyleperu.aplicacion.shared.security.Permisos;
 import com.freestyleperu.aplicacion.shared.util.SequenceService;
+import com.freestyleperu.aplicacion.shared.validation.RucValidator;
 import com.freestyleperu.aplicacion.usuario.domain.Usuario;
 import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
 import com.freestyleperu.aplicacion.venta.domain.Payment;
@@ -85,6 +89,8 @@ public class VentaService {
     private final SequenceService sequenceService;
     private final AuditService auditService;
     private final ElectronicDocumentService electronicDocumentService;
+    private final BillingConfigurationService billingConfigurationService;
+    private final ConfiguracionService configuracionService;
 
     public VentaService(SaleRepository saleRepository, SaleDetailRepository saleDetailRepository,
             PaymentRepository paymentRepository, ProductVariantRepository variantRepository,
@@ -92,7 +98,9 @@ public class VentaService {
             UsuarioRepository usuarioRepository, InventarioService inventarioService, CajaService cajaService,
             PagoService pagoService, PromoterService promoterService, ComboService comboService,
             PromocionService promocionService, SequenceService sequenceService, AuditService auditService,
-            ElectronicDocumentService electronicDocumentService) {
+            ElectronicDocumentService electronicDocumentService,
+            BillingConfigurationService billingConfigurationService,
+            ConfiguracionService configuracionService) {
         this.saleRepository = saleRepository;
         this.saleDetailRepository = saleDetailRepository;
         this.paymentRepository = paymentRepository;
@@ -109,6 +117,8 @@ public class VentaService {
         this.sequenceService = sequenceService;
         this.auditService = auditService;
         this.electronicDocumentService = electronicDocumentService;
+        this.billingConfigurationService = billingConfigurationService;
+        this.configuracionService = configuracionService;
     }
 
     public PageResponse<VentaResumenResponse> listar(Long userId, boolean verTodas, SaleStatus status,
@@ -172,6 +182,8 @@ public class VentaService {
                     "La suma de pagos (" + sumaPagos + ") no coincide con el total (" + total + ")");
         }
 
+        DatosComprobante datosComprobante = normalizarComprobante(request, customer, total);
+
         Usuario vendedor = usuarioRepository.findById(userId).orElseThrow(() -> RecursoNoEncontradoException.de("Usuario", userId));
 
         Sale sale = new Sale();
@@ -182,6 +194,9 @@ public class VentaService {
         sale.setCashSession(session);
         sale.setSubtotal(subtotal);
         sale.setDiscountAmount(descuentoTotal);
+        sale.setBillingDocumentType(datosComprobante.type());
+        sale.setBillingDocumentNumber(datosComprobante.number());
+        sale.setBillingName(datosComprobante.name());
         sale.setTotal(total);
         sale.setStatus(SaleStatus.COMPLETED);
         sale.setNotes(request.notes());
@@ -482,11 +497,81 @@ public class VentaService {
                 sale.getCancelledBy() != null ? sale.getCancelledBy().getUsername() : null,
                 sale.getCancellationReason(),
                 items,
-                pagosResponse);
+                pagosResponse,
+                sale.getBillingDocumentType() == null ? PedidoBillingDocumentType.TICKET : sale.getBillingDocumentType(),
+                sale.getBillingDocumentNumber(),
+                sale.getBillingName());
+    }
+
+    private DatosComprobante normalizarComprobante(CrearVentaRequest request, Customer customer, BigDecimal total) {
+        PedidoBillingDocumentType type = request.billingDocumentType() == null
+                ? PedidoBillingDocumentType.TICKET : request.billingDocumentType();
+        String number = blankToNull(request.billingDocumentNumber());
+        String name = blankToNull(request.billingName());
+
+        if (type == PedidoBillingDocumentType.TICKET) {
+            if (number != null || name != null) {
+                throw new ReglaDeNegocioException("El ticket interno no requiere datos de facturacion");
+            }
+            return new DatosComprobante(type, null, null);
+        }
+        var company = configuracionService.obtener();
+        if (!company.electronicInvoicingEnabled() || !RucValidator.isValid(company.ruc())) {
+            throw new ReglaDeNegocioException("La facturacion electronica no esta habilitada para esta empresa");
+        }
+        var billing = billingConfigurationService.obtener();
+        if (!billing.enabled() || !billing.configured()) {
+            throw new ReglaDeNegocioException("La facturacion electronica no esta lista: configura el proveedor antes de cobrar");
+        }
+
+        if (type == PedidoBillingDocumentType.FACTURA) {
+            if (!esRucValido(number)) {
+                throw new ReglaDeNegocioException("La factura requiere un RUC valido de 11 digitos y digito verificador correcto");
+            }
+            if (name == null || !name.matches("[\\p{L}\\p{N} .,'&()\\-/]+")) {
+                throw new ReglaDeNegocioException("La factura requiere una razon social valida");
+            }
+            if (billing.invoiceSeries() == null || billing.invoiceSeries().isBlank()) {
+                throw new ReglaDeNegocioException("Configura la serie de factura antes de cobrar");
+            }
+            return new DatosComprobante(type, number, name);
+        }
+
+        if (number == null && customer != null && customer.getDocNumber() != null) {
+            number = blankToNull(customer.getDocNumber());
+        }
+        if (number != null && !number.matches("[A-Za-z0-9]{1,15}")) {
+            throw new ReglaDeNegocioException("El documento de la boleta solo admite hasta 15 caracteres alfanumericos");
+        }
+        if (total.compareTo(BigDecimal.valueOf(700)) > 0 && number == null) {
+            throw new ReglaDeNegocioException("La boleta por importes mayores a S/ 700 requiere identificar al adquirente");
+        }
+        if (billing.receiptSeries() == null || billing.receiptSeries().isBlank()) {
+            throw new ReglaDeNegocioException("Configura la serie de boleta antes de cobrar");
+        }
+        return new DatosComprobante(type, number, name);
+    }
+
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private boolean esRucValido(String value) {
+        if (value == null || !value.matches("\\d{11}")) return false;
+        int[] weights = {5, 4, 3, 2, 7, 6, 5, 4, 3, 2};
+        int sum = 0;
+        for (int index = 0; index < weights.length; index++) {
+            sum += Character.digit(value.charAt(index), 10) * weights[index];
+        }
+        int expected = (11 - (sum % 11)) % 10;
+        return expected == Character.digit(value.charAt(10), 10);
     }
 
     private record DetalleCalculado(
             ProductVariant variant, int quantity, BigDecimal unitPrice, BigDecimal descuento, BigDecimal bruto, BigDecimal subtotal,
             Combo combo, Promocion promotion) {
+    }
+
+    private record DatosComprobante(PedidoBillingDocumentType type, String number, String name) {
     }
 }

@@ -4,6 +4,7 @@ import com.freestyleperu.aplicacion.catalogo.domain.AttributeInputType;
 import com.freestyleperu.aplicacion.catalogo.repository.BrandRepository;
 import com.freestyleperu.aplicacion.catalogo.repository.CategoryRepository;
 import com.freestyleperu.aplicacion.configuracion.service.ConfiguracionService;
+import com.freestyleperu.aplicacion.facturacion.service.BillingConfigurationService;
 import com.freestyleperu.aplicacion.pago.repository.PaymentMethodRepository;
 import com.freestyleperu.aplicacion.pago.service.PaymentProviderConfigurationService;
 import com.freestyleperu.aplicacion.pago.domain.PaymentMethodType;
@@ -20,7 +21,9 @@ import com.freestyleperu.aplicacion.promocion.service.PromocionService;
 import com.freestyleperu.aplicacion.shared.dto.PageResponse;
 import com.freestyleperu.aplicacion.shared.domain.EstadoGeneral;
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
+import com.freestyleperu.aplicacion.shared.validation.RucValidator;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicAttributeValueResponse;
+import com.freestyleperu.aplicacion.tienda.dto.response.PublicBillingOptionsResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicCategoriaResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicColorSwatchResponse;
 import com.freestyleperu.aplicacion.tienda.dto.response.PublicMarcaResponse;
@@ -72,6 +75,7 @@ public class TiendaCatalogoService {
     private final ConfiguracionService configuracionService;
     private final PromocionService promocionService;
     private final StorefrontBannerRepository storefrontBannerRepository;
+    private final BillingConfigurationService billingConfigurationService;
 
     private static final String DISTRITO_ENVIO_GRATIS = "Huacho";
 
@@ -81,7 +85,8 @@ public class TiendaCatalogoService {
             BrandRepository brandRepository, PaymentMethodRepository paymentMethodRepository,
             PaymentProviderConfigurationService paymentProviderConfigurationService,
             ConfiguracionService configuracionService, PromocionService promocionService,
-            StorefrontBannerRepository storefrontBannerRepository) {
+            StorefrontBannerRepository storefrontBannerRepository,
+            BillingConfigurationService billingConfigurationService) {
         this.productRepository = productRepository;
         this.productImageRepository = productImageRepository;
         this.variantRepository = variantRepository;
@@ -93,6 +98,7 @@ public class TiendaCatalogoService {
         this.configuracionService = configuracionService;
         this.promocionService = promocionService;
         this.storefrontBannerRepository = storefrontBannerRepository;
+        this.billingConfigurationService = billingConfigurationService;
     }
 
     public PublicStorefrontConfigResponse obtenerConfiguracionTienda() {
@@ -181,6 +187,22 @@ public class TiendaCatalogoService {
     @Cacheable(cacheNames = "storeCatalogShipping", keyGenerator = "tenantAwareKeyGenerator")
     public PublicShippingInfoResponse obtenerInfoEnvio() {
         return new PublicShippingInfoResponse(configuracionService.obtenerTarifaEnvio(), DISTRITO_ENVIO_GRATIS);
+    }
+
+    /**
+     * Publica únicamente si el interruptor del tenant y el proveedor están
+     * realmente listos. Nunca expone tokens, claves ni credenciales.
+     */
+    @Cacheable(cacheNames = "storeCatalogBillingOptions", keyGenerator = "tenantAwareKeyGenerator")
+    public PublicBillingOptionsResponse obtenerOpcionesFacturacion() {
+        var company = configuracionService.obtener();
+        var billing = billingConfigurationService.obtener();
+        boolean enabled = company.electronicInvoicingEnabled() && RucValidator.isValid(company.ruc());
+        boolean available = enabled && billing.enabled() && billing.configured();
+        boolean receiptAvailable = available && billing.receiptSeries() != null && !billing.receiptSeries().isBlank();
+        boolean invoiceAvailable = available && billing.invoiceSeries() != null && !billing.invoiceSeries().isBlank();
+        return new PublicBillingOptionsResponse(enabled, receiptAvailable || invoiceAvailable,
+                receiptAvailable, invoiceAvailable, available ? billing.provider().name() : null);
     }
 
     @Cacheable(cacheNames = "storeCatalogPaymentMethods", keyGenerator = "tenantAwareKeyGenerator")

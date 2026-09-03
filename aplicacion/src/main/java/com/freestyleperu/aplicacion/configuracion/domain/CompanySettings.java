@@ -62,6 +62,13 @@ public class CompanySettings {
     @Column(name = "email", length = 120)
     private String email;
 
+    /**
+     * Si esta empresa cuenta como ingreso. La tienda propia y el demo funcionan igual que
+     * las demás, pero nadie paga por ellas: incluirlas falsea el ingreso mensual.
+     */
+    @Column(name = "billable", nullable = false)
+    private boolean billable = true;
+
     @Column(name = "logo_url", length = 255)
     private String logoUrl;
 

@@ -69,6 +69,9 @@ public final class Permisos {
     public static final String PEDIDOS_CONSULTAR = "PEDIDOS_CONSULTAR";
     public static final String PEDIDOS_GESTIONAR = "PEDIDOS_GESTIONAR";
 
+    public static final String RECLAMOS_CONSULTAR = "RECLAMOS_CONSULTAR";
+    public static final String RECLAMOS_RESPONDER = "RECLAMOS_RESPONDER";
+
     public static final String RESERVAS_CONSULTAR = "RESERVAS_CONSULTAR";
     public static final String RESERVAS_CREAR = "RESERVAS_CREAR";
     public static final String RESERVAS_GESTIONAR = "RESERVAS_GESTIONAR";

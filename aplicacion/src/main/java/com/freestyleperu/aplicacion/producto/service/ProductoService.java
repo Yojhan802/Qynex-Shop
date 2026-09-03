@@ -28,6 +28,7 @@ import com.freestyleperu.aplicacion.shared.exception.ReglaDeNegocioException;
 import com.freestyleperu.aplicacion.shared.util.ImageUploadService;
 import com.freestyleperu.aplicacion.shared.util.SequenceService;
 import com.freestyleperu.aplicacion.shared.util.TextNormalizer;
+import com.freestyleperu.aplicacion.tienda.service.StoreCatalogSyncService;
 import java.math.BigDecimal;
 import java.util.List;
 import org.springframework.data.domain.Page;
@@ -50,12 +51,14 @@ public class ProductoService {
     private final ProductoMapper productoMapper;
     private final AuditService auditService;
     private final ImageUploadService imageUploadService;
+    private final StoreCatalogSyncService storeCatalogSyncService;
 
     public ProductoService(ProductRepository productRepository, ProductImageRepository productImageRepository,
             ProductVariantRepository variantRepository,
             CategoryRepository categoryRepository, SubcategoryRepository subcategoryRepository,
             BrandRepository brandRepository, SequenceService sequenceService, ProductoMapper productoMapper,
-            AuditService auditService, ImageUploadService imageUploadService) {
+            AuditService auditService, ImageUploadService imageUploadService,
+            StoreCatalogSyncService storeCatalogSyncService) {
         this.productRepository = productRepository;
         this.productImageRepository = productImageRepository;
         this.variantRepository = variantRepository;
@@ -66,6 +69,7 @@ public class ProductoService {
         this.productoMapper = productoMapper;
         this.auditService = auditService;
         this.imageUploadService = imageUploadService;
+        this.storeCatalogSyncService = storeCatalogSyncService;
     }
 
     public Page<ProductoResumenResponse> listar(String search, Long categoryId, Long subcategoryId, Long brandId,
@@ -106,6 +110,7 @@ public class ProductoService {
         Product guardado = productRepository.save(product);
         auditService.log("PRODUCTO_CREADO", "PRODUCTO", guardado.getId(), null,
                 new Object[] { guardado.getSku(), guardado.getName() }, AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return productoMapper.toDetalle(guardado, List.of());
     }
 
@@ -131,6 +136,7 @@ public class ProductoService {
         }
 
         auditService.log("PRODUCTO_ACTUALIZADO", "PRODUCTO", product.getId(), null, request, AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return productoMapper.toDetalle(product, variantsDe(product.getId()));
     }
 
@@ -139,6 +145,7 @@ public class ProductoService {
         Product product = buscarOFallar(id);
         product.setStatus(status);
         auditService.log("PRODUCTO_CAMBIO_ESTADO", "PRODUCTO", product.getId(), null, status, AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return productoMapper.toResumen(product, variantsDe(product.getId()));
     }
 
@@ -148,6 +155,7 @@ public class ProductoService {
         product.setImageUrl(imageUploadService.guardar(file, "products"));
         sincronizarImagenPrincipal(product, product.getImageUrl());
         auditService.log("PRODUCTO_IMAGEN_ACTUALIZADA", "PRODUCTO", product.getId(), null, product.getImageUrl(), AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return productoMapper.toDetalle(product, variantsDe(product.getId()));
     }
 
@@ -179,6 +187,7 @@ public class ProductoService {
             product.setImageUrl(saved.getImageUrl());
         }
         auditService.log("PRODUCTO_GALERIA_IMAGEN_AGREGADA", "PRODUCTO", id, null, saved.getImageUrl(), AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return toImagenResponse(saved);
     }
 
@@ -198,6 +207,7 @@ public class ProductoService {
         }
         product.setImageUrl(image.getImageUrl());
         auditService.log("PRODUCTO_GALERIA_IMAGEN_PRINCIPAL", "PRODUCTO", productId, null, image.getImageUrl(), AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return toImagenResponse(image);
     }
 
@@ -210,6 +220,7 @@ public class ProductoService {
         image.setAltText(normalizarAlt(request.altText()));
         if (request.sortOrder() != null) image.setSortOrder(request.sortOrder());
         auditService.log("PRODUCTO_GALERIA_IMAGEN_ACTUALIZADA", "PRODUCTO", productId, null, imageId, AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return toImagenResponse(image);
     }
 
@@ -232,6 +243,7 @@ public class ProductoService {
             }
         }
         auditService.log("PRODUCTO_GALERIA_IMAGEN_ELIMINADA", "PRODUCTO", productId, image.getImageUrl(), null, AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
     }
 
     @Transactional
@@ -239,6 +251,7 @@ public class ProductoService {
         Product product = buscarOFallar(id);
         product.setSizeGuideImageUrl(imageUploadService.guardar(file, "size-guides"));
         auditService.log("PRODUCTO_GUIA_TALLAS_ACTUALIZADA", "PRODUCTO", product.getId(), null, product.getSizeGuideImageUrl(), AuditResult.SUCCESS);
+        storeCatalogSyncService.requestRefresh();
         return productoMapper.toDetalle(product, variantsDe(product.getId()));
     }
 

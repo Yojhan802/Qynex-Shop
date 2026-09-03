@@ -14,12 +14,14 @@ import com.freestyleperu.aplicacion.shared.audit.AuditService;
 import com.freestyleperu.aplicacion.shared.exception.OperacionNoPermitidaException;
 import com.freestyleperu.aplicacion.shared.security.CredentialEncryptionService;
 import com.freestyleperu.aplicacion.shared.security.TenantContext;
+import com.freestyleperu.aplicacion.tienda.service.StoreCatalogSyncService;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,7 +37,9 @@ public class PaymentProviderConfigurationService {
     private final AuditService auditService;
     private final CompanySettingsRepository companySettingsRepository;
     private final List<PaymentProvider> providers;
+    private final StoreCatalogSyncService storeCatalogSyncService;
 
+    /** Constructor legado para pruebas/extensiones que aún no conocen la sincronización pública. */
     public PaymentProviderConfigurationService(
             PaymentProviderConfigurationRepository repository,
             CredentialEncryptionService encryptionService,
@@ -43,12 +47,25 @@ public class PaymentProviderConfigurationService {
             AuditService auditService,
             CompanySettingsRepository companySettingsRepository,
             List<PaymentProvider> providers) {
+        this(repository, encryptionService, objectMapper, auditService, companySettingsRepository, providers, null);
+    }
+
+    @Autowired
+    public PaymentProviderConfigurationService(
+            PaymentProviderConfigurationRepository repository,
+            CredentialEncryptionService encryptionService,
+            ObjectMapper objectMapper,
+            AuditService auditService,
+            CompanySettingsRepository companySettingsRepository,
+            List<PaymentProvider> providers,
+            StoreCatalogSyncService storeCatalogSyncService) {
         this.repository = repository;
         this.encryptionService = encryptionService;
         this.objectMapper = objectMapper;
         this.auditService = auditService;
         this.companySettingsRepository = companySettingsRepository;
         this.providers = providers;
+        this.storeCatalogSyncService = storeCatalogSyncService;
     }
 
     public List<PaymentProviderResponse> listar() {
@@ -136,6 +153,9 @@ public class PaymentProviderConfigurationService {
         auditService.log("CONFIGURACION_PASARELA_ACTUALIZADA", "PAYMENT_PROVIDER_CONFIGURATION", saved.getId(), null,
                 Map.of("provider", provider.name(), "enabled", saved.isEnabled(), "environment", saved.getEnvironment().name()),
                 AuditResult.SUCCESS);
+        if (storeCatalogSyncService != null) {
+            storeCatalogSyncService.requestRefresh();
+        }
         return toResponse(saved);
     }
 
