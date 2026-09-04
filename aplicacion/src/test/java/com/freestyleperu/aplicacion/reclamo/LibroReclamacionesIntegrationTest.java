@@ -173,6 +173,24 @@ class LibroReclamacionesIntegrationTest {
         assertThat(jwtService.parseComplaintReceiptToken("no-es-un-token", 1L)).isNull();
     }
 
+    /**
+     * El panel de la empresa tiene que ver el plazo legal, no solo el consumidor en su
+     * constancia: los 30 días del D.S. 011-2011-PCM corren desde el registro y pasarlos es
+     * sancionable. Se envía calculado desde el backend para que no haya dos cuentas
+     * distintas del mismo plazo.
+     */
+    @Test
+    void elListadoDeLaEmpresaTraeLaFechaLimiteDeRespuesta() {
+        aseguraEmpresaIdentificada();
+        ComplaintReceiptResponse constancia = complaintBookService.createAndIssueReceipt(hojaValida(ComplaintType.RECLAMO));
+
+        ComplaintResponse hoja = complaintBookService.getByNumber(constancia.entryNumber());
+
+        assertThat(hoja.responseDueDate()).isEqualTo(hoja.createdAt().toLocalDate().plusDays(30));
+        // La constancia del consumidor y la vista de la empresa dicen lo mismo.
+        assertThat(hoja.responseDueDate()).isEqualTo(constancia.responseDueDate());
+    }
+
     @Test
     void consultarPorNumeroNoExponeDatosPersonalesDeOtroConsumidor() {
         aseguraEmpresaIdentificada();

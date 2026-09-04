@@ -145,7 +145,8 @@ public class ComplaintBookService {
                 entry.getConsumerDocument(), entry.getConsumerEmail(), entry.getConsumerPhone(),
                 entry.getConsumerAddress(), entry.getOrderNumber(),
                 entry.getSaleNumber(), entry.getProductServiceDescription(), entry.getAmount(), entry.getDetail(),
-                entry.getConsumerRequest(), entry.getResponse(), entry.getCreatedAt(), entry.getRespondedAt());
+                entry.getConsumerRequest(), entry.getResponse(), entry.getCreatedAt(), entry.getRespondedAt(),
+                entry.getCreatedAt().toLocalDate().plusDays(PLAZO_RESPUESTA_DIAS));
     }
 
     /** Constancia en PDF de una hoja, para el endpoint de descarga. */
