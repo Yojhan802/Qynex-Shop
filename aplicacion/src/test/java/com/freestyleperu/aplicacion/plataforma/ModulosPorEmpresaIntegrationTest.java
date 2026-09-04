@@ -54,6 +54,7 @@ class ModulosPorEmpresaIntegrationTest {
     @Autowired private PlatformTenantService tenantService;
     @Autowired private SubscriptionRenewalService renewalService;
     @Autowired private CompanySettingsRepository companySettingsRepository;
+    @Autowired private jakarta.validation.Validator validator;
     @PersistenceContext private EntityManager entityManager;
 
     @AfterEach
@@ -270,7 +271,7 @@ class ModulosPorEmpresaIntegrationTest {
     void elAltaConPaqueteAMedidaDejaLaEmpresaConSoloEsosModulos() {
         aseguraEmpresa(Plan.STARTER);
         CrearTenantResponse alta = tenantService.crear(new CrearTenantRequest(
-                "Tienda del Barrio", unico("tienda-barrio"), null, null, null, null,
+                "Tienda del Barrio", unico("tienda-barrio"), null, null, null, "contacto@empresa.test",
                 BusinessVertical.CLOTHING, Plan.ECOMMERCE, null, unico("duenio"),
                 null, "Dueño de Prueba",
                 List.of(new ModuloSeleccionado(ModuloSistema.TIENDA, new BigDecimal("25.00"))), null, null), null);
@@ -291,7 +292,7 @@ class ModulosPorEmpresaIntegrationTest {
     void elAltaSinPaqueteExplicitoSiembraLosModulosDelPlanAPrecioDeLista() {
         aseguraEmpresa(Plan.STARTER);
         CrearTenantResponse alta = tenantService.crear(new CrearTenantRequest(
-                "Bodega Central", unico("bodega"), null, null, null, null,
+                "Bodega Central", unico("bodega"), null, null, null, "contacto@empresa.test",
                 BusinessVertical.GENERAL, Plan.STARTER, null, unico("bodeguero"),
                 null, "Dueño Bodega", List.of(), null, null), null);
 
@@ -313,7 +314,7 @@ class ModulosPorEmpresaIntegrationTest {
     void elAltaDejaCubiertoElPrimerMesYLoRegistraComoPago() {
         aseguraEmpresa(Plan.STARTER);
         CrearTenantResponse alta = tenantService.crear(new CrearTenantRequest(
-                "Bodega Nueva", unico("bodega-nueva"), null, null, null, null,
+                "Bodega Nueva", unico("bodega-nueva"), null, null, null, "contacto@empresa.test",
                 BusinessVertical.GENERAL, Plan.STARTER, null, unico("duenio"), null, "Dueño Nuevo",
                 List.of(new ModuloSeleccionado(ModuloSistema.POS, new BigDecimal("20.00"))),
                 new BigDecimal("350.00"), null), null, "operador");
@@ -335,7 +336,7 @@ class ModulosPorEmpresaIntegrationTest {
     void sinCostoDeImplementacionSeRegistraElTotalDelPaquete() {
         aseguraEmpresa(Plan.STARTER);
         CrearTenantResponse alta = tenantService.crear(new CrearTenantRequest(
-                "Bodega Simple", unico("bodega-simple"), null, null, null, null,
+                "Bodega Simple", unico("bodega-simple"), null, null, null, "contacto@empresa.test",
                 BusinessVertical.GENERAL, Plan.STARTER, null, unico("duenio"), null, "Dueño Simple",
                 List.of(), null, null), null, "operador");
 
@@ -354,7 +355,7 @@ class ModulosPorEmpresaIntegrationTest {
     void unaEmpresaNoFacturableSeCreaIgualPeroQuedaMarcada() {
         aseguraEmpresa(Plan.STARTER);
         CrearTenantResponse demo = tenantService.crear(new CrearTenantRequest(
-                "Demo Qynex", unico("demo"), null, null, null, null,
+                "Demo Qynex", unico("demo"), null, null, null, "contacto@empresa.test",
                 BusinessVertical.CLOTHING, Plan.IA, null, unico("duenio"), null, "Dueño Demo",
                 List.of(), null, false), null, "operador");
 
@@ -364,11 +365,35 @@ class ModulosPorEmpresaIntegrationTest {
         moduloGate.invalidar(demo.tenant().id());
     }
 
+    /**
+     * El correo es el único canal por el que la plataforma alcanza a la empresa: sin él no
+     * llega el aviso del plazo legal de sus reclamos ni el de vencimiento de suscripción. Y
+     * la empresa no puede ponérselo, porque es un dato de identidad. Por eso se exige al dar
+     * de alta, aunque la columna siga admitiendo nulo para las anteriores a esta regla.
+     */
+    @Test
+    void elAltaExigeCorreoDeContacto() {
+        CrearTenantRequest sinCorreo = new CrearTenantRequest(
+                "Sin Correo S.A.C.", unico("sin-correo"), null, null, null, null,
+                BusinessVertical.CLOTHING, Plan.ECOMMERCE, null, unico("duenio"),
+                null, "Dueño de Prueba", List.of(), null, null);
+
+        assertThat(validator.validate(sinCorreo))
+                .anyMatch(violacion -> violacion.getPropertyPath().toString().equals("email"));
+
+        CrearTenantRequest conCorreo = new CrearTenantRequest(
+                "Con Correo S.A.C.", unico("con-correo"), null, null, null, "contacto@empresa.test",
+                BusinessVertical.CLOTHING, Plan.ECOMMERCE, null, unico("duenio"),
+                null, "Dueño de Prueba", List.of(), null, null);
+
+        assertThat(validator.validate(conCorreo)).isEmpty();
+    }
+
     @Test
     void porOmisionUnaEmpresaNuevaSiFactura() {
         aseguraEmpresa(Plan.STARTER);
         CrearTenantResponse cliente = tenantService.crear(new CrearTenantRequest(
-                "Cliente Normal", unico("cliente"), null, null, null, null,
+                "Cliente Normal", unico("cliente"), null, null, null, "contacto@empresa.test",
                 BusinessVertical.GENERAL, Plan.STARTER, null, unico("duenio"), null, "Dueño Cliente",
                 List.of(), null, null), null, "operador");
 
