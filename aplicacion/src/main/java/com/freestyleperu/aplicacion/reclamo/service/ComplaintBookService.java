@@ -11,6 +11,7 @@ import com.freestyleperu.aplicacion.reclamo.dto.response.ComplaintResponse;
 import com.freestyleperu.aplicacion.reclamo.dto.response.PublicComplaintResponse;
 import com.freestyleperu.aplicacion.reclamo.repository.ComplaintBookEntryRepository;
 import com.freestyleperu.aplicacion.shared.audit.AuditResult;
+import com.freestyleperu.aplicacion.shared.correo.CorreoService;
 import com.freestyleperu.aplicacion.shared.audit.AuditService;
 import com.freestyleperu.aplicacion.shared.dto.PageResponse;
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
@@ -19,7 +20,9 @@ import com.freestyleperu.aplicacion.shared.security.TenantContext;
 import com.freestyleperu.aplicacion.shared.util.SequenceService;
 import com.freestyleperu.aplicacion.usuario.domain.Usuario;
 import com.freestyleperu.aplicacion.usuario.repository.UsuarioRepository;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,15 +36,17 @@ public class ComplaintBookService {
     private final UsuarioRepository usuarioRepository;
     private final SequenceService sequenceService;
     private final AuditService auditService;
+    private final CorreoService correoService;
 
     public ComplaintBookService(ComplaintBookEntryRepository repository,
             CompanySettingsRepository companySettingsRepository, UsuarioRepository usuarioRepository,
-            SequenceService sequenceService, AuditService auditService) {
+            SequenceService sequenceService, AuditService auditService, CorreoService correoService) {
         this.repository = repository;
         this.companySettingsRepository = companySettingsRepository;
         this.usuarioRepository = usuarioRepository;
         this.sequenceService = sequenceService;
         this.auditService = auditService;
+        this.correoService = correoService;
     }
 
     /**
@@ -52,7 +57,13 @@ public class ComplaintBookService {
 
     @Transactional
     public ComplaintReceiptResponse createAndIssueReceipt(CreateComplaintRequest request) {
-        return toReceipt(createEntry(request));
+        ComplaintBookEntry entry = createEntry(request);
+        // El envío no puede tumbar el registro: CorreoService no lanza, devuelve si salió.
+        // Si no salió, la hoja queda igual de registrada y la constancia sigue en pantalla.
+        if (correoService.enviar(entry.getConsumerEmail(), asuntoConstancia(entry), cuerpoConstancia(entry))) {
+            entry.setReceiptEmailedAt(LocalDateTime.now());
+        }
+        return toReceipt(entry);
     }
 
     private ComplaintBookEntry createEntry(CreateComplaintRequest request) {
@@ -111,6 +122,11 @@ public class ComplaintBookService {
         entry.setRespondedBy(user);
         entry.setStatus(request.close() ? ComplaintStatus.CERRADO : ComplaintStatus.RESPONDIDO);
         auditService.log("RECLAMO_RESPONDIDO", "RECLAMO", entry.getId(), null, entry.getStatus(), AuditResult.SUCCESS);
+        // Responder al consumidor es la obligación; dejarla anotada en el sistema no le
+        // llega a nadie. Si el correo no sale, la respuesta queda guardada igual.
+        if (correoService.enviar(entry.getConsumerEmail(), asuntoRespuesta(entry), cuerpoRespuesta(entry))) {
+            entry.setResponseEmailedAt(LocalDateTime.now());
+        }
         return toResponse(entry);
     }
 
@@ -130,6 +146,84 @@ public class ComplaintBookService {
                 entry.getConsumerAddress(), entry.getOrderNumber(), entry.getProductServiceDescription(),
                 entry.getAmount(), entry.getDetail(), entry.getConsumerRequest(), entry.getCreatedAt(),
                 entry.getCreatedAt().toLocalDate().plusDays(PLAZO_RESPUESTA_DIAS));
+    }
+
+    private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    private static final DateTimeFormatter DIA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+
+    private String asuntoConstancia(ComplaintBookEntry entry) {
+        return "Constancia de tu " + entry.getType().name().toLowerCase() + " " + entry.getEntryNumber();
+    }
+
+    private String asuntoRespuesta(ComplaintBookEntry entry) {
+        return "Respuesta a tu " + entry.getType().name().toLowerCase() + " " + entry.getEntryNumber();
+    }
+
+    /**
+     * Copia íntegra de lo declarado, como exige el Art. 5: el consumidor debe poder probar
+     * qué presentó y cuándo, sin depender de que la página siguiera abierta.
+     */
+    private String cuerpoConstancia(ComplaintBookEntry entry) {
+        LocalDate vence = entry.getCreatedAt().toLocalDate().plusDays(PLAZO_RESPUESTA_DIAS);
+        StringBuilder texto = new StringBuilder();
+        linea(texto, entry.getConsumerName() + ":");
+        linea(texto, "");
+        linea(texto, "Registramos tu " + entry.getType().name().toLowerCase()
+                + " en nuestro Libro de Reclamaciones. Guarda este correo: es tu constancia.");
+        linea(texto, "");
+        linea(texto, "HOJA N° " + entry.getEntryNumber());
+        linea(texto, "Fecha: " + entry.getCreatedAt().format(FECHA));
+        linea(texto, "Tipo: " + entry.getType());
+        linea(texto, "");
+        linea(texto, "PROVEEDOR");
+        linea(texto, entry.getProviderName());
+        if (entry.getProviderRuc() != null) linea(texto, "RUC " + entry.getProviderRuc());
+        if (entry.getProviderAddress() != null) linea(texto, entry.getProviderAddress());
+        linea(texto, "");
+        linea(texto, "CONSUMIDOR");
+        linea(texto, entry.getConsumerName());
+        if (entry.getConsumerDocument() != null) linea(texto, "Documento: " + entry.getConsumerDocument());
+        linea(texto, "Domicilio: " + entry.getConsumerAddress());
+        linea(texto, "Correo: " + entry.getConsumerEmail());
+        if (entry.getConsumerPhone() != null) linea(texto, "Teléfono: " + entry.getConsumerPhone());
+        linea(texto, "");
+        linea(texto, "BIEN CONTRATADO");
+        linea(texto, entry.getProductServiceDescription());
+        if (entry.getOrderNumber() != null) linea(texto, "Pedido: " + entry.getOrderNumber());
+        if (entry.getAmount() != null) linea(texto, "Monto: " + entry.getAmount());
+        linea(texto, "");
+        linea(texto, "DETALLE");
+        linea(texto, entry.getDetail());
+        linea(texto, "");
+        linea(texto, "LO QUE PIDES");
+        linea(texto, entry.getConsumerRequest());
+        linea(texto, "");
+        linea(texto, "---");
+        linea(texto, "Te responderemos como máximo el " + vence.format(DIA)
+                + " (30 días calendario, D.S. 011-2011-PCM).");
+        linea(texto, "Este reclamo no constituye una denuncia ante INDECOPI, y presentarlo no impide "
+                + "que acudas a las demás vías que la ley te reconoce.");
+        return texto.toString();
+    }
+
+    private String cuerpoRespuesta(ComplaintBookEntry entry) {
+        StringBuilder texto = new StringBuilder();
+        linea(texto, entry.getConsumerName() + ":");
+        linea(texto, "");
+        linea(texto, "Respondemos a tu " + entry.getType().name().toLowerCase() + " "
+                + entry.getEntryNumber() + ", presentada el " + entry.getCreatedAt().format(FECHA) + ".");
+        linea(texto, "");
+        linea(texto, "RESPUESTA DE " + entry.getProviderName());
+        linea(texto, entry.getResponse());
+        linea(texto, "");
+        linea(texto, "---");
+        linea(texto, "Si no estás conforme, puedes acudir a INDECOPI o a las demás vías que la ley "
+                + "te reconoce: nuestra respuesta no agota tus derechos.");
+        return texto.toString();
+    }
+
+    private void linea(StringBuilder destino, String texto) {
+        destino.append(texto).append("\n");
     }
 
     private String blankToNull(String value) { return value == null || value.isBlank() ? null : value.trim(); }

@@ -33,6 +33,22 @@ spring:
     error:
       include-message: never
       include-stacktrace: never
+  mail:
+    # Sin MAIL_HOST el arranque no falla: CorreoService se declara "no configurado" y
+    # cada envío se salta dejando rastro en el log. Es deliberado — que no haya SMTP no
+    # puede impedir que se registre una hoja de reclamación.
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_AUTH:true}
+      mail.smtp.starttls.enable: ${MAIL_STARTTLS:true}
+      # Un SMTP lento no puede colgar la petición del consumidor: el registro del
+      # reclamo ya está guardado cuando se intenta enviar, y estos topes acotan la espera.
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
   cache:
     # Sin `cache-names`: cada nombre usado en @Cacheable (storeCatalog*) se crea
     # solo, todas comparten el mismo spec de abajo.
@@ -54,6 +70,13 @@ management:
   endpoint:
     health:
       show-details: never
+  health:
+    mail:
+      # El starter de correo trae un health indicator que abre conexión al SMTP. Sin
+      # MAIL_HOST reporta DOWN y /actuator/health pasa a 503 — que es exactamente la ruta
+      # del healthcheck de Docker, así que el contenedor se reiniciaría en bucle por no
+      # tener correo. Enviar es accesorio: que falle no significa que el servicio esté caído.
+      enabled: false
 
 app:
   uploads:
@@ -79,6 +102,11 @@ app:
     # Conciliación de comprobantes que Verifac/NubeFact dejaron en proceso.
     status-poll-ms: ${BILLING_STATUS_POLL_MS:60000}
     status-initial-delay-ms: ${BILLING_STATUS_INITIAL_DELAY_MS:30000}
+  correo:
+    # Remitente de los correos salientes. Debe ser una dirección que el SMTP acepte
+    # como From, o el proveedor rechazará el envío.
+    remitente: ${MAIL_FROM:}
+    remitente-nombre: ${MAIL_FROM_NAME:Qynex Shop}
   openrouter:
     api-key: ${OPENROUTER_API_KEY:}
     base-url: ${OPENROUTER_BASE_URL:https://openrouter.ai/api/v1}

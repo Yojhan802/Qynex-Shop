@@ -60,6 +60,17 @@ public class ComplaintBookEntry extends BaseEntity {
     @Column(name = "consumer_address", length = 255)
     private String consumerAddress;
 
+    /**
+     * Cuándo se le envió al consumidor la constancia de su hoja (D.S. 011-2011-PCM, Art. 5).
+     * NULL = no se envió: sin SMTP configurado, correo rechazado, o anterior a esta función.
+     */
+    @Column(name = "receipt_emailed_at")
+    private LocalDateTime receiptEmailedAt;
+
+    /** Cuándo se le envió la respuesta del proveedor. NULL con los mismos motivos. */
+    @Column(name = "response_emailed_at")
+    private LocalDateTime responseEmailedAt;
+
     @Column(name = "order_number", length = 30)
     private String orderNumber;
 

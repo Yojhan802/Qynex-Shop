@@ -37,6 +37,14 @@ services:
       SERVER_PORT: 8080
       UPLOADS_DIR: /app/uploads
       OPS_API_KEY: ${OPS_API_KEY:-}
+      # SMTP de la constancia del Libro de Reclamaciones. Vacías a propósito por defecto:
+      # sin correo la aplicación arranca y los reclamos se registran igual (ver CorreoService).
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Qynex Shop}
       # Los defaults de abajo repiten los del perfil prod de application.yml — Docker Compose
       # fija la variable como string vacío si no está en .env (no la omite), lo que rompería el
       # parseo numérico de Spring si no hubiera un valor de respaldo acá. Subir estos números es

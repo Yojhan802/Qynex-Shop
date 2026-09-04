@@ -7,6 +7,7 @@ import com.freestyleperu.aplicacion.configuracion.domain.CompanySettings;
 import com.freestyleperu.aplicacion.configuracion.domain.Plan;
 import com.freestyleperu.aplicacion.configuracion.domain.SubscriptionStatus;
 import com.freestyleperu.aplicacion.configuracion.repository.CompanySettingsRepository;
+import com.freestyleperu.aplicacion.reclamo.domain.ComplaintBookEntry;
 import com.freestyleperu.aplicacion.reclamo.domain.ComplaintStatus;
 import com.freestyleperu.aplicacion.reclamo.domain.ComplaintType;
 import com.freestyleperu.aplicacion.reclamo.dto.request.CreateComplaintRequest;
@@ -46,6 +47,7 @@ class LibroReclamacionesIntegrationTest {
     @Autowired private CompanySettingsRepository companySettingsRepository;
     @Autowired private UsuarioRepository usuarioRepository;
     @Autowired private Validator validator;
+    @Autowired private com.freestyleperu.aplicacion.reclamo.repository.ComplaintBookEntryRepository complaintBookEntryRepository;
     @PersistenceContext private EntityManager entityManager;
 
     /**
@@ -114,6 +116,24 @@ class LibroReclamacionesIntegrationTest {
 
         // El plazo máximo de respuesta es de 30 días calendario desde el registro.
         assertThat(constancia.responseDueDate()).isEqualTo(constancia.createdAt().toLocalDate().plusDays(30));
+    }
+
+    /**
+     * El perfil de test no configura SMTP, que es justo el escenario a proteger: si el envío
+     * de la constancia pudiera tumbar el registro, un SMTP caído dejaría al consumidor sin
+     * reclamo Y sin constancia. La hoja se registra igual y solo queda sin sellar el envío.
+     */
+    @Test
+    void sinSmtpConfiguradoLaHojaSeRegistraIgualYNoSeMarcaComoEnviada() {
+        aseguraEmpresaIdentificada();
+
+        ComplaintReceiptResponse constancia = complaintBookService.createAndIssueReceipt(hojaValida(ComplaintType.RECLAMO));
+
+        assertThat(constancia.entryNumber()).startsWith("RC-");
+        ComplaintBookEntry guardada = complaintBookEntryRepository
+                .findByEntryNumber(constancia.entryNumber()).orElseThrow();
+        assertThat(guardada.getReceiptEmailedAt()).isNull();
+        assertThat(guardada.getResponseEmailedAt()).isNull();
     }
 
     @Test

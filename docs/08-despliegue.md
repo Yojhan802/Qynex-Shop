@@ -63,6 +63,7 @@ Variables obligatorias en `.env` (ver `.env.example` para la lista completa):
 | `JWT_SECRET` | Firma de los access tokens — generar con `openssl rand -base64 48` |
 | `CORS_ALLOWED_ORIGINS` | Solo relevante si el frontend se sirve desde otro origen que el proxy |
 | `REACT_HTTP_PORT` | Puerto público del `frontend-react` (por defecto 8093) |
+| `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | SMTP para la constancia del Libro de Reclamaciones. Opcionales: sin ellas la aplicación arranca y los reclamos se registran, solo no sale el correo |
 
 Ninguna de estas tiene un valor real por defecto: si falta alguna, el
 contenedor correspondiente falla al arrancar en vez de arrancar con un
