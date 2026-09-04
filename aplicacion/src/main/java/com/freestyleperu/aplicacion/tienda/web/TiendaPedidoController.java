@@ -4,6 +4,7 @@ import com.freestyleperu.aplicacion.pedido.dto.request.CrearPedidoRequest;
 import com.freestyleperu.aplicacion.pedido.dto.response.PedidoResponse;
 import com.freestyleperu.aplicacion.pedido.dto.response.PedidoResumenResponse;
 import com.freestyleperu.aplicacion.pedido.service.PedidoService;
+import com.freestyleperu.aplicacion.shared.util.ArchivoHttp;
 import com.freestyleperu.aplicacion.facturacion.dto.response.ElectronicDocumentResponse;
 import com.freestyleperu.aplicacion.facturacion.port.ElectronicInvoicingResource;
 import com.freestyleperu.aplicacion.facturacion.service.ElectronicDocumentService;
@@ -65,6 +66,17 @@ public class TiendaPedidoController {
             @AuthenticationPrincipal AuthenticatedUser currentUser,
             @RequestParam("file") MultipartFile file) {
         return pedidoService.subirComprobante(id, currentUser.id(), file);
+    }
+
+    /**
+     * El cliente vuelve a ver el comprobante que él mismo subió. La ruta estática
+     * {@code /uploads/orders/**} está bloqueada, así que este es su único camino — y el
+     * servicio comprueba que el pedido sea suyo antes de leer nada del disco.
+     */
+    @GetMapping("/api/store/orders/{id}/payment-proof")
+    public ResponseEntity<byte[]> verComprobante(
+            @PathVariable Long id, @AuthenticationPrincipal AuthenticatedUser currentUser) {
+        return ArchivoHttp.enLinea(pedidoService.comprobantePropio(id, currentUser.id()));
     }
 
     @GetMapping("/api/store/orders/{id}/electronic-documents")

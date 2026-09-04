@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ApiError, getCustomerSession, imageUrl, refreshCustomerAccessToken, storeApi } from '../services/api';
+import { ApiError, getCustomerSession, refreshCustomerAccessToken, storeApi } from '../services/api';
 import { connectCustomerNotifications, type LiveElectronicDocument } from '../services/live';
 import type { ElectronicDocument, Order } from '../types';
 import { formatCurrency, formatDate } from '../utils';
@@ -121,7 +121,6 @@ export function OrdersPage() {
       labels={labels}
       formatCurrency={formatCurrency}
       formatDate={formatDate}
-      imageUrl={imageUrl}
       onOpen={openOrder}
       onClose={closeOrder}
       uploading={uploading}

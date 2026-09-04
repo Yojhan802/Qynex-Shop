@@ -1,4 +1,5 @@
 import type { ElectronicDocument, Order, StoreTemplate } from '../types';
+import { PaymentProof } from '../components/PaymentProof';
 
 export interface OrdersSurfaceProps {
   template: StoreTemplate;
@@ -7,7 +8,6 @@ export interface OrdersSurfaceProps {
   labels: Record<string, string>;
   formatCurrency: (value: number) => string;
   formatDate: (value: string) => string;
-  imageUrl: (value?: string | null) => string;
   onOpen: (order: Order) => void;
   onClose: () => void;
   uploading: boolean;
@@ -39,7 +39,7 @@ function documentStatusLabel(status: string) {
   return 'Preparando emisión';
 }
 
-export function OrdersSurface({ template, orders, selected, labels, formatCurrency, formatDate, imageUrl, onOpen, onClose, uploading, onUploadProof, documents, documentsLoading, onDownloadDocument }: OrdersSurfaceProps) {
+export function OrdersSurface({ template, orders, selected, labels, formatCurrency, formatDate, onOpen, onClose, uploading, onUploadProof, documents, documentsLoading, onDownloadDocument }: OrdersSurfaceProps) {
   return <div className={`template-orders template-orders-${template.toLowerCase()}`} data-template-surface="orders">
     <div className="template-orders-list" aria-label="Lista de pedidos">
       {orders.map((order) => <button className="template-order-card" type="button" key={order.id} onClick={() => onOpen(order)}>
@@ -68,7 +68,7 @@ export function OrdersSurface({ template, orders, selected, labels, formatCurren
         <div className="template-total-line"><span>Envi&oacute;</span><strong>{selected.shippingCost ? formatCurrency(selected.shippingCost) : 'Gratis'}</strong></div>
         <div className="template-grand-total"><span>Total</span><strong>{formatCurrency(selected.total)}</strong></div>
         <div className="template-order-proof">
-          {selected.paymentProofUrl ? <><span className="template-field-label">Comprobante de pago</span><a href={imageUrl(selected.paymentProofUrl)} target="_blank" rel="noopener"><img className="template-proof-image" src={imageUrl(selected.paymentProofUrl)} alt="Comprobante de pago" /></a></> : selected.status === 'PENDING_PAYMENT' && <label className="template-field"><span>Comprobante de pago (opcional)</span><input type="file" accept="image/png,image/jpeg,image/webp" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) onUploadProof(file); }} />{uploading && <small>Subiendo comprobante...</small>}</label>}
+          {selected.paymentProofUrl ? <><span className="template-field-label">Comprobante de pago</span><PaymentProof orderId={selected.id} como="cliente" className="template-proof-image" /></> : selected.status === 'PENDING_PAYMENT' && <label className="template-field"><span>Comprobante de pago (opcional)</span><input type="file" accept="image/png,image/jpeg,image/webp" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) onUploadProof(file); }} />{uploading && <small>Subiendo comprobante...</small>}</label>}
         </div>
         <section className="template-order-documents" aria-label="Comprobantes electrónicos">
           <span className="template-field-label">Comprobantes electrónicos</span>

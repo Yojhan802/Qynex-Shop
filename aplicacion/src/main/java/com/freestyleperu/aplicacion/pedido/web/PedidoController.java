@@ -8,10 +8,12 @@ import com.freestyleperu.aplicacion.pedido.service.PedidoService;
 import com.freestyleperu.aplicacion.shared.dto.PageResponse;
 import com.freestyleperu.aplicacion.shared.security.AuthenticatedUser;
 import com.freestyleperu.aplicacion.shared.security.Permisos;
+import com.freestyleperu.aplicacion.shared.util.ArchivoHttp;
 import jakarta.validation.Valid;
 import java.time.LocalDateTime;
 import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -47,6 +49,17 @@ public class PedidoController {
         return pedidoService.obtener(id);
     }
 
+    /**
+     * Comprobante de pago del cliente (captura de Yape, transferencia). Lleva su nombre y su
+     * número de operación, así que no se sirve por la ruta estática de {@code /uploads}, que
+     * es pública: {@code /uploads/orders/**} está bloqueado y este es el único camino.
+     */
+    @GetMapping("/api/orders/{id}/payment-proof")
+    @PreAuthorize("hasAuthority('" + Permisos.PEDIDOS_CONSULTAR + "') and @modulos.activo('TIENDA')")
+    public ResponseEntity<byte[]> comprobante(@PathVariable Long id) {
+        return ArchivoHttp.enLinea(pedidoService.comprobanteDe(id));
+    }
+
     @PostMapping("/api/orders/{id}/confirm")
     @PreAuthorize("hasAuthority('" + Permisos.PEDIDOS_GESTIONAR + "') and @modulos.activo('TIENDA')")
     public PedidoResponse confirmar(@PathVariable Long id, @AuthenticationPrincipal AuthenticatedUser currentUser) {
@@ -61,4 +74,5 @@ public class PedidoController {
             @Valid @RequestBody CancelarPedidoRequest request) {
         return pedidoService.cancelar(id, request, currentUser.id());
     }
+
 }

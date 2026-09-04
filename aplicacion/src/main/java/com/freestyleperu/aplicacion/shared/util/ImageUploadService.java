@@ -45,6 +45,36 @@ public class ImageUploadService {
         return "/uploads/" + subcarpeta + "/" + nombreArchivo;
     }
 
+    /**
+     * Lee un archivo ya guardado para servirlo por un endpoint autenticado, en vez de por la
+     * ruta estática de {@code /uploads}. Se le pasa la URL pública guardada en la entidad,
+     * pero solo se usa su nombre de archivo: la carpeta la decide quien llama. Así una URL
+     * manipulada en base de datos no puede sacar al lector de {subcarpeta} — es la misma
+     * razón por la que se comprueba {@code startsWith} después de normalizar.
+     */
+    public ArchivoServido leer(String urlPublica, String subcarpeta) {
+        if (urlPublica == null || urlPublica.isBlank()) {
+            throw new ArchivoInvalidoException("El archivo no existe");
+        }
+        Path carpeta = uploadsDir.resolve(subcarpeta).normalize();
+        Path archivo = carpeta.resolve(Path.of(urlPublica).getFileName().toString()).normalize();
+        if (!archivo.startsWith(carpeta) || !Files.isRegularFile(archivo)) {
+            throw new ArchivoInvalidoException("El archivo no existe");
+        }
+        try {
+            String tipo = Files.probeContentType(archivo);
+            return new ArchivoServido(Files.readAllBytes(archivo),
+                    tipo != null ? tipo : "application/octet-stream",
+                    archivo.getFileName().toString());
+        } catch (IOException ex) {
+            throw new UncheckedIOException("No se pudo leer el archivo", ex);
+        }
+    }
+
+    /** Contenido de un archivo con su tipo real, para servirlo sin adivinarlo. */
+    public record ArchivoServido(byte[] contenido, String contentType, String nombre) {
+    }
+
     private String extensionDe(String originalFilename) {
         if (originalFilename == null || !originalFilename.contains(".")) return "";
         return originalFilename.substring(originalFilename.lastIndexOf('.'));

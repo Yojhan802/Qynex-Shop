@@ -86,6 +86,7 @@ class PedidoFlujoIntegrationTest {
     @Autowired private PaymentRepository paymentRepository;
     @Autowired private NotificacionService notificacionService;
     @Autowired private jakarta.validation.Validator validator;
+    @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager entityManager;
 
     /** PedidoService.resolverCostoEnvio exige una tarifa plana configurada (salvo contraentrega). */
     private void aseguraConfiguracionEmpresa() {
@@ -104,7 +105,15 @@ class PedidoFlujoIntegrationTest {
         settings.setPlan(Plan.ECOMMERCE);
         settings.setSubscriptionStatus(SubscriptionStatus.ACTIVA);
         settings.setUpdatedAt(java.time.LocalDateTime.now());
-        companySettingsRepository.save(settings);
+        // El tenant de estos tests es el 1, pero H2 no reinicia el identity entre tests: cada
+        // rollback lo deja avanzado, así que un simple save() acaba dando id 2, 3, 4… y todo
+        // lo que resuelve la empresa por id falla. Se fuerza el id que el resto da por hecho.
+        Long generado = companySettingsRepository.saveAndFlush(settings).getId();
+        if (!Long.valueOf(1L).equals(generado)) {
+            entityManager.createNativeQuery("UPDATE company_settings SET id = 1 WHERE id = :id")
+                    .setParameter("id", generado).executeUpdate();
+            entityManager.clear();
+        }
     }
 
     /**
@@ -379,6 +388,47 @@ class PedidoFlujoIntegrationTest {
         pedidoService.confirmarPago(pedido.id(), staffUserId);
         assertThatThrownBy(() -> pedidoService.subirComprobante(pedido.id(), customerId, archivo))
                 .isInstanceOf(ReglaDeNegocioException.class);
+    }
+
+    /**
+     * El comprobante lleva el nombre y el número de operación de una persona. Antes se servía
+     * por la ruta estática de /uploads, que es pública: bastaba la URL para descargarlo. Ahora
+     * pasa por el servicio, que comprueba quién pregunta.
+     */
+    @Test
+    void elComprobanteLoLeeSuDueñoYElStaffPeroNoOtroCliente() {
+        aseguraConfiguracionEmpresa();
+        aseguraAlmacenActivo("9");
+        aseguraUsuarioSistema();
+        VarianteResponse variante = crearVarianteConStock("Polo Pima", "Negro", "L", new BigDecimal("55.00"), 2);
+        PaymentMethod yape = metodoPago("YAPE");
+        Long customerId = nuevoCliente("dueño.comprobante@test.com").getId();
+        Long otroClienteId = nuevoCliente("ajeno.comprobante@test.com").getId();
+
+        PedidoResponse pedido = pedidoService.crear(
+                new CrearPedidoRequest(
+                        List.of(new ItemPedidoRequest(variante.id(), 1)),
+                        yape.getId(), "OP-888", "45000007", "Cliente", "Dueño", "Prueba", "900555777", "Calle Dos 20",
+                        "Lima", "Lima", "Surco", null),
+                customerId);
+
+        // Sin comprobante subido no hay nada que servir, ni siquiera al dueño.
+        assertThatThrownBy(() -> pedidoService.comprobantePropio(pedido.id(), customerId))
+                .isInstanceOf(RecursoNoEncontradoException.class);
+
+        byte[] contenido = new byte[] { 9, 8, 7 };
+        pedidoService.subirComprobante(pedido.id(), customerId,
+                new MockMultipartFile("file", "yape.png", "image/png", contenido));
+
+        // El dueño lo recupera tal cual lo subió.
+        assertThat(pedidoService.comprobantePropio(pedido.id(), customerId).contenido()).isEqualTo(contenido);
+
+        // El staff de la empresa también: es quien verifica el pago.
+        assertThat(pedidoService.comprobanteDe(pedido.id()).contenido()).isEqualTo(contenido);
+
+        // Otro cliente no, aunque acierte el id del pedido.
+        assertThatThrownBy(() -> pedidoService.comprobantePropio(pedido.id(), otroClienteId))
+                .isInstanceOf(RecursoNoEncontradoException.class);
     }
 
     @Test

@@ -129,11 +129,18 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/system/info").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/system/branding").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/system/subscription").permitAll()
-                        // Los comprobantes de suscripción llevan nombres y montos: nunca por la
-                        // ruta estática. Se sirven por un endpoint que exige ser operador de
-                        // plataforma. El resto de /uploads (productos, logos, banners) sí es
-                        // público porque la tienda lo necesita sin sesión.
+                        // Los comprobantes de pago llevan nombre, teléfono y número de
+                        // operación de una persona concreta: nunca por la ruta estática, que
+                        // sirve cualquier archivo a quien adivine o filtre la URL. Cada uno
+                        // tiene su endpoint, que comprueba quién pregunta antes de leer el
+                        // disco: los de suscripción exigen ser operador de plataforma
+                        // (/api/platform/.../proof) y los de pedidos, ser staff de esa empresa
+                        // o el cliente dueño del pedido (/api/orders/{id}/payment-proof y
+                        // /api/store/orders/{id}/payment-proof).
+                        // El resto de /uploads (productos, logos, banners) sí es público
+                        // porque la tienda lo necesita sin sesión.
                         .requestMatchers(HttpMethod.GET, "/uploads/suscripciones/**").denyAll()
+                        .requestMatchers(HttpMethod.GET, "/uploads/orders/**").denyAll()
                         .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

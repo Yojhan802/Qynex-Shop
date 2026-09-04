@@ -42,6 +42,28 @@ class ComprobanteSuscripcionSeguridadTest {
         assertThat(respuesta.getStatusCode()).isNotIn(HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN);
     }
 
+    /**
+     * Los comprobantes de pedidos son capturas de Yape de clientes finales: nombre, teléfono y
+     * número de operación. Estaban bajo /uploads/orders y por tanto eran descargables por
+     * cualquiera con la URL, porque /uploads/** es público para que la tienda muestre
+     * productos y logos sin sesión.
+     */
+    @Test
+    void laRutaEstaticaDeLosComprobantesDePedidoNoEsAlcanzableSinSesion() {
+        ResponseEntity<String> respuesta = restTemplate.getForEntity(
+                "/uploads/orders/cualquiera.png", String.class);
+
+        assertThat(respuesta.getStatusCode()).isIn(HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    void losEndpointsDelComprobanteDePedidoExigenSesion() {
+        assertThat(restTemplate.getForEntity("/api/orders/1/payment-proof", String.class).getStatusCode())
+                .isIn(HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN);
+        assertThat(restTemplate.getForEntity("/api/store/orders/1/payment-proof", String.class).getStatusCode())
+                .isIn(HttpStatus.UNAUTHORIZED, HttpStatus.FORBIDDEN);
+    }
+
     @Test
     void elEndpointDelComprobanteExigeSerOperadorDePlataforma() {
         ResponseEntity<String> respuesta = restTemplate.getForEntity(

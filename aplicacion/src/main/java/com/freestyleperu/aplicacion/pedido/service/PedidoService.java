@@ -351,6 +351,34 @@ public class PedidoService {
         return response;
     }
 
+    /**
+     * Comprobante visto por el staff de la empresa. El repositorio ya filtra por tenant
+     * (@TenantId), así que un pedido de otra empresa no aparece ni siquiera por id.
+     */
+    public ImageUploadService.ArchivoServido comprobanteDe(Long id) {
+        return leerComprobante(buscarOFallar(id));
+    }
+
+    /**
+     * Comprobante visto por el cliente que lo subió. Se comprueba la propiedad igual que en
+     * {@link #obtenerPropio}: un cliente no puede pedir el comprobante de otro, aunque
+     * acierte el id.
+     */
+    public ImageUploadService.ArchivoServido comprobantePropio(Long id, Long customerId) {
+        Pedido pedido = buscarOFallar(id);
+        if (!pedido.getCustomer().getId().equals(customerId)) {
+            throw RecursoNoEncontradoException.de("Pedido", id);
+        }
+        return leerComprobante(pedido);
+    }
+
+    private ImageUploadService.ArchivoServido leerComprobante(Pedido pedido) {
+        if (pedido.getPaymentProofUrl() == null) {
+            throw RecursoNoEncontradoException.de("Comprobante", pedido.getId());
+        }
+        return imageUploadService.leer(pedido.getPaymentProofUrl(), "orders");
+    }
+
     @Transactional
     public PedidoResponse subirComprobante(Long id, Long customerId, MultipartFile file) {
         Pedido pedido = buscarOFallar(id);
