@@ -59,7 +59,7 @@ public class ComplaintBookService {
      * Plazo máximo de respuesta al consumidor (D.S. 011-2011-PCM, Art. 5, modificado
      * por el D.S. 006-2014-PCM). Se calcula sobre días calendario.
      */
-    private static final int PLAZO_RESPUESTA_DIAS = 30;
+    static final int PLAZO_RESPUESTA_DIAS = 30;
 
     @Transactional
     public ComplaintReceiptResponse createAndIssueReceipt(CreateComplaintRequest request) {

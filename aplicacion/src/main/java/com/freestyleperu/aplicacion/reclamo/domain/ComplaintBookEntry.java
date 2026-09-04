@@ -71,6 +71,14 @@ public class ComplaintBookEntry extends BaseEntity {
     @Column(name = "response_emailed_at")
     private LocalDateTime responseEmailedAt;
 
+    /**
+     * Última vez que se avisó a la empresa de que el plazo de respuesta se acerca. Se guarda
+     * la fecha y no un booleano para poder repetir el aviso mientras la hoja siga pendiente,
+     * sin mandarlo todos los días.
+     */
+    @Column(name = "deadline_reminder_at")
+    private LocalDateTime deadlineReminderAt;
+
     @Column(name = "order_number", length = 30)
     private String orderNumber;
 
