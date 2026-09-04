@@ -936,6 +936,10 @@ body[data-store-template='URBAN'] .store-auth-form p { color: #a1a1aa; }
 .store-complaint-receipt-note { margin: 0; color: var(--template-muted, var(--color-text-secondary)); font-size: .85rem; line-height: 1.55; }
 .store-complaint-receipt > footer { display: flex; flex-wrap: wrap; gap: .35rem 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--template-line, var(--color-border)); color: var(--template-muted, var(--color-text-muted)); font-size: .82rem; }
 .store-complaint-print { padding: .6rem 1rem; border: 1px solid var(--template-accent, var(--brand-accent)); border-radius: var(--template-control-radius, 10px); background: none; color: var(--template-accent, var(--brand-accent)); font: inherit; font-weight: 700; cursor: pointer; }
+.store-complaint-receipt-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.store-complaint-print[disabled] { opacity: .6; cursor: progress; }
+/* Imprimir es el respaldo del PDF, no la acción principal: se distingue sin competir. */
+.store-complaint-print.is-secondary { border-color: var(--color-border, #d6dee6); color: var(--color-text-muted, #5b6b7c); font-weight: 600; }
 .store-complaint-success-actions { display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; align-items: center; }
 
 /* Aviso de cookies. Aceptar y rechazar pesan igual: un rechazo escondido no es
@@ -964,7 +968,7 @@ body[data-store-template='URBAN'] .store-auth-form p { color: #a1a1aa; }
   body * { visibility: hidden; }
   .store-complaint-receipt, .store-complaint-receipt * { visibility: visible; }
   .store-complaint-receipt { position: absolute; inset: 0 auto auto 0; width: 100%; padding: 0; border: 0; border-radius: 0; }
-  .store-complaint-print, .store-cookie-banner { display: none; }
+  .store-complaint-print, .store-complaint-receipt-actions, .store-cookie-banner { display: none; }
 }
 
 /* ---------------------------------------------------------------------------

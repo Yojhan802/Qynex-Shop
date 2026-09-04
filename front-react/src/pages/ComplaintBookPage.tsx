@@ -12,6 +12,8 @@ type ComplaintReceipt = PublicComplaint & {
   consumerPhone?: string | null; consumerAddress: string; orderNumber?: string | null;
   productServiceDescription: string; amount?: number | null; detail: string; consumerRequest: string;
   responseDueDate: string;
+  /** Permiso de corta vida para bajar el PDF; solo llega al registrar la hoja. */
+  receiptToken?: string | null;
 };
 const statusLabel: Record<ComplaintStatus, string> = { PENDIENTE: 'Pendiente de atención', RESPONDIDO: 'Respondido', CERRADO: 'Cerrado' };
 
@@ -19,6 +21,7 @@ export function ComplaintBookPage() {
   const [type, setType] = useState<ComplaintType>('RECLAMO');
   const [form, setForm] = useState({ consumerName: '', consumerDocument: '', consumerEmail: '', consumerPhone: '', consumerAddress: '', orderNumber: '', productServiceDescription: '', amount: '', detail: '', consumerRequest: '' });
   const [saving, setSaving] = useState(false); const [error, setError] = useState(''); const [created, setCreated] = useState<ComplaintReceipt | null>(null);
+  const [descargando, setDescargando] = useState(false); const [errorPdf, setErrorPdf] = useState('');
   const [lookup, setLookup] = useState(''); const [lookupResult, setLookupResult] = useState<PublicComplaint | null>(null); const [lookupError, setLookupError] = useState(''); const [lookingUp, setLookingUp] = useState(false);
   const update = (name: keyof typeof form, value: string) => setForm((current) => ({ ...current, [name]: value }));
   const formatDate = (value: string) => new Intl.DateTimeFormat('es-PE', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(value));
@@ -47,6 +50,29 @@ export function ComplaintBookPage() {
     finally { setLookingUp(false); }
   }
 
+  /**
+   * Descarga la constancia en PDF. Es la entrega efectiva mientras no haya SMTP: si el
+   * consumidor cierra la página sin bajarla, no le queda copia. El token viene en la
+   * respuesta al registro y vive unos minutos; no existe una URL por número de hoja porque
+   * los correlativos son predecibles y se podrían recorrer.
+   */
+  async function descargarConstancia() {
+    if (!created?.receiptToken) return;
+    setDescargando(true); setErrorPdf('');
+    try {
+      const { blob, filename } = await storeApi.download('/store/complaints/receipt.pdf', { query: { token: created.receiptToken } });
+      const url = URL.createObjectURL(blob);
+      const enlace = document.createElement('a');
+      enlace.href = url; enlace.download = filename || `constancia-${created.entryNumber}.pdf`;
+      document.body.appendChild(enlace); enlace.click(); enlace.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setErrorPdf('No pudimos preparar el PDF. Usa "Imprimir" para guardar tu copia.');
+    } finally {
+      setDescargando(false);
+    }
+  }
+
   return <StoreShell>
     <div className="store-page-heading store-legal-heading"><span className="store-kicker">ATENCIÓN AL CLIENTE</span><h1>Libro de Reclamaciones</h1><p>Registra un reclamo o una queja y conserva tu código de seguimiento. Presentarlo es gratuito y no condiciona ninguna compra.</p></div>
     <div className="store-complaint-layout">
@@ -56,8 +82,12 @@ export function ComplaintBookPage() {
             <span className="store-kicker">CONSTANCIA DE {created.type}</span>
             <h2>Hoja N.° {created.entryNumber}</h2>
           </div>
-          <button type="button" className="store-complaint-print" onClick={() => window.print()}>Descargar o imprimir</button>
+          <div className="store-complaint-receipt-actions">
+            {created.receiptToken && <button type="button" className="store-complaint-print" disabled={descargando} onClick={() => void descargarConstancia()}>{descargando ? 'Preparando PDF…' : 'Descargar constancia (PDF)'}</button>}
+            <button type="button" className="store-complaint-print is-secondary" onClick={() => window.print()}>Imprimir</button>
+          </div>
         </header>
+        {errorPdf && <p className="store-form-error" role="alert">{errorPdf}</p>}
         <p className="store-complaint-receipt-note">Esta es tu copia de la hoja registrada en el Libro de Reclamaciones, conforme al Art. 5 del D.S. 011-2011-PCM. Consérvala: acredita la fecha de presentación y el plazo de respuesta.</p>
         <section>
           <h3>1. Identificación del proveedor</h3>

@@ -12,6 +12,7 @@ import com.freestyleperu.aplicacion.reclamo.dto.response.PublicComplaintResponse
 import com.freestyleperu.aplicacion.reclamo.repository.ComplaintBookEntryRepository;
 import com.freestyleperu.aplicacion.shared.audit.AuditResult;
 import com.freestyleperu.aplicacion.shared.correo.CorreoService;
+import com.freestyleperu.aplicacion.shared.security.JwtService;
 import com.freestyleperu.aplicacion.shared.audit.AuditService;
 import com.freestyleperu.aplicacion.shared.dto.PageResponse;
 import com.freestyleperu.aplicacion.shared.exception.RecursoNoEncontradoException;
@@ -37,16 +38,21 @@ public class ComplaintBookService {
     private final SequenceService sequenceService;
     private final AuditService auditService;
     private final CorreoService correoService;
+    private final ConstanciaPdfService constanciaPdfService;
+    private final JwtService jwtService;
 
     public ComplaintBookService(ComplaintBookEntryRepository repository,
             CompanySettingsRepository companySettingsRepository, UsuarioRepository usuarioRepository,
-            SequenceService sequenceService, AuditService auditService, CorreoService correoService) {
+            SequenceService sequenceService, AuditService auditService, CorreoService correoService,
+            ConstanciaPdfService constanciaPdfService, JwtService jwtService) {
         this.repository = repository;
         this.companySettingsRepository = companySettingsRepository;
         this.usuarioRepository = usuarioRepository;
         this.sequenceService = sequenceService;
         this.auditService = auditService;
         this.correoService = correoService;
+        this.constanciaPdfService = constanciaPdfService;
+        this.jwtService = jwtService;
     }
 
     /**
@@ -59,11 +65,14 @@ public class ComplaintBookService {
     public ComplaintReceiptResponse createAndIssueReceipt(CreateComplaintRequest request) {
         ComplaintBookEntry entry = createEntry(request);
         // El envío no puede tumbar el registro: CorreoService no lanza, devuelve si salió.
-        // Si no salió, la hoja queda igual de registrada y la constancia sigue en pantalla.
-        if (correoService.enviar(entry.getConsumerEmail(), asuntoConstancia(entry), cuerpoConstancia(entry))) {
+        // Si no salió, la hoja queda igual de registrada y el consumidor conserva la
+        // descarga en pantalla, que es la entrega efectiva mientras no haya SMTP.
+        boolean enviado = correoService.enviar(entry.getConsumerEmail(), asuntoConstancia(entry),
+                cuerpoConstancia(entry), nombrePdf(entry), constanciaPdf(entry));
+        if (enviado) {
             entry.setReceiptEmailedAt(LocalDateTime.now());
         }
-        return toReceipt(entry);
+        return toReceipt(entry, jwtService.generateComplaintReceiptToken(entry.getId(), TenantContext.getOrDefault()));
     }
 
     private ComplaintBookEntry createEntry(CreateComplaintRequest request) {
@@ -139,13 +148,32 @@ public class ComplaintBookService {
                 entry.getConsumerRequest(), entry.getResponse(), entry.getCreatedAt(), entry.getRespondedAt());
     }
 
-    private ComplaintReceiptResponse toReceipt(ComplaintBookEntry entry) {
+    /** Constancia en PDF de una hoja, para el endpoint de descarga. */
+    public byte[] constanciaPdfDe(Long complaintId) {
+        return constanciaPdf(repository.findById(complaintId)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Hoja de reclamación", complaintId)));
+    }
+
+    public String nombrePdfDe(Long complaintId) {
+        return nombrePdf(repository.findById(complaintId)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Hoja de reclamación", complaintId)));
+    }
+
+    private byte[] constanciaPdf(ComplaintBookEntry entry) {
+        return constanciaPdfService.generar(entry, PLAZO_RESPUESTA_DIAS);
+    }
+
+    private String nombrePdf(ComplaintBookEntry entry) {
+        return "constancia-" + entry.getEntryNumber() + ".pdf";
+    }
+
+    private ComplaintReceiptResponse toReceipt(ComplaintBookEntry entry, String receiptToken) {
         return new ComplaintReceiptResponse(entry.getEntryNumber(), entry.getType(), entry.getStatus(),
                 entry.getProviderName(), entry.getProviderRuc(), entry.getProviderAddress(), entry.getConsumerName(),
                 entry.getConsumerDocument(), entry.getConsumerEmail(), entry.getConsumerPhone(),
                 entry.getConsumerAddress(), entry.getOrderNumber(), entry.getProductServiceDescription(),
                 entry.getAmount(), entry.getDetail(), entry.getConsumerRequest(), entry.getCreatedAt(),
-                entry.getCreatedAt().toLocalDate().plusDays(PLAZO_RESPUESTA_DIAS));
+                entry.getCreatedAt().toLocalDate().plusDays(PLAZO_RESPUESTA_DIAS), receiptToken);
     }
 
     private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");

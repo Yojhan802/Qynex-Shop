@@ -47,6 +47,7 @@ class LibroReclamacionesIntegrationTest {
     @Autowired private CompanySettingsRepository companySettingsRepository;
     @Autowired private UsuarioRepository usuarioRepository;
     @Autowired private Validator validator;
+    @Autowired private com.freestyleperu.aplicacion.shared.security.JwtService jwtService;
     @Autowired private com.freestyleperu.aplicacion.reclamo.repository.ComplaintBookEntryRepository complaintBookEntryRepository;
     @PersistenceContext private EntityManager entityManager;
 
@@ -134,6 +135,42 @@ class LibroReclamacionesIntegrationTest {
                 .findByEntryNumber(constancia.entryNumber()).orElseThrow();
         assertThat(guardada.getReceiptEmailedAt()).isNull();
         assertThat(guardada.getResponseEmailedAt()).isNull();
+    }
+
+    /**
+     * La constancia en PDF es la entrega efectiva mientras no haya SMTP: si el consumidor
+     * no puede descargarla, no se lleva ninguna copia de lo que declaró.
+     */
+    @Test
+    void laConstanciaSeDescargaEnPdfConElTokenQueDevuelveElRegistro() {
+        aseguraEmpresaIdentificada();
+
+        ComplaintReceiptResponse constancia = complaintBookService.createAndIssueReceipt(hojaValida(ComplaintType.RECLAMO));
+
+        assertThat(constancia.receiptToken()).isNotBlank();
+        Long hojaId = jwtService.parseComplaintReceiptToken(constancia.receiptToken(), 1L);
+        assertThat(hojaId).isNotNull();
+
+        byte[] pdf = complaintBookService.constanciaPdfDe(hojaId);
+        // Encabezado de un PDF real, no un archivo vacío ni un error serializado.
+        assertThat(new String(pdf, 0, 5, java.nio.charset.StandardCharsets.US_ASCII)).isEqualTo("%PDF-");
+        assertThat(pdf.length).isGreaterThan(800);
+        assertThat(complaintBookService.nombrePdfDe(hojaId)).isEqualTo("constancia-" + constancia.entryNumber() + ".pdf");
+    }
+
+    /**
+     * El token de la constancia lleva subject = id de la hoja. Si el filtro de sesión lo
+     * aceptara, autenticaría como el usuario que tuviera ese id: hay que rechazarlo.
+     */
+    @Test
+    void elTokenDeLaConstanciaNoSirveComoTokenDeSesionNiEnOtraTienda() {
+        aseguraEmpresaIdentificada();
+        ComplaintReceiptResponse constancia = complaintBookService.createAndIssueReceipt(hojaValida(ComplaintType.RECLAMO));
+
+        assertThat(jwtService.parse(constancia.receiptToken())).isNull();
+        // Y no cruza de tienda, aunque la firma sea válida.
+        assertThat(jwtService.parseComplaintReceiptToken(constancia.receiptToken(), 999L)).isNull();
+        assertThat(jwtService.parseComplaintReceiptToken("no-es-un-token", 1L)).isNull();
     }
 
     @Test

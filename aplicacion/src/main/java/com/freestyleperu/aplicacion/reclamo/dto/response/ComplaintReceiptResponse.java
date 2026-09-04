@@ -34,5 +34,11 @@ public record ComplaintReceiptResponse(
         String detail,
         String consumerRequest,
         LocalDateTime createdAt,
-        LocalDate responseDueDate) {
+        LocalDate responseDueDate,
+        /**
+         * Permiso de corta vida para descargar esta constancia en PDF. Solo viaja aquí, en la
+         * respuesta al registro: es lo que permite ofrecer la descarga sin abrir un endpoint
+         * por número de hoja, que sería enumerable.
+         */
+        String receiptToken) {
 }

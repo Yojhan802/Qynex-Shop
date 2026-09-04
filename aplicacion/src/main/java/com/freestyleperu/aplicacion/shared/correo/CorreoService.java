@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -56,6 +57,13 @@ public class CorreoService {
      * valor legal, no el formato.
      */
     public boolean enviar(String destino, String asunto, String cuerpo) {
+        return enviar(destino, asunto, cuerpo, null, null);
+    }
+
+    /**
+     * Igual, con un adjunto opcional. Si el adjunto viene nulo se manda como correo simple.
+     */
+    public boolean enviar(String destino, String asunto, String cuerpo, String nombreAdjunto, byte[] adjunto) {
         if (!configurado()) {
             log.warn("Correo no configurado (falta MAIL_HOST o MAIL_FROM): no se envía «{}» a {}", asunto, destino);
             return false;
@@ -65,12 +73,16 @@ public class CorreoService {
             return false;
         }
         try {
+            boolean conAdjunto = adjunto != null && adjunto.length > 0 && nombreAdjunto != null;
             MimeMessage mensaje = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mensaje, false, StandardCharsets.UTF_8.name());
+            MimeMessageHelper helper = new MimeMessageHelper(mensaje, conAdjunto, StandardCharsets.UTF_8.name());
             helper.setFrom(new InternetAddress(remitente, remitenteNombre, StandardCharsets.UTF_8.name()));
             helper.setTo(destino.trim());
             helper.setSubject(asunto);
             helper.setText(cuerpo, false);
+            if (conAdjunto) {
+                helper.addAttachment(nombreAdjunto, new ByteArrayResource(adjunto));
+            }
             mailSender.send(mensaje);
             log.info("Correo enviado: «{}» a {}", asunto, destino);
             return true;

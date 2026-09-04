@@ -60,6 +60,16 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-mail</artifactId>
 		</dependency>
+		<!-- PDF de la constancia del Libro de Reclamaciones.
+		     OpenPDF (LGPL 2.1 + MPL 2.0) y NO iText: iText 5/7 es AGPL, y su clausula de
+		     uso en red alcanzaria a todo Qynex Shop por ser un servicio ofrecido por red.
+		     OpenPDF se usa como dependencia sin modificar, que la LGPL permite sin
+		     obligaciones sobre el codigo propio. -->
+		<dependency>
+			<groupId>com.github.librepdf</groupId>
+			<artifactId>openpdf</artifactId>
+			<version>1.3.32</version>
+		</dependency>
 		<dependency>
 			<groupId>com.github.ben-manes.caffeine</groupId>
 			<artifactId>caffeine</artifactId>
