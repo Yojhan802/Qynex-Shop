@@ -668,9 +668,10 @@ pago online nunca pasa por caja física. La respuesta (`PedidoResponse`) gana
 ```
 Con ese `saleId`, el panel pide `GET /api/sales/{saleId}` (§10) — que ya
 devuelve el `VentaResponse` completo con `items`/`payments` — y reusa el
-mismo componente `imprimirTicket` que el POS, sin construir ningún endpoint
-ni formato de ticket nuevo. `front/js/pages/pedidos.js` lo dispara
-automáticamente apenas se confirma el pago, y deja además un botón
+mismo `printSaleTicket` que el POS (exportado por `AdminPosPageV2.tsx`), sin
+construir ningún endpoint ni formato de ticket nuevo.
+`front-react/src/pages/AdminOrdersPage.tsx` lo dispara automáticamente apenas
+se confirma el pago, y deja además un botón
 "Imprimir ticket" en el detalle del pedido para reimprimir después.
 
 Si un pedido `CONFIRMED` se cancela, su `Sale` enlazada se marca
@@ -1193,7 +1194,7 @@ parámetro `?token=` cuando el header `Authorization` está ausente, pero
 header como siempre. Es el mismo access token de 30 minutos de todos los
 demás endpoints (no hay un sistema aparte de tickets de un solo uso); si
 expira mientras el stream está abierto, el cliente reconecta con un token
-refrescado (`front/js/core/live-stream.js`).
+refrescado (`front-react/src/services/live.ts`).
 
 Eventos emitidos, ambos con el `PedidoResponse` completo (§18) como `data`:
 ```

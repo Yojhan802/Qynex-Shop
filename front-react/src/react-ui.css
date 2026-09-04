@@ -1,5 +1,6 @@
-/* Capa React: composición y estados propios. Los tokens y estilos de cada plantilla
-   siguen viviendo en front/ para que ambas versiones compartan la misma identidad. */
+/* Capa React: composición y estados propios. Los tokens y el design system viven en
+   src/base/ y las plantillas de tienda en src/templates/; esta hoja va encima de
+   ambos (ver el orden de importación en main.tsx). */
 :root { --react-content-width: 1180px; }
 .react-route-layer { min-height: 100%; }
 body { min-width: 320px; }

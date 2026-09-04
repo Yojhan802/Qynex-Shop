@@ -14,8 +14,8 @@ la JVM.
 Internet
    │
    ▼
-frontend (nginx, puerto público)
-   ├─ sirve el HTML/CSS/JS estático
+frontend-react (nginx, puerto público)
+   ├─ sirve el build estático de React
    └─ /api/**, /uploads/**  ──proxy──▶  backend (Spring Boot, red interna)
                                             │
                                             ▼

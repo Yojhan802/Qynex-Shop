@@ -4,9 +4,9 @@
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  FRONTEND  ·  HTML5 + CSS3 + JavaScript (ES Modules)     │
-│  front/                                                  │
-│  SPA ligera sin framework · Design System propio         │
+│  FRONTEND  ·  React 19 + TypeScript (Vite)               │
+│  front-react/                                            │
+│  SPA · Design System propio · tienda + panel + plataforma│
 └───────────────────────────┬──────────────────────────────┘
                             │  HTTPS · JSON · JWT Bearer
 ┌───────────────────────────▼──────────────────────────────┐
@@ -289,10 +289,13 @@ FreestylePeru/aplicacion/
 │       └── resources/
 │           ├── application.yml
 │           └── db/migration/
-└── front/                     frontend HTML/CSS/JS
+└── front-react/               frontend React + Vite
     ├── index.html
-    ├── assets/
-    ├── css/
-    ├── js/
-    └── pages/
+    ├── public/assets/          servidos tal cual desde la raíz
+    └── src/
+        ├── base/               CSS del design system
+        ├── components/
+        ├── pages/
+        ├── templates/          plantillas de tienda
+        └── services/           cliente HTTP y dominios
 ```

@@ -1,17 +1,21 @@
 # Auditoría de plantillas del storefront
 
-Este documento es el criterio permanente para revisar `front/tienda/templates`
-cada vez que se agregue o modifique una plantilla.
+Este documento es el criterio permanente para revisar
+`front-react/src/templates/` cada vez que se agregue o modifique una
+plantilla.
 
 ## Contrato común
 
 - Las diez claves permitidas son `CLASSIC`, `MINIMAL`, `FASHION`, `SPORT`,
   `LUXURY`, `BOUTIQUE`, `CATALOG`, `MARKET`, `EDITORIAL` y `URBAN`.
-- Todas usan el HTML, APIs, carrito, checkout, autenticación y pedidos
-  compartidos de `front/tienda`.
+- Todas usan las APIs y las superficies compartidas de
+  `front-react/src/templates/` (`CartSurface`, `CheckoutSurface`,
+  `AuthSurface`, `OrdersSurface`): carrito, checkout, autenticación y pedidos
+  son los mismos para las diez.
 - Una plantilla solo puede cambiar presentación. No puede introducir lógica de
   negocio, credenciales, HTML del cliente, CSS arbitrario ni un segundo carrito.
 - Todo selector específico debe estar bajo `body[data-store-template='KEY']`.
+  Ese atributo lo pone `TemplateProvider` en el `body`.
 - Si una clave es inválida o la hoja falla, el fallback obligatorio es
   `CLASSIC` y la tienda debe seguir siendo usable.
 

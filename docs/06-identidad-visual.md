@@ -154,8 +154,11 @@ Tamaño mínimo: 24 px de alto (icono), 32 px en el sidebar contraído.
 | Cifras y dinero | Inter con `font-variant-numeric: tabular-nums` | Los importes se alinean en columna; sin esto, los decimales bailan |
 | Códigos y SKU | **JetBrains Mono** (500) | `POL-00125-M-NEG` y `7750000001255` se leen y se comparan mejor en monoespaciada |
 
-Ambas son de código abierto y se sirven **localmente** desde `front/assets/fonts/`,
-no desde un CDN externo: el POS debe funcionar aunque la conexión falle.
+Ambas son de código abierto y se sirven **localmente** desde
+`front-react/src/assets/fonts/`, no desde un CDN externo: el POS debe
+funcionar aunque la conexión falle. Viven bajo `src/` y no en `public/` para
+que Vite las empaquete con hash en el nombre, que es lo que permite cachearlas
+de forma indefinida sin arriesgar servir una versión vieja.
 
 ### Escala tipográfica
 
@@ -248,7 +251,8 @@ un mostrador, y desde ahí se adapta hacia arriba y hacia abajo.
 Los archivos CSS se organizan así:
 
 ```
-front/css/
+front-react/src/base/
+├── fonts.css         @font-face de Archivo, Inter y JetBrains Mono
 ├── tokens.css        variables: color, tipografía, espaciado, radios, sombras
 ├── reset.css         normalización
 ├── base.css          tipografía base, foco visible, utilidades
@@ -257,6 +261,12 @@ front/css/
 ├── pages.css         ajustes específicos por pantalla (POS, dashboard)
 └── responsive.css    puntos de ruptura
 ```
+
+`src/main.tsx` los importa en ese orden exacto y luego, encima,
+`templates/storefront-base.css` (la tienda), `react-ui.css` (los componentes
+React) y `templates/index.css` (las plantillas de tienda). El orden importa:
+la cascada resuelve los empates, así que lo de más abajo puede ajustar lo de
+más arriba sin `!important`.
 
 **Ningún color literal fuera de `tokens.css`.** Cambiar la paleta debe ser editar
 un archivo.

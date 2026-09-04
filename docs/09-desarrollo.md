@@ -46,22 +46,19 @@ ese perfil, para que subir un archivo en un test no deje basura en el repo.
 ## 4. Frontend
 
 ```bash
-cd front
-python -m http.server 8321
+cd front-react
+npm ci        # la primera vez
+npm run dev
 ```
 
-`front/js/core/api.js` detecta el puerto `8321` específicamente y por eso
-apunta al backend en `http://localhost:8080`; en cualquier otro puerto (por
-ejemplo, servido por nginx en Docker) usa rutas relativas, asumiendo que hay
-un reverse proxy delante. Si cambias el puerto del servidor estático local,
-hay que actualizar esa constante.
+Queda en `http://localhost:8093`. El cliente HTTP usa siempre rutas relativas
+(`API_BASE = '/api'` en `src/services/api.ts`), así que no hay ningún puerto
+codificado: en desarrollo el proxy de Vite manda `/api` y `/uploads` a
+`http://localhost:8080`, y en Docker lo hace el nginx del contenedor. Para
+apuntar a otro backend, `VITE_API_PROXY_TARGET`.
 
-### Caché del navegador tras cada cambio
-
-El servidor estático no envía cabeceras que invaliden la caché del navegador,
-así que después de editar un archivo `.js` puede hacer falta un refresco
-forzado (Ctrl+Shift+R) para ver el cambio — el navegador puede seguir
-sirviendo la versión anterior desde caché.
+Antes de dar por bueno un cambio, `npm run build` — que corre `tsc --noEmit`
+primero, así que un error de tipos falla el build en vez de llegar al bundle.
 
 ### Verificar cambios visuales
 
@@ -71,19 +68,31 @@ manualmente con Playwright contra el backend y la base de datos reales
 un script descartable que hace login, navega, interactúa, y toma capturas
 para revisar antes de darlo por bueno.
 
+**Navegar no es leer.** Esa base de datos real tiene empresas reales, y en el
+panel de plataforma un clic en "guardar" de un formulario ya cargado
+sobrescribe el paquete, el nombre o el estado de suscripción de esa empresa.
+Ya pasó: tres empresas quedaron con precios y razón social alterados por un
+script de verificación. Para revisar pantallas que escriben, usar una empresa
+de prueba creada para eso, o quedarse en las de solo lectura. Si aun así
+tocaste una, `tenant_module_changes` guarda el paquete anterior y permite
+reconstruir lo que había.
+
 ## 5. Estructura del proyecto
 
 ```
 aplicacion/     Backend Spring Boot — paquetes por dominio (no por capa):
                 cada módulo (venta, inventario, caja, …) trae su propio
                 domain/repository/service/dto/web
-front/          Frontend estático — sin build step, sin framework.
-                js/core/    utilidades compartidas (api, auth, format…)
-                js/components/  piezas de UI reutilizables entre páginas
-                js/pages/   un archivo por página, bootstrap al final del
-                            archivo (evita un bug de TDZ ya encontrado una vez)
+front-react/    Frontend React + TypeScript sobre Vite. Es el único: sirve la
+                tienda, el panel de cada empresa y el de plataforma.
+                src/base/       CSS del design system
+                src/services/   api, auth, carrito, SSE, ubigeo, validación
+                src/components/ piezas de UI reutilizables entre pantallas
+                src/pages/      una por pantalla
+                src/templates/  las 10 plantillas de tienda
 docs/           Esta documentación de diseño
-docker-compose.yml, aplicacion/Dockerfile, front/Dockerfile, front/nginx.conf
+docker-compose.yml, aplicacion/Dockerfile, front-react/Dockerfile,
+front-react/nginx.conf
                 Despliegue — ver docs/08-despliegue.md
 ```
 
