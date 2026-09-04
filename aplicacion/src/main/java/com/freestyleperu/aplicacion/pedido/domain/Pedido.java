@@ -99,6 +99,14 @@ public class Pedido {
     @Column(name = "terms_version", length = 20)
     private String termsVersion;
 
+    /**
+     * Plazo de cambio vigente cuando se aceptaron los términos. Se congela aquí porque cada
+     * empresa puede cambiarlo cuando quiera: sin esto, la versión del documento no bastaría
+     * para saber qué se le prometió a este comprador.
+     */
+    @Column(name = "terms_exchange_days")
+    private Integer termsExchangeDays;
+
     @Column(name = "recipient_dni", nullable = false, length = 15)
     private String recipientDni;
 

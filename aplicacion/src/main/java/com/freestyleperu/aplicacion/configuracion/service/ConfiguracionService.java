@@ -77,6 +77,9 @@ public class ConfiguracionService {
         settings.setShippingFlatRate(request.shippingFlatRate());
         settings.setReservationDepositAmount(request.reservationDepositAmount());
         settings.setReservationExpirationDays(request.reservationExpirationDays());
+        if (request.exchangePeriodDays() != null) {
+            settings.setExchangePeriodDays(request.exchangePeriodDays());
+        }
         if (request.onlinePaymentsEnabled() != null) {
             settings.setOnlinePaymentsEnabled(request.onlinePaymentsEnabled());
         }
@@ -180,7 +183,8 @@ public class ConfiguracionService {
                 settings.getEmail(),
                 settings.getIgvRate(),
                 settings.getCurrencyCode(),
-                settings.getCurrencySymbol());
+                settings.getCurrencySymbol(),
+                settings.getExchangePeriodDays());
     }
 
     @Transactional
@@ -254,7 +258,8 @@ public class ConfiguracionService {
                 settings.getLogoUrl(), settings.getBusinessVertical(), settings.getBusinessDescription(),
                 settings.getCurrencyCode(), settings.getCurrencySymbol(), settings.getIgvRate(),
                 settings.getTicketFooter(), settings.getShippingFlatRate(), settings.getReservationDepositAmount(),
-                settings.getReservationExpirationDays(), settings.getPlan(), settings.getSubscriptionStatus(),
+                settings.getReservationExpirationDays(), settings.getExchangePeriodDays(),
+                settings.getPlan(), settings.getSubscriptionStatus(),
                 settings.getNextPaymentDue(), settings.isOnlinePaymentsEnabled(), settings.isElectronicInvoicingEnabled(),
                 settings.getUpdatedAt(), updatedByUsername, settings.getStoreTemplate(), settings.getStorePrimaryColor(),
                 settings.getStoreAccentColor(), settings.getStoreBackgroundColor());

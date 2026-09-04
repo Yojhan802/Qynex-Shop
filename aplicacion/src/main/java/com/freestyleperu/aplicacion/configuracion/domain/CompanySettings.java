@@ -109,6 +109,15 @@ public class CompanySettings {
     @Column(name = "reservation_expiration_days", nullable = false)
     private int reservationExpirationDays;
 
+    /**
+     * Días de cambio voluntario que ofrece este negocio, contados desde la entrega. Es una
+     * decisión comercial de cada empresa, no de la plataforma, y su tienda lo publica en sus
+     * propios términos. 0 significa que no ofrece cambio voluntario; la garantía legal por
+     * falta de idoneidad (Ley 29571) es independiente y no se puede reducir.
+     */
+    @Column(name = "exchange_period_days", nullable = false)
+    private int exchangePeriodDays = 7;
+
     /** No editable por el cliente vía API — solo lo cambia el operador de la plataforma directo en la base de datos. */
     @Enumerated(EnumType.STRING)
     @Column(name = "plan", nullable = false, length = 20)

@@ -29,6 +29,7 @@ public record CompanySettingsResponse(
         BigDecimal shippingFlatRate,
         BigDecimal reservationDepositAmount,
         int reservationExpirationDays,
+        int exchangePeriodDays,
         Plan plan,
         SubscriptionStatus subscriptionStatus,
         LocalDate nextPaymentDue,

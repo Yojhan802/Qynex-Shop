@@ -12,13 +12,20 @@ import type { StoreConfig } from '../types';
 export const TERMS_VERSION = '2026-09';
 
 /**
- * Plazo de cambio voluntario que el negocio ofrece por encima de la garantía legal.
- * La ley peruana no impone un derecho general de retracto en venta a distancia, así
- * que este número es una decisión comercial: confírmalo con el negocio antes de
- * publicar. La garantía legal por falta de idoneidad (Ley 29571) es independiente
- * de este plazo y no se puede reducir.
+ * Plazo de cambio voluntario por defecto, en días. Es solo el respaldo para cuando la
+ * configuración todavía no llegó: el valor real lo fija cada empresa
+ * (`config.exchangePeriodDays`), porque es una decisión comercial suya y no de la
+ * plataforma. La ley peruana no impone un derecho general de retracto en venta a
+ * distancia, así que el número es libre; la garantía legal por falta de idoneidad
+ * (Ley 29571) es independiente y no se puede reducir, ni siquiera con un plazo de 0.
  */
-export const PLAZO_CAMBIO_DIAS = 7;
+export const PLAZO_CAMBIO_POR_DEFECTO = 7;
+
+/** Días de cambio que publica esta empresa. 0 es válido: no ofrece cambio comercial. */
+function plazoDeCambio(config: StoreConfig): number {
+  const dias = config.exchangePeriodDays;
+  return typeof dias === 'number' && dias >= 0 ? dias : PLAZO_CAMBIO_POR_DEFECTO;
+}
 
 export type LegalSection = { heading: string; paragraphs: string[]; bullets?: string[] };
 export type LegalDocument = { slug: string; path: string; title: string; kicker: string; summary: string; sections: LegalSection[] };
@@ -198,10 +205,15 @@ export function returnsPolicy(config: StoreConfig): LegalDocument {
       },
       {
         heading: 'Si quieres cambiarlo por talla, color o modelo',
-        paragraphs: [
-          `Este es un cambio comercial, distinto de la garantía legal: lo ofrecemos por decisión propia dentro de los ${PLAZO_CAMBIO_DIAS} días calendario siguientes a la entrega.`,
-          'Para que proceda, el producto debe estar sin uso, con sus etiquetas y su empaque original, y debes presentar la boleta o factura de la compra.',
-        ],
+        paragraphs: plazoDeCambio(config) > 0
+          ? [
+            `Este es un cambio comercial, distinto de la garantía legal: lo ofrecemos por decisión propia dentro de los ${plazoDeCambio(config)} días calendario siguientes a la entrega.`,
+            'Para que proceda, el producto debe estar sin uso, con sus etiquetas y su empaque original, y debes presentar la boleta o factura de la compra.',
+          ]
+          : [
+            'No ofrecemos cambio comercial por talla, color o modelo: la compra es definitiva salvo que el producto presente un defecto.',
+            'Esto no afecta tu garantía legal. Si el producto no es idóneo o llega defectuoso, respondemos igual, como se explica arriba.',
+          ],
       },
       {
         heading: 'Qué no se cambia',

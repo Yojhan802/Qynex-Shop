@@ -198,6 +198,9 @@ public class PedidoService {
         // comprar, no para las que estén publicadas cuando alguien revise el pedido.
         pedido.setTermsAcceptedAt(LocalDateTime.now());
         pedido.setTermsVersion(request.termsVersion());
+        // El plazo de cambio lo fija cada empresa y puede cambiarlo mañana, así que la versión
+        // del documento no basta para saber qué se le prometió a este comprador: se congela.
+        pedido.setTermsExchangeDays(configuracionService.obtener().exchangePeriodDays());
         Pedido guardado = pedidoRepository.save(pedido);
 
         List<PedidoDetail> detallesGuardados = new ArrayList<>();

@@ -67,6 +67,8 @@ export interface StoreConfig {
   email?: string | null;
   /** Tasa de IGV vigente (0.18 = 18%), para declarar que los precios ya la incluyen. */
   igvRate?: number | null;
+  /** Días de cambio voluntario que publica esta empresa; 0 = no ofrece cambio comercial. */
+  exchangePeriodDays?: number | null;
   currencyCode?: string | null;
   currencySymbol?: string | null;
 }

@@ -10,7 +10,9 @@ import java.math.BigDecimal;
  * social, RUC y domicilio fiscal) y el contacto: el Codigo de Proteccion y
  * Defensa del Consumidor obliga a mostrarlos al comprador, asi que son datos
  * publicos por diseno, no una fuga. {@code igvRate} permite declarar en la
- * tienda que los precios ya incluyen impuestos.
+ * tienda que los precios ya incluyen impuestos, y {@code exchangePeriodDays} es
+ * el plazo de cambio que esta empresa publica en sus terminos: lo fija cada
+ * negocio, no la plataforma.
  */
 public record PublicStorefrontConfigResponse(
         StoreTemplate template,
@@ -24,5 +26,6 @@ public record PublicStorefrontConfigResponse(
         String email,
         BigDecimal igvRate,
         String currencyCode,
-        String currencySymbol) {
+        String currencySymbol,
+        int exchangePeriodDays) {
 }

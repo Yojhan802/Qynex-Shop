@@ -78,6 +78,7 @@ class PedidoFlujoIntegrationTest {
     @Autowired private VarianteService varianteService;
     @Autowired private ProductVariantRepository variantRepository;
     @Autowired private PedidoService pedidoService;
+    @Autowired private com.freestyleperu.aplicacion.pedido.repository.PedidoRepository pedidoRepository;
     @Autowired private BranchRepository branchRepository;
     @Autowired private WarehouseRepository warehouseRepository;
     @Autowired private CompanySettingsRepository companySettingsRepository;
@@ -239,6 +240,41 @@ class PedidoFlujoIntegrationTest {
                 .anyMatch(violation -> violation.getPropertyPath().toString().equals("acceptedTerms"));
     }
 
+    /**
+     * El plazo de cambio lo fija cada empresa y puede cambiarlo cuando quiera, así que el
+     * pedido congela el que regía al comprar: la versión del documento sola no permitiría
+     * saber qué se le prometió a este comprador.
+     */
+    @Test
+    void elPedidoCongelaElPlazoDeCambioVigenteAunqueLaEmpresaLoCambieDespues() {
+        aseguraConfiguracionEmpresa();
+        aseguraAlmacenActivo("plazo");
+        aseguraUsuarioSistema();
+        VarianteResponse variante = crearVarianteConStock("Casaca Denim", "Azul", "M", new BigDecimal("120.00"), 3);
+        PaymentMethod yape = metodoPago("YAPE");
+        Long customerId = nuevoCliente("cliente.plazo@test.com").getId();
+
+        CompanySettings empresa = companySettingsRepository.findById(1L).orElseThrow();
+        empresa.setExchangePeriodDays(15);
+        companySettingsRepository.saveAndFlush(empresa);
+
+        PedidoResponse pedido = pedidoService.crear(
+                new CrearPedidoRequest(
+                        List.of(new ItemPedidoRequest(variante.id(), 1)),
+                        yape.getId(), "OP-200", "45678920", "Ana", "Torres", "Lira", "944555666",
+                        "Av. Central 100", "Lima", "Lima", "Surco", null, null, null, null,
+                        Boolean.TRUE, "2026-09"),
+                customerId);
+
+        assertThat(pedidoRepository.findById(pedido.id()).orElseThrow().getTermsExchangeDays()).isEqualTo(15);
+
+        // La empresa recorta su política: el pedido ya vendido conserva lo que prometió.
+        empresa.setExchangePeriodDays(0);
+        companySettingsRepository.saveAndFlush(empresa);
+
+        assertThat(pedidoRepository.findById(pedido.id()).orElseThrow().getTermsExchangeDays()).isEqualTo(15);
+    }
+
     @Test
     void cancelarUnPedidoConfirmadoReingresaStockYUnoPendienteLiberaLaReserva() {
         aseguraConfiguracionEmpresa();
@@ -332,6 +368,7 @@ class PedidoFlujoIntegrationTest {
 
     @Test
     void contraentregaEsGratisSoloEnHuachoYSeRechazaEnCualquierOtroDistrito() {
+        aseguraConfiguracionEmpresa();
         aseguraAlmacenActivo("5");
         aseguraUsuarioSistema();
         VarianteResponse variante = crearVarianteConStock("Buzo Canguro", "Gris", "L", new BigDecimal("90.00"), 3);

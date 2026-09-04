@@ -2,6 +2,7 @@ package com.freestyleperu.aplicacion.configuracion.dto.request;
 
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -22,6 +23,8 @@ public record ActualizarCompanySettingsRequest(
         @NotNull @DecimalMin("0") BigDecimal shippingFlatRate,
         @NotNull @DecimalMin("0") BigDecimal reservationDepositAmount,
         @NotNull @Min(1) Integer reservationExpirationDays,
+        /** Días de cambio voluntario; 0 = el negocio no lo ofrece. Nulo deja el valor actual. */
+        @Min(0) @Max(365) Integer exchangePeriodDays,
         Boolean onlinePaymentsEnabled,
         Boolean electronicInvoicingEnabled) {
 
@@ -35,6 +38,6 @@ public record ActualizarCompanySettingsRequest(
                 BigDecimal reservationDepositAmount,
                 Integer reservationExpirationDays) {
         this(currencyCode, currencySymbol, igvRate, ticketFooter, shippingFlatRate,
-                reservationDepositAmount, reservationExpirationDays, null, null);
+                reservationDepositAmount, reservationExpirationDays, null, null, null);
     }
 }
