@@ -50,8 +50,6 @@ import tools.jackson.databind.ObjectMapper;
 @Component
 public class QynexCpeProvider implements ElectronicInvoicingProvider {
 
-    private static final String DEFAULT_API_URL = "http://localhost:8080";
-
     private final ObjectMapper objectMapper;
 
     public QynexCpeProvider(ObjectMapper objectMapper) {
@@ -158,12 +156,16 @@ public class QynexCpeProvider implements ElectronicInvoicingProvider {
             if (content == null || content.length == 0) {
                 throw new ProveedorFacturacionException("Qynex CPE no devolvio el recurso solicitado");
             }
+            // Comprobado contra CPE: el CDR viaja como ZIP (es como lo entrega SUNAT), no
+            // como XML suelto. Etiquetarlo mal haria que el navegador intentara mostrarlo.
             String tipo = switch (resource) {
                 case "pdf" -> "application/pdf";
-                case "xml", "cdr" -> "application/xml";
+                case "xml" -> "application/xml";
+                case "cdr" -> "application/zip";
                 default -> "application/octet-stream";
             };
-            return new ElectronicInvoicingResource(content, tipo, providerDocumentId + "." + resource);
+            String extension = "cdr".equals(resource) ? "zip" : resource;
+            return new ElectronicInvoicingResource(content, tipo, providerDocumentId + "." + extension);
         } catch (RestClientResponseException ex) {
             throw new ProveedorFacturacionException("Qynex CPE no pudo entregar el comprobante solicitado");
         } catch (RestClientException ex) {
@@ -324,9 +326,17 @@ public class QynexCpeProvider implements ElectronicInvoicingProvider {
                 .build();
     }
 
+    /**
+     * Sin valor por defecto a proposito. Donde vive CPE depende del despliegue: desde el
+     * contenedor de Shop, "localhost" es el propio contenedor y no CPE, asi que un default
+     * que parece razonable fallaria en silencio justo donde importa. Se exige explicito.
+     */
     private String apiUrl(BillingConfigurationData configuration) {
-        String url = configuration.apiUrl() == null || configuration.apiUrl().isBlank()
-                ? DEFAULT_API_URL : configuration.apiUrl().trim();
+        if (configuration.apiUrl() == null || configuration.apiUrl().isBlank()) {
+            throw new ProveedorFacturacionException(
+                    "Falta la URL de Qynex CPE en la configuracion de la empresa");
+        }
+        String url = configuration.apiUrl().trim();
         if (configuration.environment() == BillingProviderEnvironment.PRODUCTION && !url.startsWith("https://")) {
             throw new ProveedorFacturacionException("La URL de Qynex CPE debe usar HTTPS en produccion");
         }
