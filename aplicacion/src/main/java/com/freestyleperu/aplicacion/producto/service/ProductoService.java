@@ -101,6 +101,7 @@ public class ProductoService {
         product.setFit(request.fit());
         product.setPrice(request.price());
         product.setPromoPrice(request.promoPrice());
+        aplicarDatosTributarios(product, request.igvAffectationType(), request.unitCode(), request.sunatProductCode());
 
         String prefix = TextNormalizer.prefix3(category.getName());
         product.setSku(codigoUnico(request.sku(), () -> sequenceService.next("SKU_" + prefix, prefix, 5), productRepository::existsBySku, "SKU"));
@@ -130,6 +131,7 @@ public class ProductoService {
         product.setFit(request.fit());
         product.setPrice(request.price());
         product.setPromoPrice(request.promoPrice());
+        aplicarDatosTributarios(product, request.igvAffectationType(), request.unitCode(), request.sunatProductCode());
         product.setImageUrl(request.imageUrl());
         if (product.getImageUrl() != null && !product.getImageUrl().isBlank()) {
             sincronizarImagenPrincipal(product, product.getImageUrl());
@@ -328,5 +330,19 @@ public class ProductoService {
 
     private Product buscarOFallar(Long id) {
         return productRepository.findById(id).orElseThrow(() -> RecursoNoEncontradoException.de("Producto", id));
+    }
+
+    /**
+     * Datos que SUNAT exige por línea del comprobante. Se conservan los valores actuales
+     * cuando la petición no los trae, para no degradar la clasificación de un producto ya
+     * cargado por una llamada que no conocía estos campos.
+     */
+    private void aplicarDatosTributarios(Product product, String afectacion, String unidad, String codigoSunat) {
+        if (afectacion != null && !afectacion.isBlank()) product.setIgvAffectationType(afectacion.trim());
+        if (unidad != null && !unidad.isBlank()) product.setUnitCode(unidad.trim().toUpperCase());
+        // El código SUNAT sí admite borrarse: una cadena vacía lo deja sin clasificar.
+        if (codigoSunat != null) {
+            product.setSunatProductCode(codigoSunat.isBlank() ? null : codigoSunat.trim());
+        }
     }
 }

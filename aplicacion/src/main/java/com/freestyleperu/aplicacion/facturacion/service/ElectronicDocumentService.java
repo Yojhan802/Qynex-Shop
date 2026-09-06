@@ -18,6 +18,7 @@ import com.freestyleperu.aplicacion.facturacion.port.ElectronicInvoicingResource
 import com.freestyleperu.aplicacion.facturacion.repository.BillingConfigurationRepository;
 import com.freestyleperu.aplicacion.facturacion.repository.ElectronicDocumentRepository;
 import com.freestyleperu.aplicacion.notificacion.service.NotificacionService;
+import com.freestyleperu.aplicacion.producto.domain.Product;
 import com.freestyleperu.aplicacion.shared.audit.AuditResult;
 import com.freestyleperu.aplicacion.shared.audit.AuditService;
 import com.freestyleperu.aplicacion.shared.security.CredentialEncryptionService;
@@ -457,7 +458,8 @@ public class ElectronicDocumentService {
         try {
             result = invoicingProvider.issue(
                     new ElectronicInvoicingCommand(document.getDocumentType(), document.getSeries(),
-                            document.getDocumentNumber(), document.getPayloadJson()),
+                            document.getDocumentNumber(), document.getPayloadJson(),
+                            document.getIdempotencyKey()),
                     new BillingConfigurationData(billing.getEnvironment(), billing.getApiUrl(), credentials));
         } catch (ProveedorFacturacionException ex) {
             document.setStatus(ElectronicDocumentStatus.ERROR);
@@ -526,7 +528,8 @@ public class ElectronicDocumentService {
             ElectronicInvoicingProvider invoicingProvider = providerFor(document.getProvider());
             ElectronicInvoicingResult result = invoicingProvider.retry(
                     new ElectronicInvoicingCommand(document.getDocumentType(), document.getSeries(),
-                            document.getDocumentNumber(), document.getPayloadJson()),
+                            document.getDocumentNumber(), document.getPayloadJson(),
+                            document.getIdempotencyKey()),
                     document.getProviderDocumentId(), configurationData());
             applyResult(document, result);
             ElectronicDocument saved = documentRepository.save(document);
@@ -780,13 +783,23 @@ public class ElectronicDocumentService {
                 documentDiscount = documentDiscount.add(lineDiscount);
                 documentTotal = documentTotal.add(lineSubtotal);
             }
-            lines.add(new LinkedHashMap<>(Map.of(
+            // Datos tributarios de la línea. Van desde el producto y no fijos, porque la
+            // afectación de IGV es del producto: un libro es exonerado siempre, y dejarla en
+            // 10 para todo cobraría un impuesto que no toca y declararía mal la venta.
+            Product producto = detail.getVariant().getProduct();
+            Map<String, Object> line = new LinkedHashMap<>(Map.of(
                     "sku", detail.getVariantSku(),
                     "description", detail.getProductName(),
                     "quantity", quantity,
                     "unitPrice", detail.getUnitPrice(),
                     "discountAmount", lineDiscount,
-                    "subtotal", lineSubtotal)));
+                    "subtotal", lineSubtotal,
+                    "igvAffectationType", producto.getIgvAffectationType(),
+                    "unitCode", producto.getUnitCode()));
+            // Nulo mientras el producto no esté clasificado: mandar un código inventado sería
+            // declarar una clasificación falsa. Map.of no admite nulos, de ahí el put aparte.
+            line.put("sunatProductCode", producto.getSunatProductCode());
+            lines.add(line);
         }
         if (partial) {
             root.put("subtotal", documentSubtotal);

@@ -58,6 +58,28 @@ public class Product extends BaseEntity {
     @Column(name = "promo_price", precision = 12, scale = 2)
     private BigDecimal promoPrice;
 
+    /**
+     * Catálogo 07 de SUNAT: 10 gravado, 20 exonerado, 30 inafecto, 40 exportación.
+     * Pertenece al producto y no a la venta — un libro es exonerado siempre.
+     */
+    @Column(name = "igv_affectation_type", nullable = false, length = 2)
+    private String igvAffectationType = "10";
+
+    /**
+     * Catálogo 03 (UN/ECE Rec. 20): NIU unidades, ZZ servicios, KGM kilos. No se valida
+     * en local: una unidad inexistente la rechaza SUNAT con el error 2936, y el rechazo
+     * quema el correlativo.
+     */
+    @Column(name = "unit_code", nullable = false, length = 3)
+    private String unitCode = "NIU";
+
+    /**
+     * Catálogo 25 (UNSPSC), 8 dígitos. Nulo mientras no se clasifique: hoy omitirlo es
+     * una observación, pero desde el 01.01.2027 el error 3496 pasa a rechazo.
+     */
+    @Column(name = "sunat_product_code", length = 8)
+    private String sunatProductCode;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private EstadoGeneral status = EstadoGeneral.ACTIVE;
