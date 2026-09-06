@@ -42,8 +42,20 @@ public class BillingConfiguration extends BaseEntity {
     @Column(name = "credit_note_series", length = 10)
     private String creditNoteSeries;
 
+    /**
+     * Serie de las notas de crédito que modifican una FACTURA. SUNAT exige que empiece por F;
+     * la de arriba se usa para las que modifican una boleta. Cruzarlas es un rechazo 1001 con
+     * el correlativo ya consumido.
+     */
+    @Column(name = "credit_note_invoice_series", length = 10)
+    private String creditNoteInvoiceSeries;
+
     @Column(name = "debit_note_series", length = 10)
     private String debitNoteSeries;
+
+    /** Serie de las notas de débito que modifican una FACTURA. Ver creditNoteInvoiceSeries. */
+    @Column(name = "debit_note_invoice_series", length = 10)
+    private String debitNoteInvoiceSeries;
 
     @Lob
     @Column(name = "credentials_encrypted", columnDefinition = "TEXT")

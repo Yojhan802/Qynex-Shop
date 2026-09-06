@@ -15,5 +15,9 @@ public record ActualizarBillingConfigurationRequest(
         @Size(max = 10) String receiptSeries,
         @Size(max = 10) String creditNoteSeries,
         @Size(max = 10) String debitNoteSeries,
-        Map<String, String> credentials) {
+        Map<String, String> credentials,
+        /** Serie de las notas de crédito que modifican una factura; empieza por F. */
+        @Size(max = 10) String creditNoteInvoiceSeries,
+        /** Serie de las notas de débito que modifican una factura; empieza por F. */
+        @Size(max = 10) String debitNoteInvoiceSeries) {
 }

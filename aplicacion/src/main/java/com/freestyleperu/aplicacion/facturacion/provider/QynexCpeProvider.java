@@ -173,6 +173,43 @@ public class QynexCpeProvider implements ElectronicInvoicingProvider {
         }
     }
 
+    /**
+     * Series que esta credencial puede usar. CPE ya filtra por empresa y por reserva, asi
+     * que lo que llega aqui es exactamente lo que se puede elegir sin que falle al emitir.
+     *
+     * <p>Si la consulta falla se devuelve vacio en vez de propagar: esto alimenta un
+     * desplegable de una pantalla de configuracion, y que CPE no responda no puede impedir
+     * abrirla ni guardar el resto de los ajustes.
+     */
+    @Override
+    @SuppressWarnings("unchecked")
+    public java.util.List<SerieDisponible> series(BillingConfigurationData configuration) {
+        try {
+            ResponseEntity<Map> response = client(configuration)
+                    .get()
+                    .uri("/api/v1/series")
+                    .retrieve()
+                    .toEntity(Map.class);
+            Object datos = response.getBody() == null ? null : response.getBody().get("data");
+            if (!(datos instanceof List<?> lista)) {
+                return java.util.List.of();
+            }
+            List<SerieDisponible> series = new ArrayList<>();
+            for (Object cruda : lista) {
+                Map<String, Object> fila = mapa(cruda);
+                String serie = texto(fila.get("series"), null);
+                if (serie == null) continue;
+                series.add(new SerieDisponible(
+                        texto(fila.get("documentType"), ""),
+                        texto(fila.get("documentTypeName"), ""),
+                        serie));
+            }
+            return series;
+        } catch (RestClientException | ProveedorFacturacionException ex) {
+            return java.util.List.of();
+        }
+    }
+
     // --- traduccion del snapshot al contrato de CPE -------------------------------------
 
     private Map<String, Object> buildRequest(ElectronicInvoicingCommand command, Map<String, Object> snapshot) {

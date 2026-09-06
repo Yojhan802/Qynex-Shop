@@ -14,5 +14,9 @@ public record BillingConfigurationResponse(
         String creditNoteSeries,
         String debitNoteSeries,
         boolean configured,
-        List<String> credentialKeys) {
+        List<String> credentialKeys,
+        /** Serie de las notas de crédito que modifican una factura. */
+        String creditNoteInvoiceSeries,
+        /** Serie de las notas de débito que modifican una factura. */
+        String debitNoteInvoiceSeries) {
 }

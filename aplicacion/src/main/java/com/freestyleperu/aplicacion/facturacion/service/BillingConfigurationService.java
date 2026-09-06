@@ -28,18 +28,54 @@ public class BillingConfigurationService {
     private final ObjectMapper objectMapper;
     private final AuditService auditService;
     private final StoreCatalogSyncService storeCatalogSyncService;
+    private final java.util.Map<com.freestyleperu.aplicacion.facturacion.domain.BillingProvider,
+            com.freestyleperu.aplicacion.facturacion.port.ElectronicInvoicingProvider> invoicingProviders;
 
     public BillingConfigurationService(
             BillingConfigurationRepository repository,
             CredentialEncryptionService encryptionService,
             ObjectMapper objectMapper,
             AuditService auditService,
-            StoreCatalogSyncService storeCatalogSyncService) {
+            StoreCatalogSyncService storeCatalogSyncService,
+            java.util.List<com.freestyleperu.aplicacion.facturacion.port.ElectronicInvoicingProvider> providers) {
         this.repository = repository;
         this.encryptionService = encryptionService;
         this.objectMapper = objectMapper;
         this.auditService = auditService;
         this.storeCatalogSyncService = storeCatalogSyncService;
+        this.invoicingProviders = providers.stream().collect(java.util.stream.Collectors.toMap(
+                com.freestyleperu.aplicacion.facturacion.port.ElectronicInvoicingProvider::type, p -> p));
+    }
+
+    /**
+     * Series que la empresa puede usar, para que el panel ofrezca una lista en vez de un
+     * campo de texto. Sale del proveedor configurado; los que no saben decirlo devuelven
+     * vacío y la pantalla sigue pidiendo la serie a mano.
+     *
+     * <p>La llamada al proveedor se hace aquí, en el servidor, y nunca desde el navegador:
+     * lleva las credenciales de la empresa, y un secreto en un bundle de JavaScript es un
+     * secreto público.
+     */
+    public java.util.List<com.freestyleperu.aplicacion.facturacion.port.ElectronicInvoicingProvider.SerieDisponible>
+            seriesDisponibles() {
+        BillingConfiguration config = repository.findFirstByOrderByIdAsc().orElse(null);
+        if (config == null || config.getCredentialsEncrypted() == null) {
+            return java.util.List.of();
+        }
+        var provider = invoicingProviders.get(config.getProvider());
+        if (provider == null) {
+            return java.util.List.of();
+        }
+        try {
+            java.util.Map<String, String> credentials = objectMapper.readValue(
+                    encryptionService.decrypt(config.getCredentialsEncrypted()), java.util.Map.class);
+            return provider.series(new com.freestyleperu.aplicacion.facturacion.port.BillingConfigurationData(
+                    config.getEnvironment(), config.getApiUrl(), credentials));
+        } catch (Exception ex) {
+            // Una pantalla de configuración no puede quedarse en blanco porque el proveedor
+            // no responda: se cae al campo de texto de siempre.
+            return java.util.List.of();
+        }
     }
 
     public BillingConfigurationResponse obtener() {
@@ -47,7 +83,7 @@ public class BillingConfigurationService {
                 .map(this::toResponse)
                 .orElseGet(() -> new BillingConfigurationResponse(
                         BillingProvider.VERIFACT, false, BillingProviderEnvironment.TEST, null,
-                        null, null, null, null, false, List.of()));
+                        null, null, null, null, false, List.of(), null, null));
     }
 
     @Transactional
@@ -77,6 +113,12 @@ public class BillingConfigurationService {
         if (request.debitNoteSeries() != null) {
             config.setDebitNoteSeries(blankToNull(request.debitNoteSeries()));
         }
+        if (request.creditNoteInvoiceSeries() != null) {
+            config.setCreditNoteInvoiceSeries(blankToNull(request.creditNoteInvoiceSeries()));
+        }
+        if (request.debitNoteInvoiceSeries() != null) {
+            config.setDebitNoteInvoiceSeries(blankToNull(request.debitNoteInvoiceSeries()));
+        }
         if (!credentials.isEmpty()) {
             try {
                 config.setCredentialsEncrypted(encryptionService.encrypt(
@@ -96,7 +138,8 @@ public class BillingConfigurationService {
     private BillingConfigurationResponse toResponse(BillingConfiguration config) {
         return new BillingConfigurationResponse(config.getProvider(), config.isEnabled(), config.getEnvironment(),
                 config.getApiUrl(), config.getInvoiceSeries(), config.getReceiptSeries(),
-                config.getCreditNoteSeries(), config.getDebitNoteSeries(), isConfigured(config), credentialKeys(config));
+                config.getCreditNoteSeries(), config.getDebitNoteSeries(), isConfigured(config), credentialKeys(config),
+                config.getCreditNoteInvoiceSeries(), config.getDebitNoteInvoiceSeries());
     }
 
     private boolean isConfigured(BillingConfiguration config) {

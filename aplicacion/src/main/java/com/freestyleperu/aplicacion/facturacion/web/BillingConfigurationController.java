@@ -26,6 +26,18 @@ public class BillingConfigurationController {
         return service.obtener();
     }
 
+    /**
+     * Series que la empresa puede usar, para poblar los selectores del panel. Pasa por el
+     * servidor y no por el navegador porque consultarlas exige las credenciales del
+     * proveedor: un secreto en un bundle de JavaScript es un secreto público.
+     */
+    @GetMapping("/api/settings/billing/series")
+    @PreAuthorize("hasAuthority('" + Permisos.CONFIGURACION_EDITAR + "')")
+    public java.util.List<com.freestyleperu.aplicacion.facturacion.port.ElectronicInvoicingProvider.SerieDisponible>
+            series() {
+        return service.seriesDisponibles();
+    }
+
     @PutMapping("/api/settings/billing")
     @PreAuthorize("hasAuthority('" + Permisos.CONFIGURACION_EDITAR + "')")
     public BillingConfigurationResponse actualizar(@Valid @RequestBody ActualizarBillingConfigurationRequest request) {

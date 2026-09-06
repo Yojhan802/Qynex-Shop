@@ -613,7 +613,7 @@ public class ElectronicDocumentService {
         notificacionService.notificarComprobanteActualizado(customerId, response);
     }
 
-    private String seriesFor(BillingConfiguration config, ElectronicDocumentType type, ElectronicDocument sourceDocument) {
+    static String seriesFor(BillingConfiguration config, ElectronicDocumentType type, ElectronicDocument sourceDocument) {
         if (config.getProvider() == com.freestyleperu.aplicacion.facturacion.domain.BillingProvider.NUBEFACT
                 && esNota(type) && sourceDocument != null) {
             return sourceDocument.getSeries();
@@ -621,9 +621,28 @@ public class ElectronicDocumentService {
         return switch (type) {
             case FACTURA -> config.getInvoiceSeries();
             case BOLETA -> config.getReceiptSeries();
-            case NOTA_CREDITO -> config.getCreditNoteSeries();
-            case NOTA_DEBITO -> config.getDebitNoteSeries();
+            case NOTA_CREDITO -> serieDeNota(sourceDocument,
+                    config.getCreditNoteInvoiceSeries(), config.getCreditNoteSeries());
+            case NOTA_DEBITO -> serieDeNota(sourceDocument,
+                    config.getDebitNoteInvoiceSeries(), config.getDebitNoteSeries());
         };
+    }
+
+    /**
+     * La serie de una nota la decide el comprobante que modifica, no el tipo de nota: SUNAT
+     * exige serie F para las notas sobre factura y B para las de boleta, y cruzarlas es un
+     * rechazo por formato (error 1001) que además quema el correlativo.
+     *
+     * <p>Se cae a la serie general cuando no hay una específica para factura, que es como
+     * quedaron las empresas configuradas antes de separarlas.
+     */
+    private static String serieDeNota(ElectronicDocument sourceDocument, String serieFactura, String serieGeneral) {
+        boolean sobreFactura = sourceDocument != null
+                && sourceDocument.getDocumentType() == ElectronicDocumentType.FACTURA;
+        if (sobreFactura) {
+            return serieFactura != null && !serieFactura.isBlank() ? serieFactura : serieGeneral;
+        }
+        return serieGeneral;
     }
 
     private ElectronicInvoicingProvider providerFor(
@@ -647,7 +666,7 @@ public class ElectronicDocumentService {
         return String.valueOf(max + 1);
     }
 
-    private boolean esNota(ElectronicDocumentType type) {
+    private static boolean esNota(ElectronicDocumentType type) {
         return type == ElectronicDocumentType.NOTA_CREDITO || type == ElectronicDocumentType.NOTA_DEBITO;
     }
 
