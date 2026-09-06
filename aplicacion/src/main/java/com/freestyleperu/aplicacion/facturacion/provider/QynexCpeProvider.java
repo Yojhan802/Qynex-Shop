@@ -275,10 +275,22 @@ public class QynexCpeProvider implements ElectronicInvoicingProvider {
      */
     private ElectronicDocumentStatus estadoDe(String estadoCpe) {
         return switch (estadoCpe == null ? "" : estadoCpe.toUpperCase()) {
+            // SunatStatus: lo que respondio SUNAT. Son los unicos estados terminales.
             case "ACCEPTED" -> ElectronicDocumentStatus.ACCEPTED;
+            // Aceptado con observaciones sigue siendo aceptado: el comprobante es valido y
+            // no hay nada que reemitir. Tratarlo como pendiente lo dejaria sondeando para
+            // siempre un documento que ya termino su ciclo.
+            case "ACCEPTED_WITH_OBSERVATIONS" -> ElectronicDocumentStatus.ACCEPTED;
             case "REJECTED" -> ElectronicDocumentStatus.REJECTED;
-            case "QUEUED" -> ElectronicDocumentStatus.PENDING;
-            case "SIGNED", "SENDING", "FAILED" -> ElectronicDocumentStatus.SENT;
+            // InternalStatus: todavia no hay respuesta de SUNAT.
+            case "DRAFT", "VALIDATING", "READY", "QUEUED" -> ElectronicDocumentStatus.PENDING;
+            case "SIGNING", "SIGNED", "SENDING", "COMPLETED" -> ElectronicDocumentStatus.SENT;
+            // FAILED no es terminal: SUNAT no llego a responder y la cola de CPE reintenta
+            // sola. Se deja en SENT para seguir consultando; darlo por terminado acabaria
+            // con alguien emitiendo un segundo comprobante por la misma venta.
+            case "FAILED" -> ElectronicDocumentStatus.SENT;
+            // Un estado que no conocemos se trata como en vuelo, nunca como terminal: es el
+            // lado seguro si CPE incorpora uno nuevo.
             default -> ElectronicDocumentStatus.SENT;
         };
     }

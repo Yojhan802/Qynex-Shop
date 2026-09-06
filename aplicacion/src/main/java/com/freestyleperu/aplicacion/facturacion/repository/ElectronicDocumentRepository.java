@@ -26,6 +26,9 @@ public interface ElectronicDocumentRepository extends JpaRepository<ElectronicDo
     @EntityGraph(attributePaths = { "sale" })
     Optional<ElectronicDocument> findByIdempotencyKey(String idempotencyKey);
 
+    /** Para resolver el documento que nombra una notificación del proveedor. */
+    Optional<ElectronicDocument> findByProviderDocumentId(String providerDocumentId);
+
     @Query("""
             select d
             from ElectronicDocument d
