@@ -142,6 +142,9 @@ public class QynexCpeProvider implements ElectronicInvoicingProvider {
             String providerDocumentId, String resource, BillingConfigurationData configuration) {
         String path = switch (resource) {
             case "pdf" -> "/api/v1/documents/{id}/pdf";
+            // Mismo contenido legal, otro papel: rollo de 80 mm para caja. Lo genera CPE,
+            // que es quien tiene el XML firmado del que sale el Valor Resumen del QR.
+            case "ticket" -> "/api/v1/documents/{id}/pdf?format=TICKET";
             case "xml" -> "/api/v1/documents/{id}/xml";
             case "cdr" -> "/api/v1/documents/{id}/cdr";
             default -> throw new ProveedorFacturacionException("Recurso de comprobante no soportado");
@@ -159,12 +162,16 @@ public class QynexCpeProvider implements ElectronicInvoicingProvider {
             // Comprobado contra CPE: el CDR viaja como ZIP (es como lo entrega SUNAT), no
             // como XML suelto. Etiquetarlo mal haria que el navegador intentara mostrarlo.
             String tipo = switch (resource) {
-                case "pdf" -> "application/pdf";
+                case "pdf", "ticket" -> "application/pdf";
                 case "xml" -> "application/xml";
                 case "cdr" -> "application/zip";
                 default -> "application/octet-stream";
             };
-            String extension = "cdr".equals(resource) ? "zip" : resource;
+            String extension = switch (resource) {
+                case "cdr" -> "zip";
+                case "ticket" -> "ticket.pdf";
+                default -> resource;
+            };
             return new ElectronicInvoicingResource(content, tipo, providerDocumentId + "." + extension);
         } catch (RestClientResponseException ex) {
             throw new ProveedorFacturacionException("Qynex CPE no pudo entregar el comprobante solicitado");
@@ -277,7 +284,34 @@ public class QynexCpeProvider implements ElectronicInvoicingProvider {
             }
             items.add(item);
         }
+        agregarEnvio(items, snapshot);
         return items;
+    }
+
+    /**
+     * El envio va como una linea mas del comprobante.
+     *
+     * <p>Shop lo cobra aparte de los productos y lo suma al total, asi que omitirlo declara
+     * menos de lo que se cobro: la venta de 55 mas 15 de envio se habria declarado como 55.
+     * Ese descuadre no da error en ningun sitio —se cobra una cifra y se declara otra— y
+     * aparece meses despues; aqui lo caza expectedTotal antes de consumir correlativo.
+     *
+     * <p>Unidad ZZ porque es un servicio, y gravado como el resto: el flete de una venta
+     * gravada sigue el tratamiento de lo que transporta.
+     */
+    private void agregarEnvio(List<Map<String, Object>> items, Map<String, Object> snapshot) {
+        BigDecimal envio = numero(snapshot.get("shippingAmount"));
+        if (envio == null || envio.signum() <= 0) {
+            return;
+        }
+        Map<String, Object> linea = new LinkedHashMap<>();
+        linea.put("description", "SERVICIO DE ENVIO");
+        linea.put("quantity", BigDecimal.ONE);
+        linea.put("unitPrice", envio);
+        linea.put("priceIncludesIgv", Boolean.TRUE);
+        linea.put("unitCode", "ZZ");
+        linea.put("igvAffectationType", "10");
+        items.add(linea);
     }
 
     // --- lectura de la respuesta --------------------------------------------------------

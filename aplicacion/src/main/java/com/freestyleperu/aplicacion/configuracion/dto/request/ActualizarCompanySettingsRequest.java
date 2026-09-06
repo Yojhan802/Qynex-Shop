@@ -26,7 +26,9 @@ public record ActualizarCompanySettingsRequest(
         /** Días de cambio voluntario; 0 = el negocio no lo ofrece. Nulo deja el valor actual. */
         @Min(0) @Max(365) Integer exchangePeriodDays,
         Boolean onlinePaymentsEnabled,
-        Boolean electronicInvoicingEnabled) {
+        Boolean electronicInvoicingEnabled,
+        /** TICKET (80 mm) o A4. Nulo conserva el que ya tuviera la empresa. */
+        com.freestyleperu.aplicacion.configuracion.domain.ReceiptPrintFormat receiptPrintFormat) {
 
     /** Compatibilidad con llamadas internas y tests que aún no envían los flags opcionales. */
     public ActualizarCompanySettingsRequest(
@@ -38,6 +40,6 @@ public record ActualizarCompanySettingsRequest(
                 BigDecimal reservationDepositAmount,
                 Integer reservationExpirationDays) {
         this(currencyCode, currencySymbol, igvRate, ticketFooter, shippingFlatRate,
-                reservationDepositAmount, reservationExpirationDays, null, null, null);
+                reservationDepositAmount, reservationExpirationDays, null, null, null, null);
     }
 }

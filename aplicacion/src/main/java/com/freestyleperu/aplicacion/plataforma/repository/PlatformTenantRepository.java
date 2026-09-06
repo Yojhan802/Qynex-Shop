@@ -88,11 +88,11 @@ public class PlatformTenantRepository {
                         slug, name, business_vertical, business_description, ruc, address, phone, email, logo_url,
                         currency_code, currency_symbol, igv_rate, ticket_footer, shipping_flat_rate,
                         reservation_deposit_amount, reservation_expiration_days, exchange_period_days,
-                        plan, subscription_status,
+                        receipt_print_format, plan, subscription_status,
                         next_payment_due, online_payments_enabled, electronic_invoicing_enabled,
                         billable, store_template, updated_at, updated_by)
                     VALUES (?, ?, ?, NULL, ?, ?, ?, ?, NULL, 'PEN', 'S/', 0.1800,
-                            'Gracias por su compra', 15.00, 20.00, 3, 7, ?, 'ACTIVA', ?, FALSE, FALSE,
+                            'Gracias por su compra', 15.00, 20.00, 3, 7, 'TICKET', ?, 'ACTIVA', ?, FALSE, FALSE,
                             ?, 'CLASSIC', ?, ?)
                     """, java.sql.Statement.RETURN_GENERATED_KEYS);
             int i = 1;

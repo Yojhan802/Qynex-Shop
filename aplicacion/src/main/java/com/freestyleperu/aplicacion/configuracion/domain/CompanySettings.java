@@ -110,6 +110,14 @@ public class CompanySettings {
     private int reservationExpirationDays;
 
     /**
+     * Formato de la representación impresa del comprobante. Lo pide Qynex CPE, que es quien
+     * la genera; aquí solo se guarda cuál quiere esta tienda según la impresora que tenga.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "receipt_print_format", nullable = false, length = 10)
+    private ReceiptPrintFormat receiptPrintFormat = ReceiptPrintFormat.TICKET;
+
+    /**
      * Días de cambio voluntario que ofrece este negocio, contados desde la entrega. Es una
      * decisión comercial de cada empresa, no de la plataforma, y su tienda lo publica en sus
      * propios términos. 0 significa que no ofrece cambio voluntario; la garantía legal por

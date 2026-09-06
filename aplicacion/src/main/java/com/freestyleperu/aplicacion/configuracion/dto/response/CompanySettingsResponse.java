@@ -30,6 +30,7 @@ public record CompanySettingsResponse(
         BigDecimal reservationDepositAmount,
         int reservationExpirationDays,
         int exchangePeriodDays,
+        com.freestyleperu.aplicacion.configuracion.domain.ReceiptPrintFormat receiptPrintFormat,
         Plan plan,
         SubscriptionStatus subscriptionStatus,
         LocalDate nextPaymentDue,

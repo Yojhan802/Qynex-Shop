@@ -77,6 +77,9 @@ public class ConfiguracionService {
         settings.setShippingFlatRate(request.shippingFlatRate());
         settings.setReservationDepositAmount(request.reservationDepositAmount());
         settings.setReservationExpirationDays(request.reservationExpirationDays());
+        if (request.receiptPrintFormat() != null) {
+            settings.setReceiptPrintFormat(request.receiptPrintFormat());
+        }
         if (request.exchangePeriodDays() != null) {
             settings.setExchangePeriodDays(request.exchangePeriodDays());
         }
@@ -259,6 +262,7 @@ public class ConfiguracionService {
                 settings.getCurrencyCode(), settings.getCurrencySymbol(), settings.getIgvRate(),
                 settings.getTicketFooter(), settings.getShippingFlatRate(), settings.getReservationDepositAmount(),
                 settings.getReservationExpirationDays(), settings.getExchangePeriodDays(),
+                settings.getReceiptPrintFormat(),
                 settings.getPlan(), settings.getSubscriptionStatus(),
                 settings.getNextPaymentDue(), settings.isOnlinePaymentsEnabled(), settings.isElectronicInvoicingEnabled(),
                 settings.getUpdatedAt(), updatedByUsername, settings.getStoreTemplate(), settings.getStorePrimaryColor(),

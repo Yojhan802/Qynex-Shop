@@ -434,8 +434,10 @@ public class ElectronicDocumentService {
     public ElectronicDocumentResponse enviar(Long documentId, Long userId) {
         ElectronicDocument document = documentRepository.findById(documentId)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Comprobante electrónico", documentId));
-        if (document.getStatus() != ElectronicDocumentStatus.DRAFT) {
-            throw new ReglaDeNegocioException("Solo se puede enviar un comprobante que está en borrador");
+        if (!sePuedeEnviar(document)) {
+            throw new ReglaDeNegocioException(document.getProviderDocumentId() != null
+                    ? "Este comprobante ya está en el proveedor: consulta su estado en vez de reenviarlo"
+                    : "Solo se puede enviar un comprobante que está en borrador");
         }
 
         CompanySettings company = companySettingsRepository.findById(TenantContext.getOrDefault())
@@ -559,6 +561,22 @@ public class ElectronicDocumentService {
         return providerFor(document.getProvider()).download(document.getProviderDocumentId(), resource, configurationData());
     }
 
+    /**
+     * Representación impresa del comprobante, en el formato que use esta tienda.
+     *
+     * <p>La genera el proveedor y no Shop: el QR del Anexo N.º 6 lleva el Valor Resumen del
+     * XML firmado, que solo tiene quien firmó. Reconstruirlo aquí daría un QR que parece
+     * válido y no lo es.
+     */
+    public ElectronicInvoicingResource representacionImpresa(Long documentId) {
+        CompanySettings company = companySettingsRepository.findById(TenantContext.getOrDefault())
+                .orElseThrow(() -> RecursoNoEncontradoException.de(
+                        "Configuración de empresa", TenantContext.getOrDefault()));
+        boolean ticket = company.getReceiptPrintFormat()
+                == com.freestyleperu.aplicacion.configuracion.domain.ReceiptPrintFormat.TICKET;
+        return descargar(documentId, ticket ? "ticket" : "pdf");
+    }
+
     private BillingConfigurationData configurationData() {
         BillingConfiguration billing = billingConfigurationRepository.findFirstByOrderByIdAsc()
                 .orElseThrow(() -> new OperacionNoPermitidaException("La configuración de facturación no está disponible"));
@@ -611,6 +629,26 @@ public class ElectronicDocumentService {
         Long customerId = document.getSale() != null && document.getSale().getCustomer() != null
                 ? document.getSale().getCustomer().getId() : null;
         notificacionService.notificarComprobanteActualizado(customerId, response);
+    }
+
+    /**
+     * Un borrador se envía, y un fallo que nunca llegó al proveedor se puede reenviar.
+     *
+     * <p>La distinción es {@code providerDocumentId}. Sin él, el proveedor no llegó a
+     * aceptar nada: no hay correlativo consumido ni comprobante ante SUNAT, así que
+     * reintentar tras corregir la causa es lo correcto —y quedarse bloqueado obligaría a
+     * rehacer la venta entera por un error de configuración.
+     *
+     * <p>Con él, el comprobante ya está en la cola del proveedor. Reenviarlo emitiría un
+     * segundo documento por la misma venta, y el sobrante solo se corrige con una nota de
+     * crédito ante SUNAT. Ese caso se consulta, no se reenvía.
+     */
+    private boolean sePuedeEnviar(ElectronicDocument document) {
+        if (document.getStatus() == ElectronicDocumentStatus.DRAFT) {
+            return true;
+        }
+        return document.getStatus() == ElectronicDocumentStatus.ERROR
+                && document.getProviderDocumentId() == null;
     }
 
     static String seriesFor(BillingConfiguration config, ElectronicDocumentType type, ElectronicDocument sourceDocument) {

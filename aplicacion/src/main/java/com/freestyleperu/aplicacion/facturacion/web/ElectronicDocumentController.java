@@ -74,6 +74,24 @@ public class ElectronicDocumentController {
         return recurso(id, "pdf");
     }
 
+    /**
+     * Representación impresa para entregar al comprador, en el formato de papel que use la
+     * tienda: rollo de 80 mm si tiene térmica, A4 si no. Es lo que se imprime al cobrar.
+     *
+     * <p>Distinto de {@code /pdf}, que devuelve siempre A4 y sirve para archivar o reenviar.
+     */
+    @GetMapping("/api/electronic-documents/{id}/representacion")
+    @PreAuthorize("hasAuthority('" + Permisos.VENTAS_CONSULTAR + "')")
+    public ResponseEntity<byte[]> representacion(@PathVariable Long id) {
+        ElectronicInvoicingResource archivo = service.representacionImpresa(id);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(archivo.contentType()));
+        headers.setContentLength(archivo.content().length);
+        // inline y no attachment: el POS lo abre para imprimirlo, no para descargarlo.
+        headers.setContentDisposition(ContentDisposition.inline().filename(archivo.fileName()).build());
+        return new ResponseEntity<>(archivo.content(), headers, 200);
+    }
+
     @GetMapping("/api/electronic-documents/{id}/xml")
     @PreAuthorize("hasAuthority('" + Permisos.VENTAS_CONSULTAR + "')")
     public ResponseEntity<byte[]> xml(@PathVariable Long id) {
