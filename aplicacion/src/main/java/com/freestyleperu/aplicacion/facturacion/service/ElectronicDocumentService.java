@@ -47,11 +47,16 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionSynchronization;
 import tools.jackson.databind.ObjectMapper;
 
 @Service
 @Transactional(readOnly = true)
 public class ElectronicDocumentService {
+
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(ElectronicDocumentService.class);
 
     private final ElectronicDocumentRepository documentRepository;
     private final BillingConfigurationRepository billingConfigurationRepository;
@@ -119,6 +124,41 @@ public class ElectronicDocumentService {
      * flujo de confirmacion y emision manual.
      */
     @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    /**
+     * Programa la emisión del comprobante para cuando la venta esté guardada de verdad.
+     *
+     * <p>Se hace después del commit y no dentro, por dos motivos que apuntan al mismo sitio:
+     * la venta no puede depender de que el proveedor responda —si SUNAT o el proveedor están
+     * caídos, el cobro se cierra igual y el comprobante se reintenta—, y emitir dentro de la
+     * transacción alargaría el bloqueo de la caja por una llamada de red.
+     *
+     * <p>{@link #emitirAutomaticamenteParaVenta} ya se traga sus propios errores y los deja
+     * en auditoría, así que un fallo aquí nunca vuelve al flujo de venta.
+     */
+    public void emitirTrasCommit(Long saleId) {
+        Runnable emitir = () -> {
+            try {
+                emitirAutomaticamenteParaVenta(saleId);
+            } catch (RuntimeException ex) {
+                // Nada de lo que ocurra aquí puede volver al flujo de venta: la venta ya está
+                // cerrada y cobrada, y este es un efecto posterior. Propagar la excepción no
+                // arreglaría el comprobante y sí rompería la respuesta de una operación que
+                // ya salió bien. Queda en el log para poder reintentar desde el panel.
+                log.error("No se pudo emitir el comprobante de la venta {}: {}", saleId, ex.getMessage());
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    emitir.run();
+                }
+            });
+        } else {
+            emitir.run();
+        }
+    }
+
     public void emitirAutomaticamenteParaVenta(Long saleId) {
         Sale sale = saleRepository.findById(saleId)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Venta", saleId));

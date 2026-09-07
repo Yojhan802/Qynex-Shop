@@ -249,6 +249,11 @@ public class VentaService {
         auditService.log("VENTA_CREADA", "VENTA", guardada.getId(), null,
                 new Object[] { guardada.getSaleNumber(), total }, AuditResult.SUCCESS);
 
+        // El comprobante sale solo al cobrar, como en cualquier caja: nadie va a otra
+        // pantalla a emitirlo con clientes esperando. Si el tipo elegido es TICKET no hace
+        // nada, y si el proveedor falla la venta queda cerrada igual.
+        electronicDocumentService.emitirTrasCommit(guardada.getId());
+
         return toResponse(guardada, detallesGuardados, pagosGuardados);
     }
 

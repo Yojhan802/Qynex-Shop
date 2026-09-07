@@ -83,6 +83,7 @@ public class PedidoService {
     private final SequenceService sequenceService;
     private final AuditService auditService;
     private final ImageUploadService imageUploadService;
+    private final com.freestyleperu.aplicacion.facturacion.service.ElectronicDocumentService electronicDocumentService;
     private final SaleRepository saleRepository;
     private final SaleDetailRepository saleDetailRepository;
     private final PaymentRepository paymentRepository;
@@ -96,7 +97,9 @@ public class PedidoService {
             ProductVariantRepository variantRepository, CustomerRepository customerRepository,
             UsuarioRepository usuarioRepository, InventarioService inventarioService, PagoService pagoService,
             ConfiguracionService configuracionService, PromocionService promocionService, SequenceService sequenceService,
-            AuditService auditService, ImageUploadService imageUploadService, SaleRepository saleRepository,
+            AuditService auditService, ImageUploadService imageUploadService,
+            com.freestyleperu.aplicacion.facturacion.service.ElectronicDocumentService electronicDocumentService,
+            SaleRepository saleRepository,
             SaleDetailRepository saleDetailRepository, PaymentRepository paymentRepository,
             NotificacionService notificacionService, BillingConfigurationService billingConfigurationService) {
         this.pedidoRepository = pedidoRepository;
@@ -112,6 +115,7 @@ public class PedidoService {
         this.sequenceService = sequenceService;
         this.auditService = auditService;
         this.imageUploadService = imageUploadService;
+        this.electronicDocumentService = electronicDocumentService;
         this.saleRepository = saleRepository;
         this.saleDetailRepository = saleDetailRepository;
         this.paymentRepository = paymentRepository;
@@ -306,6 +310,12 @@ public class PedidoService {
 
         auditService.log("PEDIDO_CONFIRMADO", "PEDIDO", pedido.getId(), null,
                 new Object[] { pedido.getOrderNumber(), ventaGuardada.getSaleNumber() }, AuditResult.SUCCESS);
+        // Un pedido pagado a mano (Yape, transferencia) llega aquí, y hasta ahora se quedaba
+        // sin comprobante: el pago online sí emitía y este no, siendo la misma venta con otro
+        // medio de pago. Va tras el commit para que un proveedor caído no revierta la
+        // confirmación del pago, que es un hecho del negocio ya ocurrido.
+        electronicDocumentService.emitirTrasCommit(ventaGuardada.getId());
+
         PedidoResponse response = toResponse(pedido, detalles);
         notificacionService.notificarPedidoActualizado(pedido.getCustomer().getId(), response);
         return response;

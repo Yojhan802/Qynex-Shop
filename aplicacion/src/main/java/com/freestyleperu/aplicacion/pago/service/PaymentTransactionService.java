@@ -326,18 +326,10 @@ public class PaymentTransactionService {
                 || pedido.getSale() == null) {
             return;
         }
-        Long saleId = pedido.getSale().getId();
-        Runnable emitir = () -> electronicDocumentService.emitirAutomaticamenteParaVenta(saleId);
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    emitir.run();
-                }
-            });
-        } else {
-            emitir.run();
-        }
+        // Mismo punto de emisión que el POS, las separaciones y los pedidos pagados a mano:
+        // un solo sitio decide cuándo se emite, así que los cuatro caminos no pueden
+        // divergir con el tiempo.
+        electronicDocumentService.emitirTrasCommit(pedido.getSale().getId());
     }
 
     private void validarReintento(PaymentTransaction existente, Pedido pedido, PaymentProviderType provider) {

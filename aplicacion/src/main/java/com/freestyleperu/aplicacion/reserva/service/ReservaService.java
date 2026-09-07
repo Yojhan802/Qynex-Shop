@@ -94,13 +94,15 @@ public class ReservaService {
     private final ComboService comboService;
     private final SequenceService sequenceService;
     private final AuditService auditService;
+    private final com.freestyleperu.aplicacion.facturacion.service.ElectronicDocumentService electronicDocumentService;
 
     public ReservaService(ReservaRepository reservaRepository, CustomerRepository customerRepository,
             ProductVariantRepository variantRepository, CashSessionRepository cashSessionRepository,
             SaleRepository saleRepository, SaleDetailRepository saleDetailRepository, PaymentRepository paymentRepository,
             UsuarioRepository usuarioRepository, InventarioService inventarioService, CajaService cajaService,
             PagoService pagoService, PromoterService promoterService, ConfiguracionService configuracionService,
-            ComboService comboService, SequenceService sequenceService, AuditService auditService) {
+            ComboService comboService, SequenceService sequenceService, AuditService auditService,
+            com.freestyleperu.aplicacion.facturacion.service.ElectronicDocumentService electronicDocumentService) {
         this.reservaRepository = reservaRepository;
         this.customerRepository = customerRepository;
         this.variantRepository = variantRepository;
@@ -117,6 +119,7 @@ public class ReservaService {
         this.comboService = comboService;
         this.sequenceService = sequenceService;
         this.auditService = auditService;
+        this.electronicDocumentService = electronicDocumentService;
     }
 
     public PageResponse<ReservaResumenResponse> listar(ReservaStatus status, Long customerId, String buyerName, Pageable pageable) {
@@ -277,6 +280,12 @@ public class ReservaService {
         reserva.setSale(guardada);
         reserva.setCompletedAt(LocalDateTime.now());
         reserva.setCompletedBy(vendedor);
+
+
+        // La separación termina en una venta como cualquier otra, así que emite igual: si no,
+        // el único camino de venta sin comprobante sería justo el del cliente que llevaba
+        // semanas pagando a plazos.
+        electronicDocumentService.emitirTrasCommit(guardada.getId());
 
         auditService.log("RESERVA_COMPLETADA", "RESERVA", reserva.getId(), null, guardada.getSaleNumber(), AuditResult.SUCCESS);
         return toResponse(reserva);
@@ -446,6 +455,11 @@ public class ReservaService {
             reserva.setCompletedBy(vendedor);
             auditService.log("RESERVA_COMPLETADA", "RESERVA", reserva.getId(), null, guardada.getSaleNumber(), AuditResult.SUCCESS);
         }
+
+        // Fuera del bucle a propósito: varias separaciones se cierran en UNA venta, así que
+        // le corresponde un solo comprobante. Dentro del bucle se emitiría uno por
+        // separación, todos por el total, y sobrarían tantos como reservas menos una.
+        electronicDocumentService.emitirTrasCommit(guardada.getId());
 
         return reservas.stream().map(this::toResponse).toList();
     }
