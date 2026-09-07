@@ -8,6 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.freestyleperu.aplicacion.configuracion.domain.CompanySettings;
+import com.freestyleperu.aplicacion.configuracion.repository.CompanySettingsRepository;
 import com.freestyleperu.aplicacion.pedido.domain.PedidoBillingDocumentType;
 import com.freestyleperu.aplicacion.venta.domain.Sale;
 import com.freestyleperu.aplicacion.venta.repository.SaleRepository;
@@ -68,6 +70,20 @@ class EmisionAutomaticaTest {
         assertThatCode(() -> esc.service().emitirTrasCommit(7L)).doesNotThrowAnyException();
     }
 
+    /**
+     * Una empresa que solo usa el ticket interno no tiene nada que emitir, y eso no es una
+     * incidencia. Sin esta salida, cada venta suya dejaria un error en auditoria y en el log,
+     * llenando de ruido el registro de justo las empresas que no usan la funcion.
+     */
+    @Test
+    void unaEmpresaSinFacturacionElectronicaNoIntentaEmitirNiDejaError() {
+        Escenario esc = escenario(PedidoBillingDocumentType.BOLETA, false);
+
+        esc.service().emitirAutomaticamenteParaVenta(7L);
+
+        verify(esc.repository(), never()).save(any());
+    }
+
     private record Escenario(ElectronicDocumentService service, SaleRepository repository) {
     }
 
@@ -77,14 +93,23 @@ class EmisionAutomaticaTest {
      * falta, el test reventaria y estaria diciendo que la decision dejo de ser local.
      */
     private Escenario escenario(PedidoBillingDocumentType tipo) {
+        return escenario(tipo, true);
+    }
+
+    private Escenario escenario(PedidoBillingDocumentType tipo, boolean facturacionActiva) {
         Sale sale = new Sale();
         sale.setBillingDocumentType(tipo);
 
         SaleRepository repository = mock(SaleRepository.class);
         when(repository.findById(7L)).thenReturn(Optional.of(sale));
 
+        CompanySettings empresa = new CompanySettings();
+        empresa.setElectronicInvoicingEnabled(facturacionActiva);
+        CompanySettingsRepository empresas = mock(CompanySettingsRepository.class);
+        when(empresas.findById(anyLong())).thenReturn(Optional.of(empresa));
+
         ElectronicDocumentService service = new ElectronicDocumentService(
-                null, null, null, null, repository, null, null, null, null, null, java.util.List.of());
+                null, null, empresas, null, repository, null, null, null, null, null, java.util.List.of());
         return new Escenario(service, repository);
     }
 

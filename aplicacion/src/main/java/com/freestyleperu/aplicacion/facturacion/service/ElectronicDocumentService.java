@@ -167,6 +167,14 @@ public class ElectronicDocumentService {
         if (requestedType == PedidoBillingDocumentType.TICKET) {
             return;
         }
+        // Una empresa sin facturación electrónica no tiene nada que emitir, y eso no es un
+        // fallo: es su configuración. Sin esta salida, cada venta dejaría un error en el log
+        // y en auditoría, convirtiendo el registro de incidencias en ruido para justamente
+        // las empresas que solo usan el ticket interno.
+        CompanySettings empresa = companySettingsRepository.findById(TenantContext.getOrDefault()).orElse(null);
+        if (empresa == null || !empresa.isElectronicInvoicingEnabled()) {
+            return;
+        }
 
         ElectronicDocumentType documentType = requestedType == PedidoBillingDocumentType.FACTURA
                 ? ElectronicDocumentType.FACTURA : ElectronicDocumentType.BOLETA;
